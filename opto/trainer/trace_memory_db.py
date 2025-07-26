@@ -284,17 +284,31 @@ class TraceMemoryDB:
             ]
         cands = self.get_candidates(problem_id, step_id)
         # choose ranking key: custom fn > named score > direct .score
-        if score_fn is not None:
-            key_fn = lambda c: score_fn(c["data"])
-        elif score_name:
-            key_fn = lambda c: c["data"].get("scores", c.get("scores", {})).get(score_name, c["data"].get("score"))
-        else:
-            key_fn = lambda c: c["data"].get("score")
+        def safe_score_extractor(c):
+            if score_fn is not None:
+                return score_fn(c["data"])
+            
+            # Try multiple locations for scores
+            score = None
+            if score_name:
+                # Check top-level scores first
+                if isinstance(c.get("scores"), dict) and score_name in c["scores"]:
+                    score = c["scores"][score_name]
+                # Then check data.scores
+                elif isinstance(c.get("data", {}).get("scores"), dict) and score_name in c["data"]["scores"]:
+                    score = c["data"]["scores"][score_name]
+                # Finally check data.score if score_name is "score"
+                elif score_name == "score" and "score" in c.get("data", {}):
+                    score = c["data"]["score"]
+            else:
+                # Default: look for score in data
+                score = c.get("data", {}).get("score")
+            
+            return score if isinstance(score, (int, float)) else float('-inf')
         # filter out non-numeric scores
-        valid = [c for c in cands if isinstance(key_fn(c), (int, float))]
-        # fast top-N selection
-        top_n = heapq.nlargest(n, valid, key=key_fn)
-        return [copy.deepcopy(c) for c in top_n]
+        top = heapq.nlargest(n, cands, key=safe_score_extractor) # pick the n “largest” items without touching the rest
+        # then return copies of only those n items to avoid modification issues
+        return [copy.deepcopy(c) for c in top] if top else []
 
     def get_random_candidates(self, problem_id: str, step_id: int, n: int = 1) -> List[Dict]:
         """Return a random sample of candidates (R13)."""

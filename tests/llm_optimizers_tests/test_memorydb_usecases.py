@@ -321,6 +321,8 @@ def test_dynamic_prompt_reuse(memory_db):
                         suggested_x = float(suggestion["x"])
                     elif isinstance(suggestion, (int, float, str)):
                         suggested_x = float(suggestion)
+                    elif suggestion == {}:  # Empty suggestion - use current value
+                        suggested_x = float(param._data)
                     else:
                         return  # Skip if can't parse
                     score = -abs(2 * suggested_x - 10)
