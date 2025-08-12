@@ -473,6 +473,7 @@ class TextGrad(Optimizer):
                 system_prompt=self.optimizer_system_prompt,
                 verbose=verbose,
             )
+            response = response.choices[0].message.content
             try:
                 var_json = (
                     response.split(self.new_variable_tags[0])[1]

@@ -1,5 +1,5 @@
 <p >
-    <img src="https://github.com/microsoft/Trace/blob/main/docs/images/Trace_Primary_C.png" alt="drawing" width="500"/>
+    <img src="https://github.com/AgentOpt/Trace/blob/main/docs/images/Trace_Primary_C.png" alt="drawing" width="500"/>
 </p>
 
 # End-to-end Generative Optimization for AI Agents
@@ -15,10 +15,10 @@ losses, natural language text, compiler errors, etc.). Trace generalizes the bac
 propagating an AI system's execution trace. Trace is implemented as a PyTorch-like Python library. Users write Python
 code directly and can use Trace primitives to optimize certain parts, just like training neural networks!
 
-[Paper](https://arxiv.org/abs/2406.16218) | [Project website](https://microsoft.github.io/Trace/) | [Documentation](https://microsoft.github.io/Trace/intro.html) | [Blogpost](https://www.microsoft.com/en-us/research/blog/tracing-the-path-to-self-adapting-ai-agents/) | [Discord channel](https://discord.gg/4VeAvwFcWy) | [Roadmap](https://docs.google.com/spreadsheets/d/1dMoECd2Soj6bATpkNDeaMxl0ymOYCtGq7ZiHr0JRdJU/edit?usp=sharing)
+[Paper](https://arxiv.org/abs/2406.16218) | [Project website](https://agentopt.github.io/Trace/) | [Documentation](https://agentopt.github.io/Trace/intro.html) | [Blogpost](https://www.microsoft.com/en-us/research/blog/tracing-the-path-to-self-adapting-ai-agents/) | [Discord channel](https://discord.gg/4VeAvwFcWy) | [Roadmap](https://docs.google.com/spreadsheets/d/1dMoECd2Soj6bATpkNDeaMxl0ymOYCtGq7ZiHr0JRdJU/edit?usp=sharing)
 
 <p >
-    <img src="https://github.com/microsoft/Trace/blob/main/docs/images/platform2.png" alt="drawing" width="100%"/>
+    <img src="https://github.com/AgentOpt/Trace/blob/main/docs/images/platform2.png" alt="drawing" width="100%"/>
 </p>
 
 ## Setup
@@ -102,6 +102,15 @@ def strange_sort_list(lst):
 test_input = [1, 2, 3, 4]
 test_output = strange_sort_list(test_input)
 print(test_output)
+```
+
+Note that by default the generative optimizers in Trace (like OptoPrime) use LiteLLLM as the backend.
+See [LLM API Setup](#llm-api-setup) below for more details. 
+At a minimum, the api_key must be set for calling LLMs, such as,
+
+```python
+import os
+os.environ['OPENAI_API_KEY'] = 'YOUR API KEY'
 ```
 
 Now, after declaring what is trainable and what isn't, and use `node` and `bundle` to define the computation graph, we
@@ -220,21 +229,15 @@ agent = train()
 
 Defining and training an agent through Trace will give you more flexibility and control over what the agent learns.
 
-If you have a dataset and you want to use **multi-threading** to train and evaluate your workflow quickly:
-
-```python
-
-```
-
 ## Tutorials
 
 | **Level** | **Tutorial**                                                                              | **Run in Colab**                                                                                                                                                                                       | **Description**                                                                                                                                                                       |
 | --- |-------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Beginner | [Getting Started](https://microsoft.github.io/Trace/quickstart/quick_start.html)          | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/microsoft/Trace/blob/website/docs/quickstart/quick_start.ipynb)       | Introduces basic primitives like `node` and `bundle`. Showcases a code optimization pipeline.                                                                                         |
-| Beginner | [Adaptive AI Agent](https://microsoft.github.io/Trace/quickstart/quick_start_2.html)      | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/microsoft/Trace/blob/website/docs/quickstart/quick_start_2.ipynb)      | Introduce primitive `model` that allows anyone to build self-improving agents that react to environment feedback. Shows how an LLM agent learns to place a shot in a Battleship game.
-| Intermediate | [Multi-Agent Collaboration](https://microsoft.github.io/Trace/quickstart/virtualhome.html) | N/A                                                                                                                                                                                                    | Demonstrates how Trace can be used for multi-agent collaboration environment in Virtualhome.
-| Intermediate | [NLP Prompt Optimization](https://microsoft.github.io/Trace/examples/nlp/bigbench_hard.html) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/microsoft/Trace/blob/website/docs/examples/nlp/bigbench_hard.ipynb) | Shows how Trace can optimizes prompt and code together jointly for BigBench-Hard 23 tasks.
-| Advanced | [Robotic Arm Control](https://microsoft.github.io/Trace/examples/robotics/metaworld.html) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/microsoft/Trace/blob/website/docs/examples/robotics/metaworld.ipynb)                                     | Trace can optimize code to control a robotic arm after observing a full trajectory of interactions.                                                                                   |
+| Beginner | [Getting Started](https://agentopt.github.io/Trace/quickstart/quick_start.html)          | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/Trace/blob/website/docs/quickstart/quick_start.ipynb)       | Introduces basic primitives like `node` and `bundle`. Showcases a code optimization pipeline.                                                                                         |
+| Beginner | [Adaptive AI Agent](https://agentopt.github.io/Trace/quickstart/quick_start_2.html)      | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/Trace/blob/website/docs/quickstart/quick_start_2.ipynb)      | Introduce primitive `model` that allows anyone to build self-improving agents that react to environment feedback. Shows how an LLM agent learns to place a shot in a Battleship game.
+| Intermediate | [Multi-Agent Collaboration](https://agentopt.github.io/Trace/quickstart/virtualhome.html) | N/A                                                                                                                                                                                                    | Demonstrates how Trace can be used for multi-agent collaboration environment in Virtualhome.
+| Intermediate | [NLP Prompt Optimization](https://agentopt.github.io/Trace/examples/nlp/bigbench_hard.html) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/Trace/blob/website/docs/examples/nlp/bigbench_hard.ipynb) | Shows how Trace can optimizes prompt and code together jointly for BigBench-Hard 23 tasks.
+| Advanced | [Robotic Arm Control](https://agentopt.github.io/Trace/examples/robotics/metaworld.html) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/Trace/blob/website/docs/examples/robotics/metaworld.ipynb)                                     | Trace can optimize code to control a robotic arm after observing a full trajectory of interactions.                                                                                   |
 
 
 ## Supported Optimizers
@@ -274,7 +277,7 @@ The table evaluates the frameworks in the following aspects:
 We provide a comparison to validate our implementation of TextGrad in Trace:
 
 <p align="center">
-    <img src="https://github.com/microsoft/Trace/blob/main/docs/images/compare_to_textgrad3.png?raw=True" alt="drawing" width="100%"/>
+    <img src="https://github.com/AgentOpt/Trace/blob/main/docs/images/compare_to_textgrad3.png?raw=True" alt="drawing" width="100%"/>
 </p>
 
 To produce this table, we ran the TextGrad pip-installed repo on 2024-10-30, and we also include the numbers reported in the TextGrad paper.
@@ -389,8 +392,8 @@ Explains the role of feedback in LLM-based optimizers. An early work that influe
 ```
 
 ## Contributors Wall
-<a href="https://github.com/microsoft/Trace/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=microsoft/Trace" />
+<a href="https://github.com/AgentOpt/Trace/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=AgentOpt/Trace" />
 </a>
 
 ## Contributing
@@ -404,8 +407,7 @@ a CLA and decorate the PR appropriately (e.g., status check, comment). Simply fo
 provided by the bot. You will only need to do this once across all repos using our CLA.
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/).
 
 ## Roadmap
 
@@ -423,7 +425,7 @@ please see the paper for details.
 which [fixes](https://platform.openai.com/docs/models/gpt-4o) the structured output issue of gpt-4o-2024-05-13.
 While gpt-4 works reliably most of the time, we've found gpt-4o-2024-05-13 often hallucinates even in very basic
 optimization problems and does not follow instructions. This might be due to the current implementation of optimizers
-rely on outputing in json format. Issues of gpt-4o with json have been reported in the communities (
+rely on outputing in json format. Issues of gpt-4o with json have been reported in the community (
 see [example](https://community.openai.com/t/gpt-4o-doesnt-consistently-respect-json-schema-on-tool-use/751125)).
 
 ## Disclaimers
@@ -433,7 +435,7 @@ see [example](https://community.openai.com/t/gpt-4o-doesnt-consistently-respect-
   functionalities may be changed in the future.
 - System performance may vary by workflow, dataset, query, and response, and users are responsible for determining the
   accuracy of generated content.
-- System outputs do not represent the opinions of Microsoft.
+- System outputs do not represent the opinions of the developers of Trace.
 - All decisions leveraging outputs of the system should be made with human oversight and not be based solely on system
   outputs.
 - Use of the system must comply with all applicable laws, regulations, and policies, including those pertaining to
@@ -446,10 +448,10 @@ see [example](https://community.openai.com/t/gpt-4o-doesnt-consistently-respect-
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
 trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft
+Any use of Microsoft trademarks or logos in this project does not imply Microsoft
 sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
 
 ## Privacy
 
-See [Microsoft Privacy Statement](https://privacy.microsoft.com/en-us/privacystatement).
+This project has adopted the [Microsoft Privacy Statement](https://privacy.microsoft.com/en-us/privacystatement).

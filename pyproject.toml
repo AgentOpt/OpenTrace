@@ -23,12 +23,13 @@ classifiers = [
 
 [project.optional-dependencies]
 autogen = ["autogen-agentchat==0.2.40"]
+test = ["datasets==3.6.0"]
 
 
 [project.urls]
-Homepage = "https://microsoft.github.io/Trace/"
-Documentation = "https://microsoft.github.io/Trace/intro.html"
-Repository = "https://github.com/microsoft/Trace.git"
+Homepage = "https://agentopt.github.io/Trace/"
+Documentation = "https://agentopt.github.io/Trace/intro.html"
+Repository = "https://github.com/AgentOpt/Trace.git"
 
 [tool.setuptools]
 license-files = ["LICEN[CS]E*"]

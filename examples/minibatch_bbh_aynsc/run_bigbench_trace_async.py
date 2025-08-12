@@ -142,7 +142,7 @@ class Predict:
         We read in a question and produces a response
         """
         user_prompt = self.create_prompt(self.prompt_template, question)
-        response = trace_ops.call_llm(user_prompt)
+        response = trace_ops.call_llm(None, user_prompt)
         answer = self.extract_answer(self.prompt_template, question, response)
         return answer
 

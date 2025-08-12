@@ -99,7 +99,7 @@ class UCBSearchAlgorithm(MinibatchAlgorithm):
 
         self.optimizer.update(original_params) 
 
-        avg_score = np.mean(eval_scores) if eval_scores and all(s is not None for s in eval_scores) else -np.inf
+        avg_score = np.mean(eval_scores) if ((eval_scores is not None) and all(s is not None for s in eval_scores)) else -np.inf
         eval_count = len(eval_xs) 
         
         return float(avg_score), eval_count
