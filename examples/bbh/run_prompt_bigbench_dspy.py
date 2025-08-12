@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
         stats = {}
 
-        llm = dspy.OpenAI(model="gpt-4-turbo-2024-04-09", max_tokens=512)
+        llm = dspy.LM(model="openai/gpt-4-turbo-2024-04-09", max_tokens=512)
         dspy.settings.configure(lm=llm)
 
         if args.cot:

@@ -7,7 +7,7 @@ def test_auto_guide_build():
     assert reference_guide.model == "gpt-4"
     
     # Test building ReferenceGuide with custom prompt template
-    custom_prompt_guide = KeywordSuggest(
+    custom_prompt_guide = ReferenceSuggest(
         model="gpt-3.5-turbo",
         prompt_template="Custom prompt: {content}, Reference: {reference}"
     )
@@ -22,15 +22,12 @@ def test_auto_guide_build():
     assert keyword_guide.keyword_response == keyword_response
     
     # Test building KeywordGuide with custom analyzers
-    # def custom_analyzer(content, reference_log):
-    #     return "Custom analysis result"
-    #
-    # analyzer_guide = AutoGuide.build(
-    #     keyword_response={"key": "value"},
-    #     custom_analyzers=[custom_analyzer]
-    # )
-    # assert isinstance(analyzer_guide, KeywordGuide)
-    # assert len(analyzer_guide.custom_analyzers) == 1
-    # assert analyzer_guide.custom_analyzers[0](None, None) == "Custom analysis result"
+    def custom_analyzer(content, reference_log):
+        return "Custom analysis result"
+
+    analyzer_guide = KeywordSuggest(keyword_response={"key": "value"}, custom_analyzers=[custom_analyzer])
+    assert isinstance(analyzer_guide, Suggest)
+    assert len(analyzer_guide.custom_analyzers) == 1
+    assert analyzer_guide.custom_analyzers[0](None, None) == "Custom analysis result"
 
 # test_auto_guide_build()

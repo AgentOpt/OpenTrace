@@ -219,7 +219,7 @@ def test_optimizer_customization(optimizer_class):
     # Try to set custom parameters if the optimizer supports it
     try:
         if hasattr(optimizer_class, '__init__') and 'temperature' in inspect.signature(optimizer_class.__init__).parameters:
-            optimizer = optimizer_class([x], temperature=0.7)
+            optimizer = optimizer_class([x], temperature=0.0)
         else:
             optimizer = optimizer_class([x])
     except Exception as e:

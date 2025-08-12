@@ -215,7 +215,7 @@ def main():
                        help='Number of threads for parallel processing')
     parser.add_argument('--eval_frequency', type=int, default=2,
                        help='How often to run evaluation')
-    parser.add_argument('--log_frequency', type=int, default=20,
+    parser.add_argument('--log_frequency', type=int, default=10,
                        help='How often to log results')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for reproducibility')
@@ -229,17 +229,17 @@ def main():
                        help='Maximum depth for beam search algorithms')
     parser.add_argument('--validation_dataset_size', type=int, default=20,
                        help='Size of validation dataset for beam search')
-    parser.add_argument('--max_history_size', type=int, default=12,
+    parser.add_argument('--max_history_size', type=int, default=5,
                        help='Maximum history size for history-based algorithms')
     parser.add_argument('--num_basicsearch_proposals', type=int, default=2,
                        help='Number of proposals for basic search algorithm')
     
     # UCB algorithm-specific parameters
-    parser.add_argument('--max_buffer_size', type=int, default=10,
+    parser.add_argument('--max_buffer_size', type=int, default=5,
                        help='Maximum buffer size for UCB algorithms')
     parser.add_argument('--ucb_exploration_factor', type=float, default=1.0,
                        help='UCB exploration factor')
-    parser.add_argument('--num_search_iterations', type=int, default=100,
+    parser.add_argument('--num_search_iterations', type=int, default=4,
                        help='Number of search iterations for UCB algorithms')
     parser.add_argument('--train_batch_size_ucb', type=int, default=2,
                        help='Training batch size for UCB algorithms')

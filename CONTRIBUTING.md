@@ -1,6 +1,6 @@
 # Contribution Guideline
 
-Trace is an actively growing project and under active maintenance and development! We maintain two major branches `main` and `experimental`. The `main` branch is the most stable, version-controlled branch and it is what the PyPI package is linked to.  On the other hand, the `experimental` branch is the dev branch, which will change more dynamically in in preparation for the next version update. 
+Trace is an actively growing project and under active maintenance and development! We maintain two major branches `main` and `experimental`. The `main` branch is the most stable, version-controlled branch and it is what the PyPI package is linked to.  On the other hand, the `experimental` branch is the dev branch, which will change more dynamically in preparation for the next version update. 
 
 ### Development and Review Process
 

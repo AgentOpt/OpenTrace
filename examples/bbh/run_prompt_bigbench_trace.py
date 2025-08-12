@@ -4,6 +4,7 @@ from textwrap import dedent
 from opto.optimizers import OptoPrime
 from datasets import load_dataset
 from opto.trace import model, bundle, ExecutionError
+from opto.utils.llm import LLM
 
 import re
 from tqdm import tqdm
@@ -24,10 +25,8 @@ def eval_metric(true, prediction):
 
 
 class LLMCallable:
-    def __init__(self, config_list=None, max_tokens=1024, verbose=False):
-        if config_list is None:
-            config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
-        self.llm = autogen.OpenAIWrapper(config_list=config_list)
+    def __init__(self, llm=None, max_tokens=1024, verbose=False):
+        self.llm = llm or LLM()
         self.max_tokens = max_tokens
         self.verbose = verbose
 
@@ -40,15 +39,15 @@ class LLMCallable:
         if self.verbose not in (False, "output"):
             print("Prompt\n", system_prompt + user_prompt)
 
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}, {"role": "user", "content": "Format your response as a JSON object."}]
 
         try:
-            response = self.llm.create(
+            response = self.llm(
                 messages=messages,
                 response_format={"type": "json_object"},
             )
         except Exception:
-            response = self.llm.create(messages=messages, max_tokens=self.max_tokens)
+            response = self.llm(messages=messages, max_tokens=self.max_tokens)
         response = response.choices[0].message.content
 
         if self.verbose:

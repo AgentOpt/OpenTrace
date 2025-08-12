@@ -588,10 +588,13 @@ def set_update(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(catch_execution_error=False)
 def call_llm(system_prompt, *user_prompts, **kwargs):
     """Query the language model of system_prompt with user_prompts."""
-    messages = [{"role": "system", "content": system_prompt}]
+    if system_prompt is not None:
+        messages = [{"role": "system", "content": system_prompt}]
+    else:
+        messages = [{"role": "system", "content": "You are a helpful assistant.\n"}]
     for user_prompt in user_prompts:
         messages.append({"role": "user", "content": user_prompt})
     from opto.utils.llm import LLM
