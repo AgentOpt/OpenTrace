@@ -1,4 +1,3 @@
-import autogen
 from opto.trace.nodes import node, GRAPH, ParameterNode
 from textwrap import dedent
 from opto.optimizers import OptoPrime

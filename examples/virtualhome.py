@@ -10,13 +10,12 @@ import autogen
 
 import opto.trace as trace
 from opto.trace.nodes import node
+from opto.utils.llm import LLM
 
 
 class LLMCallable:
-    def __init__(self, config_list=None, max_tokens=1024, verbose=False):
-        if config_list is None:
-            config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
-        self.llm = autogen.OpenAIWrapper(config_list=config_list)
+    def __init__(self, llm=None, max_tokens=1024, verbose=False):
+        self.llm = llm or LLM()
         self.max_tokens = max_tokens
         self.verbose = verbose
 
@@ -28,15 +27,15 @@ class LLMCallable:
         if self.verbose not in (False, "output"):
             print("Prompt\n", system_prompt + user_prompt)
 
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}, {"role": "user", "content": "Format your response as a JSON object."}]
 
         try:
-            response = self.llm.create(
+            response = self.llm(
                 messages=messages,
                 response_format={"type": "json_object"},
             )
         except Exception:
-            response = self.llm.create(messages=messages, max_tokens=self.max_tokens)
+            response = self.llm(messages=messages, max_tokens=self.max_tokens)
         response = response.choices[0].message.content
 
         if self.verbose:
@@ -103,7 +102,7 @@ class BaseUtil:
 
 def env_fn(env_id, env_task_set, executable_args, args):
     # from envs.unity_environment import UnityEnvironment
-
+    
     return UnityEnvironment(num_agents=args.agent_num,
                             max_episode_length=args.max_episode_length,
                             port_id=env_id,
@@ -186,7 +185,7 @@ class VirtualHomeEnv:
         self.dialogue_history_len = 30
 
         for i in range(self.num_agents):
-            self.agents.append(virtualhome_agent.LLM_agent(agent_id=i + 1, args=args))
+            self.agents.append(agent_fn[i])
 
     def reset(self, task_id=None, reset_seed=1111):
         self.cnt_duplicate_subgoal = 0
@@ -376,7 +375,7 @@ class TracedEnv:
 
         self.obs = None
         self.args = args
-        self.env = TraceVirtualHome(args.max_number_steps, args.run_id,
+        self.env = VirtualHomeEnv(args.max_number_steps, args.run_id,
                                     env_fn, args.agent_fn, args.num_agents, args=args)
 
         atexit.register(self.close)
@@ -387,7 +386,7 @@ class TracedEnv:
 
     def reset_env(self):
         self.env.close()
-        self.env = TraceVirtualHome(self.args.max_number_steps, self.args.run_id,
+        self.env = VirtualHomeEnv(self.args.max_number_steps, self.args.run_id,
                                     env_fn, self.args.agent_fn, self.args.num_agents, args=self.args)
 
     def reset(self, task_id=8):
@@ -403,7 +402,7 @@ class TracedEnv:
             agent_obs, agent_obs_descs, agent_goal_specs, agent_goal_descs, agent_infos = self.env.reset(
                 task_id=task_id)
 
-        @bundle()
+        @trace.bundle()
         def reset(agent_idx):
             return agent_obs_descs[agent_idx]['prompts']
 
@@ -446,7 +445,7 @@ class TracedEnv:
         self.obs = next_agent_obs_descs
 
         # have to add allow_external_dependencies, why metaworld is fine?
-        @bundle(allow_external_dependencies=True)
+        @trace.bundle(allow_external_dependencies=True)
         def step(action, agent_idx):
             """
             Take action in the environment and return the next observation
