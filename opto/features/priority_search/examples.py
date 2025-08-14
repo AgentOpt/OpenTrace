@@ -1,5 +1,5 @@
 
-from opto.trainer.algorithms.priority_search import PrioritySearch
+from opto.features.priority_search import PrioritySearch
 from typing import Union, Optional
 
 # Below we define several algorithms that use the PrioritySearch class.

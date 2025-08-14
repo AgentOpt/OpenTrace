@@ -7,8 +7,8 @@ from opto import trace
 from opto.trace.nodes import ParameterNode
 from opto.trainer.utils import async_run
 from opto.trainer.algorithms.basic_algorithms import batchify
-from opto.trainer.algorithms.priority_search.search_template import SearchTemplate, Samples
-from opto.trainer.algorithms.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict
+from opto.features.priority_search.search_template import SearchTemplate, Samples
+from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict
 
 
 class ModuleCandidate:
