@@ -3,7 +3,7 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trainer.algorithms.basic_algorithms import Minibatch
 from opto.trainer.loader import DataLoader
-from opto.trainer.sampler import Sampler, RolloutsGraph
+from opto.features.priority_search.sampler import Sampler, RolloutsGraph
 
 # TODO save and load SearchTemplate
 # TODO async version???

@@ -1,5 +1,5 @@
 from opto import trace
-from opto.trainer.sampler import Sampler
+from opto.features.priority_search.sampler import Sampler
 from opto.trainer.loader import DataLoader
 from opto.trainer.guide import AutoGuide
 from opto.features.priority_search.utils import is_node_copy
