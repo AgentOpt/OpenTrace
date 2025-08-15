@@ -1,7 +1,5 @@
 import numpy as np
-
-
-
+import pickle
 
 class DataLoader:
 
@@ -62,3 +60,28 @@ class DataLoader:
             return xs, infos
         except StopIteration:
             return self.sample()
+
+    def save(self, path):
+        """Save the dataset to a file."""
+        with open(path, 'wb') as f:
+            pickle.dump(
+                {'_indices': self._indices,
+                 '_i': self._i,
+                 'batch_size': self.batch_size,
+                 'replacement': self.replacement,
+                 'shuffle': self.shuffle,
+                 'dataset': self.dataset},
+                f
+            )
+
+    def load(self, path):
+        """Load the dataset from a file."""
+        import pickle
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+            self._indices = data['_indices']
+            self._i = data['_i']
+            self.batch_size = data['batch_size']
+            self.replacement = data['replacement']
+            self.shuffle = data['shuffle']
+            self.dataset = data['dataset']
