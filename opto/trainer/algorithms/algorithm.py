@@ -18,7 +18,7 @@ class AbstractAlgorithm:
         pass
 
 
-class AlgorithmBase(AbstractAlgorithm):
+class Trainer(AbstractAlgorithm):
     """
         We define the API of algorithms to train an agent from a dataset of (x, info) pairs.
 
