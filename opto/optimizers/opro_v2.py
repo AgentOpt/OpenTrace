@@ -85,7 +85,7 @@ TODO:
 1. think about how initial solution was generated...
 """
 
-class OPRO2(OptoPrimeV2):
+class OPROv2(OptoPrimeV2):
     representation_prompt = dedent(
         """
         You're tasked to change the proposed solution according to feedback.

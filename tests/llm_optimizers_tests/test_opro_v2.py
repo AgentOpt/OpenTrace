@@ -10,7 +10,7 @@ from opto.utils.llm import LLM
 
 from opto import trace
 from opto.trace import node, bundle
-from opto.optimizers.optoprime_v2 import OptoPrimeV2, OptimizerPromptSymbolSet2
+from opto.optimizers.opro_v2 import OPROv2, OPROPromptSymbolSet
 
 # You can override for temporarly testing a specific optimizer ALL_OPTIMIZERS = [TextGrad] # [OptoPrimeMulti] ALL_OPTIMIZERS = [OptoPrime]
 
@@ -19,7 +19,6 @@ SKIP_REASON = "No API credentials found"
 HAS_CREDENTIALS = os.path.exists("OAI_CONFIG_LIST") or os.environ.get("TRACE_LITELLM_MODEL") or os.environ.get(
     "OPENAI_API_KEY")
 llm = LLM()
-
 
 @pytest.fixture(autouse=True)
 def clear_graph():
@@ -38,10 +37,10 @@ def test_tag_template_change():
     num_1 = node(1, trainable=True)
     num_2 = node(2, trainable=True, description="<=5")
     result = num_1 + num_2
-    optimizer = OptoPrimeV2([num_1, num_2], use_json_object_format=False,
+    optimizer = OPROv2([num_1, num_2], use_json_object_format=False,
                             ignore_extraction_error=False,
                             include_example=True,
-                            optimizer_prompt_symbol_set=OptimizerPromptSymbolSet2())
+                            optimizer_prompt_symbol_set=OPROPromptSymbolSet())
 
     optimizer.zero_feedback()
     optimizer.backward(result, 'make this number bigger')
@@ -74,7 +73,7 @@ def test_function_repr():
     num_1 = node(1, trainable=False)
 
     result = multiply(transform(num_1))
-    optimizer = OptoPrimeV2([multiply.parameter], use_json_object_format=False,
+    optimizer = OPROv2([multiply.parameter], use_json_object_format=False,
                             ignore_extraction_error=False,
                             include_example=True)
 
@@ -87,7 +86,7 @@ def test_function_repr():
     part1 = optimizer.replace_symbols(part1, optimizer.prompt_symbols)
     part2 = optimizer.replace_symbols(part2, optimizer.prompt_symbols)
 
-    function_repr = """<variable name="__code0" type="code">
+    function_repr = """<solution name="__code0" type="code">
 <value>
 def multiply(num):
     return num * 5
@@ -96,7 +95,7 @@ def multiply(num):
 The code should start with:
 def multiply(num):
 </constraint>
-</variable>"""
+</solution>"""
 
     assert function_repr in part2, "Expected function representation to be present in part2"
 
@@ -107,9 +106,8 @@ def test_big_data_truncation():
 
     result = num_1 + list_1[30]
 
-    optimizer = OptoPrimeV2([num_1, list_1], use_json_object_format=False,
-                            ignore_extraction_error=False,
-                            include_example=True, initial_var_char_limit=10)
+    optimizer = OPROv2([num_1, list_1], use_json_object_format=False,
+                            ignore_extraction_error=False, initial_var_char_limit=10)
 
     optimizer.zero_feedback()
     optimizer.backward(result, 'make this number bigger')
@@ -120,22 +118,24 @@ def test_big_data_truncation():
     part1 = optimizer.replace_symbols(part1, optimizer.prompt_symbols)
     part2 = optimizer.replace_symbols(part2, optimizer.prompt_symbols)
 
-    truncated_repr = """<variable name="list0" type="list">
-<value>
-[1, 2, 3, ...(skipped due to length limit)
-</value>
-</variable>"""
+    truncated_repr = "[1, 2, 3, ...(skipped due to length limit)"
 
     assert truncated_repr in part2, "Expected truncated list representation to be present in part2"
 
 def test_extraction_pipeline():
     num_1 = node(1, trainable=True)
-    num_2 = node(2, trainable=True, description="<=5")
-    result = num_1 + num_2
-    optimizer = OptoPrimeV2([num_1, num_2], use_json_object_format=False,
-                            ignore_extraction_error=False,
-                            include_example=True,
-                            optimizer_prompt_symbol_set=OptimizerPromptSymbolSet2())
+    optimizer = OPROv2([num_1], use_json_object_format=False,
+                       ignore_extraction_error=False,
+                       include_example=True)
+
+    @bundle()
+    def propose_solution(x):
+        """
+        Propose a solution to the given prompt using the input.
+        """
+        return x + 1
+
+    result = propose_solution(num_1)
 
     optimizer.zero_feedback()
     optimizer.backward(result, 'make this number bigger')
@@ -153,29 +153,12 @@ def test_extraction_pipeline():
 
     # response = optimizer.llm(messages=messages)
     # response = response.choices[0].message.content
-    response = """<reason>
-The instruction suggests that the output, `add0`, needs to be made bigger than it currently is (3). The code performs an addition of `int0` and `int1` to produce `add0`. To increase `add0`, we can increase the values of `int0` or `int1`, or both. Given that `int1` has a constraint of being less than or equal to 5, we can set `int0` to a higher value, since it has no explicit constraint. By adjusting `int0` to a higher value, the output can be made larger in accordance with the feedback.
-</reason>
 
-<var>
-<name>int0</name>
-<data>
-5
-</data>
-</var>
-
-<var>
-<name>int1</name>
-<data>
-5
-</data>
-</var>"""
+    response = '```\n\n<reasoning>\nThe #Instruction requests a new solution that incorporates the given feedback into the proposed solution. The #Variables section includes an integer variable "int0" with the current value set to 1. The feedback states that this number should be made "bigger." Thus, the current value does not meet the feedback requirement, and I should change it to a larger integer value to comply with the feedback. A simple increment will suffice, so I will propose changing "int0" from 1 to 2.\n</reasoning>\n<variable>\n<name>int0</name>\n<value>\n2\n</value>\n</variable>\n\n```'
     reasoning = response
     suggestion = optimizer.extract_llm_suggestion(response)
 
     assert 'reasoning' in suggestion, "Expected 'reasoning' in suggestion"
     assert 'variables' in suggestion, "Expected 'variables' in suggestion"
     assert 'int0' in suggestion['variables'], "Expected 'int0' variable in suggestion"
-    assert 'int1' in suggestion['variables'], "Expected 'int1' variable in suggestion"
-    assert suggestion['variables']['int0'] == 5, "Expected int0 to be incremented to 5"
-    assert suggestion['variables']['int1'] == 5, "Expected int1 to be incremented to 5"
+    assert suggestion['variables']['int0'] == 2, "Expected int0 to be incremented to 2"
