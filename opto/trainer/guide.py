@@ -10,7 +10,7 @@ def exact_match_metric(question, student_answer, info):
     """ Exact match metric """
     return float(student_answer == info)
 
-class AutoGuide:
+class Guide:
     """
     Base class for all guides that provide feedback on content.
 
@@ -69,7 +69,7 @@ class AutoGuide:
                 setattr(self, key, value)
 
 
-class VerbalJudgeGuide(AutoGuide):
+class LLMJudge(Guide):
     """
     This is a combined metric + feedback guide that asks LLM to provide a binary judgment (True/False)
     and then if False, provide feedback.

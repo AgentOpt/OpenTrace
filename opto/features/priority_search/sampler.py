@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trainer.utils import batch_run
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide
 
 @dataclass
 class Rollout:
@@ -88,8 +88,8 @@ class RolloutConfig:
             raise TypeError("xs must be a list.")
         if not isinstance(infos, list):
             raise TypeError("infos must be a list.")
-        if not isinstance(guide, AutoGuide):
-            raise TypeError("guide must be a AutoGuide.")
+        if not isinstance(guide, Guide):
+            raise TypeError("guide must be a Guide.")
         if len(xs) != len(infos):
             raise ValueError("Length of xs must match length of infos.")
         self.module = module
@@ -189,7 +189,7 @@ class Sampler:
 
         Args:
             loader (DataLoader): The data loader to sample from.
-            guide (AutoGuide): The guide to evaluate the proposals.
+            guide (Guide): The guide to evaluate the proposals.
             num_threads (int): Number of threads to use for sampling.
             sub_batch_size (int, optional): Size of the sub-batch to use for sampling. If None, uses the batch size.
             score_range (tuple): The range of scores to consider valid.

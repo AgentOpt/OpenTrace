@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from typing import Union
 from opto import trace
-from opto.trainer.algorithms.algorithm import AlgorithmBase
+from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
 from opto.trainer.utils import batch_run, async_run
 from opto.optimizers.utils import print_color
@@ -33,7 +33,7 @@ def standard_optimization_step(agent, x, guide, info, min_score=0):
     return target, score, feedback
 
 
-class Minibatch(AlgorithmBase):
+class Minibatch(Trainer):
     """ General minibatch optimization algorithm. This class defines a general training and logging routine using minimbatch sampling."""
 
     def __init__(self,

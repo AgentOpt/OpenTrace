@@ -4,7 +4,7 @@ from opto import trace
 from opto.trainer.loader import DataLoader
 from opto.trainer.algorithms import BasicSearchAlgorithm
 from opto.optimizers import OptoPrimeV2
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide as _Guide
 from opto.utils.llm import DummyLLM
 
 import re, os
@@ -40,7 +40,7 @@ def test_saving_load():
 def test_trainer_saving_loading():
 
 
-    class Guide(AutoGuide):
+    class Guide(_Guide):
 
         def get_feedback(self, query, response, reference=None, **kwargs):
             """

@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm_asyncio
 from opto.trace.bundle import ALLOW_EXTERNAL_DEPENDENCIES
 from opto.trace.modules import Module
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide
 
 def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, description = None, allow_sequential_run=True):
     """Run multiple functions in asynchronously.
@@ -36,13 +36,13 @@ def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, de
     if (max_workers == 1) and allow_sequential_run: # run without asyncio
         print(f"{description} (Running sequentially).")
         return [run(*args, **kwargs) for run, args, kwargs in zip(runs, args_list, kwargs_list)]
-    else: 
+    else:
         async def _run():
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                tasks = [loop.run_in_executor(executor, functools.partial(run, *args, **kwargs)) 
+                tasks = [loop.run_in_executor(executor, functools.partial(run, *args, **kwargs))
                         for run, args, kwargs, in zip(runs, args_list, kwargs_list)]
-                
+
                 # Use the description in the tqdm progress bar if provided
                 if description:
                     return await tqdm_asyncio.gather(*tasks, desc=description)
@@ -54,11 +54,11 @@ def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, de
 def batch_run(max_workers=None, description=None):
     """
     Create a function that runs in parallel using asyncio, with support for batching.
-    The batch size is inferred as the length of the longest argument or keyword argument.            
+    The batch size is inferred as the length of the longest argument or keyword argument.
 
     Args:
         fun (callable): The function to run.
-        
+
         max_workers (int, optional): Maximum number of worker threads to use.
             If None, the default ThreadPoolExecutor behavior is used.
         description (str, optional): Description to display in the progress bar.
@@ -66,9 +66,9 @@ def batch_run(max_workers=None, description=None):
     Returns:
         callable: A new function that processes batches of inputs.
 
-    NOTE: 
-        If fun takes input that has __len__ (like lists or arrays), they won't be broadcasted. 
-        When using batch_run, be sure to pass list of such arguments of the same length.       
+    NOTE:
+        If fun takes input that has __len__ (like lists or arrays), they won't be broadcasted.
+        When using batch_run, be sure to pass list of such arguments of the same length.
 
     Example:
         >>> @batch_run(max_workers=4, description="Processing batch")
@@ -78,33 +78,33 @@ def batch_run(max_workers=None, description=None):
         >>> y = 10
         >>> outputs = my_function(x, y)
         >>> # outputs will be [11, 12, 13, 14, 15]
-        >>> # This will run the function in asynchronously with 4 threads   
+        >>> # This will run the function in asynchronously with 4 threads
     """
-    
+
     def decorator(fun):
         """
         Decorator to create a function that runs in parallel using asyncio, with support for batching.
-        
+
         Args:
             fun (callable): The function to run.
-            
+
             max_workers (int, optional): Maximum number of worker threads to use.
                 If None, the default ThreadPoolExecutor behavior is used.
             description (str, optional): Description to display in the progress bar.
 
         Returns:
             callable: A new function that processes batches of inputs.
-        """    
+        """
         def _fun(*args, **kwargs):
-            
+
             # We try to infer the batch size from the args
             all_args = args + tuple(kwargs.values())
             # find all list or array-like arguments and use their length as batch size
             batch_size = max(len(arg) for arg in all_args if hasattr(arg, '__len__'))
-            
+
             # broadcast the batch size to all args and record the indices that are broadcasted
             args = [arg if hasattr(arg, '__len__') else [arg] * batch_size for arg in args]
-            kwargs = {k: v if hasattr(v, '__len__') else [v] * batch_size for k, v in kwargs.items()}   
+            kwargs = {k: v if hasattr(v, '__len__') else [v] * batch_size for k, v in kwargs.items()}
 
             # assert that all args and kwargs have the same length
             lengths = [len(arg) for arg in args] + [len(v) for v in kwargs.values()]
@@ -113,10 +113,10 @@ def batch_run(max_workers=None, description=None):
 
             # deepcopy if it is a trace.Module (as they may have mutable state)
             # Module.copy() is used to create a new instance with the same parameters
-            _args = [[a.copy() if isinstance(a, (Module, AutoGuide)) else a for a in arg ] for arg in args ]
-            _kwargs = {k: [a.copy() if isinstance(a, (Module, AutoGuide)) else a  for a in v ] for k, v in kwargs.items() }
+            _args = [[a.copy() if isinstance(a, (Module, Guide)) else a for a in arg ] for arg in args ]
+            _kwargs = {k: [a.copy() if isinstance(a, (Module, Guide)) else a  for a in v ] for k, v in kwargs.items() }
 
-            # Run the forward function in parallel using asyncio with the same parameters. 
+            # Run the forward function in parallel using asyncio with the same parameters.
             # Since trace.Node is treated as immutable, we can safely use the same instance.
             # The resultant graph will be the same as if we had called the function with the original arguments.
 
@@ -145,25 +145,25 @@ if __name__ == "__main__":
     args_list = [(3,), (3,), (2,), (3,), (3,), (2,), (2,), (3,), (2,), (3,)]
     kwargs_list = [{}] * 10
     import time
-    
+
     # Example with 1 thread (runs sequentially)
     print("Running with 1 thread (sequential):")
     start = time.time()
     output = async_run(runs, args_list, kwargs_list, max_workers=1)
     print(f"Time with 1 thread: {time.time()-start:.2f} seconds")
-    
+
     # Example with limited workers (2 threads)
     print("\nRunning with 2 threads (parallel):")
     start = time.time()
     output = async_run(runs, args_list, kwargs_list, max_workers=2)
     print(f"Time with 2 threads: {time.time()-start:.2f} seconds")
-    
+
     # Example with limited workers (4 threads)
     print("\nRunning with 4 threads (parallel):")
     start = time.time()
     output = async_run(runs, args_list, kwargs_list, max_workers=4)
     print(f"Time with 4 threads: {time.time()-start:.2f} seconds")
-    
+
     # Example with default number of workers
     print("\nRunning with default number of threads:")
     start = time.time()

@@ -5,7 +5,7 @@ from opto.utils.llm import LLM, LiteLLM
 from opto.optimizers import OptoPrime
 from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm
 from opto.trainer.loggers import TensorboardLogger
-from opto.trainer.guide import VerbalJudgeGuide
+from opto.trainer.guide import LLMJudge
 from typing import Any
 
 
@@ -46,7 +46,7 @@ class Learner:
         return self.model(self.system_prompt, self.user_prompt_template, message)
 
 
-Guide = VerbalJudgeGuide
+Guide = LLMJudge
 Logger = TensorboardLogger
 
 
@@ -80,7 +80,7 @@ def main():
             agent=agent,
             optimizer=optimizer,
             logger=logger)
-    
+
     alg.train(guide,
               train_dataset,
               num_epochs=num_epochs,

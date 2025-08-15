@@ -100,8 +100,8 @@ class UCBSearchAlgorithm(MinibatchAlgorithm):
         self.optimizer.update(original_params)
 
         avg_score = np.mean(eval_scores) if ((eval_scores is not None) and all(s is not None for s in eval_scores)) else -np.inf
-        eval_count = len(eval_xs) 
-        
+        eval_count = len(eval_xs)
+
         return float(avg_score), eval_count
 
     def _calculate_ucb(self, candidate_buffer_entry: Dict, total_tracked_evaluations: int) -> float:
@@ -337,7 +337,7 @@ class UCBSearchAlgorithm(MinibatchAlgorithm):
             if save_frequency is not None and iteration % save_frequency == 0:
                 best_overall_candidate = max(self.buffer, key=lambda c: c['score_sum'] / (c['eval_count'] or 1E-9) )
                 self.optimizer.update(best_overall_candidate['params']) # Load params using optimizer
-                self.save_agent(save_path, iteration) # save_agent is from AlgorithmBase
+                self.save_agent(save_path, iteration) # save_agent is from Trainer
                 print_color(f"Iter {iteration}: Saved agent based on best candidate in buffer.", 'green')
 
         # End of search loop
