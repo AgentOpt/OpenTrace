@@ -47,7 +47,7 @@ class ProblemInstance:
     variables: str
     feedback: str
 
-    optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
+    optimizer_prompt_symbol_set: OPROPromptSymbolSet
 
     problem_template = dedent(
         """
@@ -92,8 +92,8 @@ class OPRO2(OptoPrimeV2):
 
         Specifically, a problem will be composed of the following parts:
         - {instruction_section_title}: the instruction which describes the things you need to do or the question you should answer.
-        - {variables_section_title}: the input variables that you can change/tweak (trainable).
-        - {feedback_section_title}: the feedback about the code's execution result.
+        - {variables_section_title}: the proposed solution that you can change/tweak (trainable).
+        - {feedback_section_title}: the feedback about the solution.
 
         If `data_type` is `code`, it means `{value_tag}` is the source code of a python code, which may include docstring and definitions.
         """
@@ -134,14 +134,16 @@ class OPRO2(OptoPrimeV2):
         """
     )
 
-    default_objective = "Propose a new solution that will improve the feedback."
+    # Default Objective becomes instruction for the next block
+    default_objective = "Propose a new solution that will incorporate the feedback."
 
     def __init__(self, *args,
                  optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
                  **kwargs):
         optimizer_prompt_symbol_set = optimizer_prompt_symbol_set or OPROPromptSymbolSet()
         super().__init__(*args, optimizer_prompt_symbol_set=optimizer_prompt_symbol_set, **kwargs)
-        self.buffer = []
+        self.include_example = False # default example in OptoPrimeV2 does not work in OPRO
+        self.memory_size = 5
 
     def problem_instance(self, summary, mask=None):
         mask = mask or []
