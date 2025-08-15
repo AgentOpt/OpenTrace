@@ -294,7 +294,7 @@ class ProblemInstance:
     )
 
     def __repr__(self) -> str:
-        return self.replace_symbols(self.problem_template.format(
+        return self.problem_template.format(
             instruction=self.instruction,
             code=self.code,
             documentation=self.documentation,
@@ -303,24 +303,7 @@ class ProblemInstance:
             outputs=self.outputs,
             others=self.others,
             feedback=self.feedback,
-        ), self.optimizer_prompt_symbol_set.default_prompt_symbols)
-
-    def replace_symbols(self, text: str, symbols: Dict[str, str]) -> str:
-        default_prompt_symbols = {
-            "variables": "# Variables",
-            "constraints": "# Constraints",
-            "inputs": "# Inputs",
-            "outputs": "# Outputs",
-            "others": "# Others",
-            "feedback": "# Feedback",
-            "instruction": "# Instruction",
-            "code": "# Code",
-            "documentation": "# Documentation",
-        }
-
-        for k, v in symbols.items():
-            text = text.replace(default_prompt_symbols[k], v)
-        return text
+        )
 
 
 class OptoPrimeV2(OptoPrime):
