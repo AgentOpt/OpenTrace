@@ -5,7 +5,7 @@ from opto.utils.llm import LLM, LiteLLM
 from opto.optimizers import OptoPrimeV2 as OptoPrime
 from opto.features.priority_search import PrioritySearch as SearchAlgorithm
 from opto.trainer.loggers import TensorboardLogger
-from opto.trainer.guide import VerbalJudgeGuide
+from opto.trainer.guide import LLMJudge
 from typing import Any
 
 
@@ -46,7 +46,7 @@ class Learner:
         return self.model(self.system_prompt, self.user_prompt_template, message)
 
 
-Guide = VerbalJudgeGuide
+Guide = LLMJudge
 Logger = TensorboardLogger
 
 

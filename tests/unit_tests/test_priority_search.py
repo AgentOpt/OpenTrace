@@ -4,7 +4,7 @@ from opto.features.priority_search.sampler import Sampler
 from opto.features.priority_search.priority_search import PrioritySearch as _PrioritySearch
 from opto.features.priority_search.priority_search import ModuleCandidate
 from opto.optimizers import OptoPrimeV2
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide
 from opto.utils.llm import DummyLLM
 
 import re
@@ -12,7 +12,7 @@ import numpy as np
 import copy
 
 
-class Guide(AutoGuide):
+class Guide(Guide):
 
     def get_feedback(self, query, response, reference=None, **kwargs):
         """

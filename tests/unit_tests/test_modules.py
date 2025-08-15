@@ -157,7 +157,7 @@ def test_multiple_inheritance():
     assert result._data == 2
 
 
-# Test cases for model_dump
+# Test cases for export
 @model
 class DummyClass:
     def __init__(self):
@@ -189,12 +189,12 @@ class ComplexClass:
     def __str__(self):
         return "ComplexClass"
 
-def test_model_dump_basic():
+def test_export_basic():
     dummy = DummyClass()
     dummy._param._data = 42  # Change the node value
     temp_file = "temp_dummy.py"
     try:
-        dummy.model_dump(temp_file)
+        dummy.export(temp_file)
         with open(temp_file, "r") as f:
             content = f.read()
             # Check if class definition is present
@@ -214,11 +214,11 @@ def test_model_dump_basic():
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-def test_model_dump_complex():
+def test_export_complex():
     complex_obj = ComplexClass()
     temp_file = "temp_complex.py"
     try:
-        complex_obj.model_dump(temp_file)
+        complex_obj.export(temp_file)
         with open(temp_file, "r") as f:
             content = f.read()
             # Check if class definition is present
@@ -233,13 +233,13 @@ def test_model_dump_complex():
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-def test_model_dump_with_projection():
+def test_export_with_projection():
     dummy = DummyClass()
     temp_file = "temp_dummy_formatted.py"
     try:
         # Test with BlackCodeFormatter
         from opto.trace.projections import BlackCodeFormatter
-        dummy.model_dump(temp_file, projections=[BlackCodeFormatter()])
+        dummy.export(temp_file, projections=[BlackCodeFormatter()])
         with open(temp_file, "r") as f:
             content = f.read()
             # Check if content is properly formatted
@@ -265,13 +265,13 @@ class NonTrainableClass:
     def another_non_trainable(self, y):
         return y + 1
 
-def test_model_dump_non_trainable():
+def test_export_non_trainable():
     obj = NonTrainableClass()
     obj._param._data = 10  # Change node value
     obj._param2._data = 20  # Change another node value
     temp_file = "temp_non_trainable.py"
     try:
-        obj.model_dump(temp_file)
+        obj.export(temp_file)
         with open(temp_file, "r") as f:
             content = f.read()
             # Check if class definition is present
@@ -292,7 +292,7 @@ def test_model_dump_non_trainable():
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-def test_model_dump_mixed_trainable():
+def test_export_mixed_trainable():
 
     @model
     class MixedClass:
@@ -319,7 +319,7 @@ def test_model_dump_mixed_trainable():
 
     temp_file = "temp_mixed.py"
     try:
-        obj.model_dump(temp_file)
+        obj.export(temp_file)
         with open(temp_file, "r") as f:
             content = f.read()
             # Check if class definition is present
@@ -341,7 +341,7 @@ def test_model_dump_mixed_trainable():
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-def test_model_dump_and_import():
+def test_export_and_import():
     @model
     class StrangeCalculator:
         def __init__(self):
@@ -369,7 +369,7 @@ def test_model_dump_and_import():
     # Dump the model
     temp_file = "temp_calculator.py"
     try:
-        calc.model_dump(temp_file)
+        calc.export(temp_file)
 
         # Import the dumped class
         import importlib.util

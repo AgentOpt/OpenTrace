@@ -11,7 +11,7 @@ import autogen
 import pickle
 import os
 from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, evaluate
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide
 
 
 def eval_metric(true, prediction):
@@ -28,24 +28,24 @@ def eval_metric(true, prediction):
         return prediction == true
 
 
-class BigBenchGuide(AutoGuide):
+class BigBenchGuide(Guide):
     """
     Custom guide that uses the eval_metric function to evaluate responses
     and provide feedback for the BigBench tasks.
     """
-    
+
     def __init__(self):
         super().__init__()
-    
+
     def forward(self, task, response, info, **kwargs):
         """
         Evaluate the response using the eval_metric function.
-        
+
         Args:
             task: The question
             response: The model's answer
             info: The correct answer
-            
+
         Returns:
             score: 1.0 if correct, 0.0 if incorrect
             feedback: Feedback message
@@ -53,25 +53,25 @@ class BigBenchGuide(AutoGuide):
         try:
             correctness = eval_metric(info, response)
             score = 1.0 if correctness else 0.0
-            
+
             if correctness:
                 feedback = "The answer is correct! No need to change anything."
             else:
                 feedback = f"The answer is wrong. We expect the output of your answer to be \"{info}\". Please modify the prompt and relevant parts of the program to help LLM produce the right answer."
-            
+
             return score, feedback
         except Exception as e:
             return 0.0, f"Error occurred: {str(e)}. Please fix the error and try again."
-            
+
     def metric(self, task, response, info, **kwargs):
         """
         Evaluate the response and return just the score.
-        
+
         Args:
             task: The question
             response: The model's answer
             info: The correct answer
-            
+
         Returns:
             score: 1.0 if correct, 0.0 if incorrect
         """
@@ -88,14 +88,14 @@ class Predict:
         self.prompt_template = dedent(
             """
             Given the fields `question`, produce the fields `answer`.
-    
+
             ---
-    
+
             Follow the following format.
-    
-            Question: 
-            Answer: 
-    
+
+            Question:
+            Answer:
+
             ---
             Question: {}
             Answer:
@@ -216,7 +216,7 @@ class PredictCoT:
 def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
     """
     Train the model using the MinibatchUpdate algorithm.
-    
+
     Args:
         dp: The model to train
         optimizer: The optimizer to use
@@ -224,33 +224,33 @@ def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
         val_examples: Validation examples
         task_name: Name of the task
         save_dir: Directory to save checkpoints
-        
+
     Returns:
         dp: The trained model
         rewards: The final validation accuracy
     """
     # Create the guide
     guide = BigBenchGuide()
-    
+
     # Prepare the training dataset
     train_dataset = {
         'inputs': [ex['question'] for ex in examples],
         'infos': [ex['answer'] for ex in examples]
     }
-    
+
     # Prepare the validation dataset
     val_dataset = {
         'inputs': [ex['question'] for ex in val_examples],
         'infos': [ex['answer'] for ex in val_examples]
     }
-    
+
     # Create the MinibatchUpdate algorithm
     algorithm = MinibatchAlgorithm(
         agent=dp,
         optimizer=optimizer,
         num_threads=4  # Adjust as needed
     )
-    
+
     # Train the model
     train_score, val_score = algorithm.train(
         guide=guide,
@@ -265,30 +265,30 @@ def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
         verbose=True,
         min_score=None  # No minimum score required
     )
-    
+
     return dp, val_score
 
 
 def evaluate_dp(dp, examples):
     """
     Evaluate the model on a set of examples using MinibatchAlgorithm's evaluate method.
-    
+
     Args:
         dp: The model to evaluate
         examples: The examples to evaluate on
-        
+
     Returns:
         accuracy: The accuracy of the model
         responses: The responses of the model
     """
-    
+
     # Create the guide
     guide = BigBenchGuide()
-    
+
     # Prepare the evaluation dataset
     inputs = [ex['question'] for ex in examples]
     infos = [ex['answer'] for ex in examples]
-    
+
     # Use the evaluate function from basic_algorithm.py
     scores = evaluate(
         agent=dp,
@@ -299,10 +299,10 @@ def evaluate_dp(dp, examples):
         num_threads=4,  # Adjust as needed
         description=f"Evaluating on {len(examples)} examples"  # Add descriptive message for the progress bar
     )
-    
+
     # Calculate accuracy
     accuracy = np.mean(scores) if scores else 0.0
-    
+
     # Collect responses for analysis
     responses = []
     for example in tqdm(examples):
@@ -312,7 +312,7 @@ def evaluate_dp(dp, examples):
         except Exception as e:
             print(f"Error during evaluation: {str(e)}")
             responses.append(None)
-    
+
     return accuracy, responses
 
 

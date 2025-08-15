@@ -1,11 +1,11 @@
 from opto import trace
 from opto.features.priority_search.sampler import Sampler
 from opto.trainer.loader import DataLoader
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide
 from opto.features.priority_search.utils import is_node_copy
 
 
-class Guide(AutoGuide):
+class Guide(Guide):
 
     def get_feedback(self, query, response, reference=None, **kwargs):
         """

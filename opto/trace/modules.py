@@ -17,7 +17,7 @@ def model(cls):
 
     class ModelWrapper(cls, Module):
 
-        def model_dump(self, filename, projections: Optional[List[Projection]] = None):
+        def export(self, filename, projections: Optional[List[Projection]] = None):
             """Dump the model's source code to a file, including all methods and attributes.
             Ignores dunder methods unless they were overridden by the user.
             """
@@ -48,7 +48,7 @@ def model(cls):
                     # For dunder methods, check if they were overridden
                     try:
                         print(cls.__name__, "<>", member.__qualname__)
-                        # MixedClass <> test_model_dump_mixed_trainable.<locals>.MixedClass.__init__
+                        # MixedClass <> test_export_mixed_trainable.<locals>.MixedClass.__init__
                         # if we wrap it inside a function, the qualname is different than when we dont
                         if hasattr(member, '__qualname__') and cls.__name__ in member.__qualname__:
                             filtered_members.append((name, member))

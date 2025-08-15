@@ -2,7 +2,7 @@ from typing import Optional
 from opto.trace.modules import Module
 from opto.trainer.loggers import DefaultLogger
 from opto.trainer.loader import DataLoader
-from opto.trainer.guide import AutoGuide
+from opto.trainer.guide import Guide
 from opto.optimizers.optimizer import Optimizer
 import os
 import pickle
@@ -102,7 +102,7 @@ class AlgorithmBase(AbstractAlgorithm):
                     _path = path+ f"_{key}.module"
                     value.save(_path)
                     d[key] = _path
-                elif isinstance(value, AutoGuide):
+                elif isinstance(value, Guide):
                     _path = path + f"_{key}.guide"
                     value.save(_path)
                     d[key] = _path
@@ -135,7 +135,7 @@ class AlgorithmBase(AbstractAlgorithm):
                         assert isinstance(attr, Module), f"Expected {key} to be a Module, got {type(attr)}"
                     elif value.endswith('.guide'):
                         attr = self.__dict__[key]
-                        assert isinstance(attr, AutoGuide), f"Expected {key} to be an AutoGuide, got {type(attr)}"
+                        assert isinstance(attr, Guide), f"Expected {key} to be an Guide, got {type(attr)}"
                     elif value.endswith('.dataloader'):
                         attr = self.__dict__[key]
                         assert isinstance(attr, DataLoader), f"Expected {key} to be a DataLoader, got {type(attr)}"
