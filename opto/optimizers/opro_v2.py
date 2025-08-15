@@ -127,11 +127,14 @@ class OPROv2(OptoPrimeV2):
     default_objective = "Propose a new solution that will incorporate the feedback."
 
     def __init__(self, *args,
-                 optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OPROPromptSymbolSet(),
+                 optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
+                 include_example=False, # default example in OptoPrimeV2 does not work in OPRO
+                 memory_size=5,
                  **kwargs):
-        super().__init__(*args, optimizer_prompt_symbol_set=optimizer_prompt_symbol_set, **kwargs)
-        self.include_example = False # default example in OptoPrimeV2 does not work in OPRO
-        self.memory_size = 5
+        optimizer_prompt_symbol_set = optimizer_prompt_symbol_set or OPROPromptSymbolSet()
+        super().__init__(*args, optimizer_prompt_symbol_set=optimizer_prompt_symbol_set,
+                         include_example=include_example, memory_size=memory_size,
+                         **kwargs)
 
     def problem_instance(self, summary, mask=None):
         mask = mask or []
