@@ -63,22 +63,11 @@ class ProblemInstance:
     )
 
     def __repr__(self) -> str:
-        return self.replace_symbols(self.problem_template.format(
+        return self.problem_template.format(
             instruction=self.instruction,
             variables=self.variables,
             feedback=self.feedback,
-        ), self.optimizer_prompt_symbol_set.default_prompt_symbols)
-
-    def replace_symbols(self, text: str, symbols: Dict[str, str]) -> str:
-        default_prompt_symbols = {
-            "variables": "# Variables",
-            "feedback": "# Feedback",
-            "instruction": "# Problem Context",
-        }
-
-        for k, v in symbols.items():
-            text = text.replace(default_prompt_symbols[k], v)
-        return text
+        )
 
 """
 TODO:
@@ -138,9 +127,8 @@ class OPROv2(OptoPrimeV2):
     default_objective = "Propose a new solution that will incorporate the feedback."
 
     def __init__(self, *args,
-                 optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
+                 optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OPROPromptSymbolSet(),
                  **kwargs):
-        optimizer_prompt_symbol_set = optimizer_prompt_symbol_set or OPROPromptSymbolSet()
         super().__init__(*args, optimizer_prompt_symbol_set=optimizer_prompt_symbol_set, **kwargs)
         self.include_example = False # default example in OptoPrimeV2 does not work in OPRO
         self.memory_size = 5
