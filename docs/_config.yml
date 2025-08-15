@@ -23,7 +23,7 @@ latex:
 
 # Information about where the book exists on the web
 repository:
-  url: https://github.com/microsoft/Trace  # Online location of your book
+  url: https://github.com/AgentOpt/Trace  # Online location of your book
   path_to_book: docs  # Optional path to your book, relative to the repository root
   branch: website  # Which branch of the repository should be used when creating links (optional)
 
@@ -36,9 +36,9 @@ html:
   use_issues_button: false
   use_repository_button: true
   extra_navbar: <a href="intro.html">Go to Book Content</a>
-  extra_footer: "<a href='mailto:chinganc@microsoft.com'>Contact Us</a> | <a href='http://go.microsoft.com/fwlink/?LinkId=521839'>Privacy &amp; Cookies</a> | <a href='https://go.microsoft.com/fwlink/?linkid=2259814'>Consumer Health Privacy</a> | <a href='https://go.microsoft.com/fwlink/?LinkID=206977'>Terms Of Use</a> | <a href='https://www.microsoft.com/trademarks'>Trademarks</a>"
+  extra_footer: "<a href='mailto:chinganc@microsoft.com'>Contact Us</a> | <a href='https://go.microsoft.com/fwlink/?LinkID=206977'>Terms Of Use</a> | <a href='https://www.microsoft.com/trademarks'>Trademarks</a>"
   analytics:
-    plausible_analytics_domain: microsoft.github.io/trace
+    plausible_analytics_domain: agentopt.github.io/trace
     plausible_analytics_url: https://plausible.io/js/script.js
 
 sphinx:
@@ -52,7 +52,7 @@ sphinx:
   - 'sphinx.ext.viewcode'
   config:
     add_module_names: false
-    plausible_domain: microsoft.github.io/trace
+    plausible_domain: agentopt.github.io/trace
     nb_merge_streams: true
     templates_path: ["_templates"]
     autosummary_generate: True

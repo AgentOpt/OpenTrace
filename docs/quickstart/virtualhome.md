@@ -130,19 +130,22 @@ optimizer1 = OptoPrime([agent1.plan])
 optimizer2 = OptoPrime([agent2.plan])
 
 agents = [agent1, agent2]
+optimizers = [optimizer1, optimizer2]
 ```
 
 We then run the simulation for a fixed number of steps. In each step, we observe the environment, and each agent produces an action based on its observation.
 
 ```python
-from examples.virtualhome import VirtualHomeEnv
+from examples.virtualhome import VirtualHomeEnv, env_fn
 
 horizon = 50
+task_id = 8
 
-env = VirtualHomeEnv()
+env = VirtualHomeEnv(max_number_steps=horizon, run_id=0, env_fn=env_fn(env_id=0, env_task_set=task_id), 
+                        agent_fn=agents, num_agents=len(agents))
 
 # we specify a task in this environment
-agent_obs, agent_obs_descs, agent_goal_specs, agent_goal_descs, agent_infos = env.reset(task_id=8)
+agent_obs, agent_obs_descs, agent_goal_specs, agent_goal_descs, agent_infos = env.reset(task_id=task_id)
 
 for h in range(horizon):
     plans, errors = {}, {}
