@@ -176,8 +176,18 @@ class FunModule(Module):
         self.allow_external_dependencies = allow_external_dependencies
         self.parameter = None
         self.overwrite_python_recursion = overwrite_python_recursion
-        self.__name__ = fun.__name__  # needed for MLFlow tracing
-        self.__signature__ = inspect.signature(fun)  # needed for MLFlow tracing
+
+        # needed for MLFlow tracing
+        # inspect module will treat FunModule as function-like
+        # inspect._signature_is_functionlike -> True
+
+        self.__signature__ = inspect.signature(fun)
+        self.__name__ = fun.__name__
+        self.__doc__ = fun.__doc__
+        self.__code__ = fun.__code__
+        self.__defaults__ = fun.__defaults__
+        self.__kwdefaults__ = fun.__kwdefaults__
+        self.__annotations__ = fun.__annotations__
 
         if trainable:
             # trainable code uses exec which has an effect of overwrite_python_recursion==True.
