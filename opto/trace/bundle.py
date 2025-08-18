@@ -23,6 +23,7 @@ from opto.trace.nodes import (
     get_op_name,
 )
 from opto.trace.utils import contain
+from opto.trace.settings import mlflow_autologging, mlflow_config
 
 # This is a global flag to allow external dependencies to be used in the operator.
 ALLOW_EXTERNAL_DEPENDENCIES = None
@@ -175,6 +176,9 @@ class FunModule(Module):
         self.allow_external_dependencies = allow_external_dependencies
         self.parameter = None
         self.overwrite_python_recursion = overwrite_python_recursion
+        self.__name__ = fun.__name__  # needed for MLFlow tracing
+        self.__signature__ = inspect.signature(fun)  # needed for MLFlow tracing
+
         if trainable:
             # trainable code uses exec which has an effect of overwrite_python_recursion==True.
             self.overwrite_python_recursion = True
