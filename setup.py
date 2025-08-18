@@ -11,7 +11,7 @@ __version__ = version["__version__"]
 install_requires = [
     "graphviz>=0.20.1",
     "pytest",
-    "litellm==1.75.0",
+    "litellm",
     "mlflow",
     "black",
     "scikit-learn",
@@ -30,5 +30,5 @@ setuptools.setup(
     long_description=open('README.md', encoding="utf8").read(),
     packages=setuptools.find_packages(include=["opto*"]),
     install_requires=install_requires,
-    python_requires=">=3.9",
+    python_requires=">=3.10",
 )
