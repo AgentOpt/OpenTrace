@@ -12,6 +12,7 @@ install_requires = [
     "graphviz>=0.20.1",
     "pytest",
     "litellm==1.75.0",
+    "mlflow==3.2.0",
     "black",
     "scikit-learn",
     "tensorboardX",
