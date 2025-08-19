@@ -59,8 +59,10 @@ def bundle(
         projections (List[Projection], optional): List of projections to be used in updating trainable parameter. Defaults to None.
         mlflow_kwargs (dict, optional): Additional keyword arguments to pass to mlflow.trace() when MLFlow 
             autologging is enabled. Supports 'name', 'span_type', 'attributes', and 'output_reducer' 
-            parameters as defined in mlflow.trace(). Only used when mlflow_autologging is True and 
-            log_models config is enabled. Defaults to None. We additionally have `silent` parameter to disable tracing of the function.
+            parameters as defined in mlflow.trace(). Additionally supports:
+            - 'silent': If True, disables tracing for this specific function
+            - 'default_op': If True and disable_default_op_logging is enabled, silences tracing for this function
+            Only used when mlflow_autologging is True and log_models config is enabled. Defaults to None.
 
     Returns:
         FunModule: The wrapped function that returns node objects.
@@ -82,14 +84,26 @@ def bundle(
         )
         
         # Apply MLFlow tracing if enabled - this wraps the FunModule
-        mlflow_kwargs = {} or mlflow_kwargs  # Ensure it's a dict
+        mlflow_kwargs = mlflow_kwargs or {}  # Ensure it's a dict
+        
+        # Check if we should silence this function due to default op logging being disabled
+        should_silence_default_op = (
+            settings.mlflow_config.get("disable_default_op_logging", True) and 
+            mlflow_kwargs.get("default_op", False)
+        )
             
-        if settings.mlflow_autologging and settings.mlflow_config.get("log_models", True) and mlflow_kwargs.get("silent", False) is not True:
+        if (settings.mlflow_autologging and 
+            settings.mlflow_config.get("log_models", True) and 
+            mlflow_kwargs.get("silent", False) is not True and
+            not should_silence_default_op):
             # If MLFlow autologging is enabled, we trace the function.
             # This will create a span for each function call with proper input/output capture.
             try:
                 import mlflow
-                fun_module = mlflow.trace(fun_module, **mlflow_kwargs)
+                # Filter out custom parameters that aren't part of mlflow.trace() signature
+                mlflow_trace_kwargs = {k: v for k, v in mlflow_kwargs.items() 
+                                     if k not in ['silent', 'default_op']}
+                fun_module = mlflow.trace(fun_module, **mlflow_trace_kwargs)
             except ImportError:
                 raise ImportError("MLFlow is not installed. Please install it to use MLFlow tracing.")
         
