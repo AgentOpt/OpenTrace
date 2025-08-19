@@ -60,14 +60,14 @@ def bundle(
         mlflow_kwargs (dict, optional): Additional keyword arguments to pass to mlflow.trace() when MLFlow 
             autologging is enabled. Supports 'name', 'span_type', 'attributes', and 'output_reducer' 
             parameters as defined in mlflow.trace(). Only used when mlflow_autologging is True and 
-            log_models config is enabled. Defaults to None.
+            log_models config is enabled. Defaults to None. We additionally have `silent` parameter to disable tracing of the function.
 
     Returns:
         FunModule: The wrapped function that returns node objects.
     """
     prev_f_locals = inspect.stack()[1].frame.f_locals
 
-    def decorator(fun):
+    def decorator(fun, mlflow_kwargs=mlflow_kwargs):
         fun_module = FunModule(
             fun=fun,
             description=description,
@@ -82,12 +82,14 @@ def bundle(
         )
         
         # Apply MLFlow tracing if enabled - this wraps the FunModule
-        if settings.mlflow_autologging and settings.mlflow_config.get("log_models", True):
+        mlflow_kwargs = {} or mlflow_kwargs  # Ensure it's a dict
+            
+        if settings.mlflow_autologging and settings.mlflow_config.get("log_models", True) and mlflow_kwargs.get("silent", False) is not True:
             # If MLFlow autologging is enabled, we trace the function.
             # This will create a span for each function call with proper input/output capture.
             try:
                 import mlflow
-                fun_module = mlflow.trace(fun_module, **(mlflow_kwargs or {}))
+                fun_module = mlflow.trace(fun_module, **mlflow_kwargs)
             except ImportError:
                 raise ImportError("MLFlow is not installed. Please install it to use MLFlow tracing.")
         
