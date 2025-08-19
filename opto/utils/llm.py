@@ -32,7 +32,7 @@ class AbstractModel:
     # Overwrite this `model` property when subclassing.
     @property
     def model(self):
-        """ When self.model is called, text responses should always be available at ['choices'][0].['message']['content'] """
+        """When self.model is called, text responses should always be available at `response['choices'][0]['message']['content']`"""
         return self._model
 
     # This is the main API
