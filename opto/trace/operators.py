@@ -8,7 +8,7 @@ from opto.trace.bundle import bundle
 import copy
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def clone(x: Any):
     """This is a clone operator of x."""
     return copy.deepcopy(x)
@@ -22,37 +22,37 @@ def identity(x: Any):
 # Unary operators and functions
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def pos(x: Any):
     """This is a pos operator of x."""
     return +x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def neg(x: Any):
     """This is a neg operator of x."""
     return -x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def abs(x: Any):
     """This is an abs operator of x."""
     return abs(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def invert(x: Any):
     """This is an invert operator of x."""
     return ~x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def round(x: Any, n: Any):
     """This is a round operator of x."""
     return round(x, n)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def floor(x: Any):
     """This is a floor operator of x."""
     import math
@@ -60,7 +60,7 @@ def floor(x: Any):
     return math.floor(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def ceil(x: Any):
     """This is a ceil operator of x."""
     import math
@@ -68,7 +68,7 @@ def ceil(x: Any):
     return math.ceil(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def trunc(x: Any):
     """This is a trunc operator of x."""
     import math
@@ -79,79 +79,79 @@ def trunc(x: Any):
 # Normal arithmetic operators
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def add(x: Any, y: Any):
     """This is an add operator of x and y."""
     return x + y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def subtract(x: Any, y: Any):
     """This is a subtract operator of x and y."""
     return x - y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def multiply(x: Any, y: Any):
     """This is a multiply operator of x and y."""
     return x * y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def floor_divide(x: Any, y: Any):
     """This is a floor_divide operator of x and y."""
     return x // y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def divide(x: Any, y: Any):
     """This is a divide operator of x and y."""
     return x / y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def mod(x: Any, y: Any):
     """This is a mod operator of x and y."""
     return x % y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def node_divmod(x: Any, y: Any):
     """This is a divmod operator of x and y."""
     return divmod(x, y)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def power(x: Any, y: Any):
     """This is a power operator of x and y."""
     return x**y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def lshift(x: Any, y: Any):
     """This is a lshift operator of x and y."""
     return x << y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def rshift(x: Any, y: Any):
     """This is a rshift operator of x and y."""
     return x >> y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def and_(x: Any, y: Any):
     """This is an and operator of x and y."""
     return x & y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def or_(x: Any, y: Any):
     """This is an or operator of x and y."""
     return x | y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def xor(x: Any, y: Any):
     """This is a xor operator of x and y."""
     return x ^ y
@@ -160,43 +160,43 @@ def xor(x: Any, y: Any):
 # Comparison methods
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def lt(x: Any, y: Any):
     """This is a lt operator of x and y."""
     return x < y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def le(x: Any, y: Any):
     """This is a le operator of x and y."""
     return x <= y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def eq(x: Any, y: Any):
     """This is an eq operator of x and y."""
     return x == y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def neq(x: Any, y: Any):
     """This is a not eq operator of x and y."""
     return x != y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def ne(x: Any, y: Any):
     """This is a ne operator of x and y."""
     return x != y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def ge(x: Any, y: Any):
     """This is a ge operator of x and y."""
     return x >= y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def gt(x: Any, y: Any):
     """This is a gt operator of x and y."""
     return x > y
@@ -205,142 +205,142 @@ def gt(x: Any, y: Any):
 # logical operators
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def cond(condition: Any, x: Any, y: Any):
     """This selects x if condition is True, otherwise y."""
     x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def not_(x: Any):
     """This is a not operator of x."""
     return not x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def is_(x: Any, y: Any):
     """Whether x is equal to y."""
     return x is y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def is_not(x: Any, y: Any):
     """Whether x is not equal to y."""
     return x is not y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def in_(x: Any, y: Any):
     """Whether x is in y."""
     return x in y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def not_in(x: Any, y: Any):
     """Whether x is not in y."""
     return x not in y
 
 
 # Indexing and slicing
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def getitem(x: Any, index: Any):
     """This is a getitem operator of x based on index."""
     return x[index]
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def pop(x: Any, index: Any):
     """This is a pop operator of x based on index."""
     return x.pop(index)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def len_(x: Any):
     """This is a len operator of x."""
     return len(x)
 
 
 # String operators
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def ord_(x: Any):
     """The unicode number of a character."""
     return ord(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def chr_(x: Any):
     """The character of a unicode number."""
     return chr(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def concat(x: Any, y: Any):
     """This is a concatenation operator of x and y."""
     return x + y
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def lower(x: Any):
     """This makes all characters in x lower case."""
     return x.lower()
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def upper(x: Any):
     """This makes all characters in x upper case."""
     return x.upper()
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def title(x: Any):
     """This makes the first character to upper case and the rest to lower case."""
     return x.title()
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def swapcase(x: Any):
     """Swaps the case of all characters: uppercase character to lowercase and vice-versa."""
     return x.swapcase()
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def capitalize(x: Any):
     """Converts the first character of a string to uppercase."""
     return x.capitalize()
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def split(x: Any, y: Any, maxsplit: Any = -1):
     """Splits the string by finding a substring y in string x, return the first part and second part of string x without y."""
     return x.split(y, maxsplit)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def strip(x: Any, chars=None):
     """Removes the leading and trailing characters of x."""
     return x.strip(chars)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def replace(x: Any, old: Any, new: Any, count: Any = -1):
     """Replaces all occurrences of substring y in string x with z."""
     return x.replace(old, new, count)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def format(x: Any, *args, **kwargs):
     """Fills in a string template with content, str.format()."""
     return x.format(*args, **kwargs)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def join(x: Any, *y: Any):
     """Joins a sequence y with different strs with x: "\n".join(["a", "b", "c"]) -> "a\nb\nc"."""
     return x.join(y)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def node_getattr(obj: Node, attr: str):
     """This operator gets attr of obj."""
     return getattr(obj, attr)
@@ -349,6 +349,7 @@ def node_getattr(obj: Node, attr: str):
 @bundle(
     _process_inputs=False,
     allow_external_dependencies=True,
+    mlflow_kwargs={'default_op': True}
 )
 def call(fun: Node, *args, **kwargs):
     """This operator calls the function `fun` with args (args_0, args_1, etc.) and kwargs. If there are no args or kwargs, i.e. call(fun=function_name), the function takes no input."""
@@ -360,49 +361,49 @@ def call(fun: Node, *args, **kwargs):
     return output
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def to_list(x: Any):
     """This converts x to a list."""
     return list(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def make_list(*args):
     """This creates a list from the arguments."""
     return list(args)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def to_dict(x: Any):
     """This converts x to a dictionary."""
     return dict(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def make_dict(**kwargs):
     """This creates a dictionary from the keyword arguments."""
     return kwargs
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def to_set(x: Any):
     """This converts x to a set."""
     return set(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def make_set(*args):
     """This creates a set from the arguments."""
     return set(args)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def to_tuple(x: Any):
     """This converts x to a tuple."""
     return tuple(x)
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def make_tuple(*args):
     """This creates a tuple from the arguments."""
     return tuple(args)
@@ -411,7 +412,7 @@ def make_tuple(*args):
 # dict operators
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def keys(x: Dict):
     """Return the keys of a dictionary x as a list."""
     if not isinstance(x, dict):
@@ -420,7 +421,7 @@ def keys(x: Dict):
     return [k for k in x.keys()]
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def values(x: Dict):
     """Return the values of a dictionary x as a list."""
     if not isinstance(x, dict):
@@ -432,7 +433,7 @@ def values(x: Dict):
 # dict in-place operators
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def dict_update(x: Dict, y: Dict):
     """Update the dictionary x with the dictionary y."""
     x = copy.copy(x)
@@ -440,7 +441,7 @@ def dict_update(x: Dict, y: Dict):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def dict_pop(x: Dict, key: Any):
     """Pop the key from the dictionary x."""
     x = copy.copy(x)
@@ -448,7 +449,7 @@ def dict_pop(x: Dict, key: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def dict_popitem(x: Dict):
     """Pop the last item from the dictionary x."""
     x = copy.copy(x)
@@ -459,7 +460,7 @@ def dict_popitem(x: Dict):
 # list in-place operators
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_append(x: Any, y: Any):
     """Append y to x."""
     x = copy.copy(x)
@@ -467,7 +468,7 @@ def list_append(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_clear(x: Any):
     """Clear x."""
     x = copy.copy(x)
@@ -475,7 +476,7 @@ def list_clear(x: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_extend(x: Any, y: Any):
     """Extend x with y."""
     x = copy.copy(x)
@@ -483,7 +484,7 @@ def list_extend(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_insert(x: Any, index: Any, y: Any):
     """Insert y at index in x."""
     x = copy.copy(x)
@@ -491,7 +492,7 @@ def list_insert(x: Any, index: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_pop(x: Any, index: Any):
     """Pop the index from x."""
     x = copy.copy(x)
@@ -499,7 +500,7 @@ def list_pop(x: Any, index: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_remove(x: Any, y: Any):
     """Remove y from x."""
     x = copy.copy(x)
@@ -507,7 +508,7 @@ def list_remove(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_reverse(x: Any):
     """Reverse x."""
     x = copy.copy(x)
@@ -515,7 +516,7 @@ def list_reverse(x: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def list_sort(x: Any, key: Any = None, reverse: Any = False):
     """Sort x."""
     x = copy.copy(x)
@@ -524,7 +525,7 @@ def list_sort(x: Any, key: Any = None, reverse: Any = False):
 
 
 # set in-place operators
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_add(x: Any, y: Any):
     """Add y to x."""
     x = copy.copy(x)
@@ -532,7 +533,7 @@ def set_add(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_clear(x: Any):
     """Clear x."""
     x = copy.copy(x)
@@ -540,7 +541,7 @@ def set_clear(x: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_discard(x: Any, y: Any):
     """Discard y from x."""
     x = copy.copy(x)
@@ -548,7 +549,7 @@ def set_discard(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_intersection_update(x: Any, y: Any):
     """Update x with the intersection of x and y."""
     x = copy.copy(x)
@@ -556,7 +557,7 @@ def set_intersection_update(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_pop(x: Any):
     """Pop an element from x."""
     x = copy.copy(x)
@@ -564,7 +565,7 @@ def set_pop(x: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_remove(x: Any, y: Any):
     """Remove y from x."""
     x = copy.copy(x)
@@ -572,7 +573,7 @@ def set_remove(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_symmetric_difference_update(x: Any, y: Any):
     """Update x with the symmetric difference of x and y."""
     x = copy.copy(x)
@@ -580,7 +581,7 @@ def set_symmetric_difference_update(x: Any, y: Any):
     return x
 
 
-@bundle()
+@bundle(mlflow_kwargs={'default_op': True})
 def set_update(x: Any, y: Any):
     """Update x with y."""
     x = copy.copy(x)
@@ -588,7 +589,7 @@ def set_update(x: Any, y: Any):
     return x
 
 
-@bundle(catch_execution_error=False)
+@bundle(catch_execution_error=False, mlflow_kwargs={'default_op': True})
 def call_llm(system_prompt, *user_prompts, **kwargs):
     """Query the language model of system_prompt with user_prompts."""
     if system_prompt is not None:
