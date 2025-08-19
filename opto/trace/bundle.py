@@ -23,7 +23,7 @@ from opto.trace.nodes import (
     get_op_name,
 )
 from opto.trace.utils import contain
-from opto.trace.settings import mlflow_autologging, mlflow_config
+from opto.trace import settings
 
 # This is a global flag to allow external dependencies to be used in the operator.
 ALLOW_EXTERNAL_DEPENDENCIES = None
@@ -41,6 +41,7 @@ def bundle(
     allow_external_dependencies=False,
     overwrite_python_recursion=False,
     projections=None,
+    mlflow_kwargs=None
 ):
     """Wrap a function as a FunModule which returns node objects.
 
@@ -56,6 +57,10 @@ def bundle(
         allow_external_dependencies (bool, optional): Whether to allow external dependencies. Defaults to False.
         overwrite_python_recursion (bool, optional): Whether to overwrite Python recursion behavior. Defaults to False.
         projections (List[Projection], optional): List of projections to be used in updating trainable parameter. Defaults to None.
+        mlflow_kwargs (dict, optional): Additional keyword arguments to pass to mlflow.trace() when MLFlow 
+            autologging is enabled. Supports 'name', 'span_type', 'attributes', and 'output_reducer' 
+            parameters as defined in mlflow.trace(). Only used when mlflow_autologging is True and 
+            log_models config is enabled. Defaults to None.
 
     Returns:
         FunModule: The wrapped function that returns node objects.
@@ -75,6 +80,17 @@ def bundle(
             _ldict=prev_f_locals,  # Get the locals of the calling function
             projections=projections,
         )
+        
+        # Apply MLFlow tracing if enabled - this wraps the FunModule
+        if settings.mlflow_autologging and settings.mlflow_config.get("log_models", True):
+            # If MLFlow autologging is enabled, we trace the function.
+            # This will create a span for each function call with proper input/output capture.
+            try:
+                import mlflow
+                fun_module = mlflow.trace(fun_module, **(mlflow_kwargs or {}))
+            except ImportError:
+                raise ImportError("MLFlow is not installed. Please install it to use MLFlow tracing.")
+        
         return fun_module
 
     return decorator

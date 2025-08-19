@@ -17,6 +17,7 @@ def autolog(
     log_models: bool = True,
     log_datasets: bool = True,
     disable: bool = False,
+    disable_default_op_logging: bool = True,
     exclusive: bool = False,
     disable_for_unsupported_versions: bool = False,
     silent: bool = False,
@@ -35,7 +36,8 @@ def autolog(
             Defaults to True.
         log_datasets (bool): If True, dataset information used in training is logged to MLflow
             Tracking. Defaults to True.
-        disable (bool): If True, disables the MLflow autologging integration. Defaults to False.
+        disable (bool): If True, disables MLflow autologging. Defaults to False.
+        disable_default_op_logging (bool): If True, disables logging of default Trace operations in trace.operators
         exclusive (bool): If True, autologged content is not logged to additional MLflow
             Tracking fluent APIs. Defaults to False.
         disable_for_unsupported_versions (bool): If True, disable MLflow autologging for
@@ -62,11 +64,16 @@ def autolog(
     
     # Enable MLflow autologging
     settings.mlflow_autologging = True
-    
+
+    # Enable litellm logging (Trace uses litellm backend)
+    import mlflow
+    mlflow.litellm.autolog()
+
     # Store configuration in settings
     settings.mlflow_config = {
         "log_models": log_models,
         "log_datasets": log_datasets,
+        "disable_default_op_logging": disable_default_op_logging,
         "exclusive": exclusive,
         "disable_for_unsupported_versions": disable_for_unsupported_versions,
         "silent": silent,
