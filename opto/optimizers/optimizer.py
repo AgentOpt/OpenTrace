@@ -12,6 +12,7 @@ class AbstractOptimizer:
     def __init__(self, parameters: List[ParameterNode], *args, **kwargs):
         assert type(parameters) is list
         assert all([isinstance(p, ParameterNode) for p in parameters])
+        assert len(parameters) > 0, 'Parameters list is empty.'
         self.parameters = parameters
 
     def step(self):
