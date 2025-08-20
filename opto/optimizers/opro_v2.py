@@ -5,14 +5,6 @@ from typing import Dict
 
 from opto.optimizers.optoprime_v2 import OptoPrimeV2, OptimizerPromptSymbolSet
 
-"""
-OPRO is a single parameter / solution optimizer that conditions on feedback.
-(context, solution, feedback) -> new_solution
-
-It does not contain execution graph and is more streamlined/faster in inference.
-"""
-
-
 # Not inheriting from optoprime_v2 because this should have a smaller set
 class OPROPromptSymbolSet(OptimizerPromptSymbolSet):
 
@@ -68,11 +60,6 @@ class ProblemInstance:
             variables=self.variables,
             feedback=self.feedback,
         )
-
-"""
-TODO:
-1. think about how initial solution was generated...
-"""
 
 class OPROv2(OptoPrimeV2):
     representation_prompt = dedent(
