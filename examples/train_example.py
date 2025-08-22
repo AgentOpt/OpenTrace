@@ -38,7 +38,7 @@ class Learner:
         Returns:
             The response from the agent.
         """
-        return call_llm(self.llm, self.system_prompt, self.user_prompt_template, message)
+        return call_llm(self.llm, system_prompt, user_prompt_template, message)
 
     def forward(self, message: Any) -> Any:
         """ Forward pass of the agent. """

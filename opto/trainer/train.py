@@ -19,7 +19,7 @@ def train(
     model: trace.Module,
     train_dataset: dict,
     # class of optimizer
-    algorithm: Union[Trainer, str] = 'BasicSearchAlgorithm',
+    algorithm: Union[Trainer, str] = 'MinibatchAlgorithm',
     optimizer: Union[Optimizer, str] = "OptoPrimeV2",
     guide: Union[Guide, str] = 'LLMJudge',
     logger: Union[BaseLogger, str] = 'ConsoleLogger',

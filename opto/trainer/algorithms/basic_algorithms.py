@@ -53,7 +53,7 @@ class Minibatch(Trainer):
               guide,
               train_dataset,
               *,
-              ensure_improvement: bool = False,  # whether to check the improvement of the agent
+              ensure_improvement: bool = True,  # whether to check the improvement of the agent
               improvement_threshold: float = 0.,  # threshold for improvement
               num_epochs: int = 1,  # number of training epochs
               batch_size: int = 1,  # batch size for updating the agent
