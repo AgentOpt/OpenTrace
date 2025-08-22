@@ -5,7 +5,7 @@ from opto import trace
 from opto.trainer.algorithms import Trainer
 from opto.trainer.guide import Guide
 from opto.trainer.loggers import BaseLogger
-from opto.optimizers.optimizer import Optimzier
+from opto.optimizers.optimizer import Optimizer
 
 
 def dataset_check(dataset):
@@ -15,13 +15,13 @@ def dataset_check(dataset):
 
 
 def train(
+    *,
     model: trace.Module,
-    guide: Guide,
     train_dataset: dict,
     # class of optimizer
-    trainer: Union[Trainer, str] = 'BasicSearchAlgorithm',
+    algorithm: Union[Trainer, str] = 'BasicSearchAlgorithm',
     optimizer: Union[Optimizer, str] = "OptoPrimeV2",
-    guide: Union[Guide, str] = 'LLMGuide',
+    guide: Union[Guide, str] = 'LLMJudge',
     logger: Union[BaseLogger, str] = 'ConsoleLogger',
     # extra configs
     optimizer_kwargs: Union[dict, None] = None,
@@ -44,70 +44,76 @@ def train(
 
     # TODO remove duplicate codes
 
-    # Check agent parameters is non-empty
-    parameters = agent.parameters()
-    assert len(parameters) >0, "Agent must have parameters."
+    # Check model parameters is non-empty
+    parameters = model.parameters()
+    assert len(parameters) >0, "Model must have non-empty parameters."
 
+    optimizer = load_optimizer(optimizer, model, **optimizer_kwargs)
+    guide = load_guide(guide, **guide_kwargs)
+    logger = load_logger(logger, **logger_kwargs)
+    trainer_class = load_trainer_class(algorithm)
 
-    # Load optimizer from opto.optimizers
-    if type(optimizer) is str:
-        # check if optimizer is a valid class
-        optimizers_module = importlib.import_module("opto.optimizers")
-        optimizer_class = getattr(optimizers_module, optimizer)
-    # else if optimizer is an instance
-    elif issubclass(optimizer, Optimizer):
-        optimizer_class = optimizer
-    else:
-        raise ValueError(f"Invalid optimizer type: {type(optimizer)}")
-    optimizer = optimizer_class(
-            model.parameters(),
-            **optimizer_kwargs
-    )
+    assert isinstance(optimizer, Optimizer)
+    assert isinstance(guide, Guide)
+    assert isinstance(logger, BaseLogger)
+    assert issubclass(trainer_class, Trainer)
 
-    # Load guide from opto.trainer.guide
-    if type(guide) is str:
-        # check if guide is a valid class
-        guides_module = importlib.import_module("opto.trainer.guide")
-        guide_class = getattr(guides_module, guide)
-    # else if guide is an instance
-    elif issubclass(guide, Guide):
-        guide_class = guide
-    else:
-        raise ValueError(f"Invalid guide type: {type(guide)}")
-    guide = guide_class(
-        **guide_kwargs
-    )
-
-    # Load logger from opto.trainer.loggers
-    if type(logger) is str:
-        # check if logger is a valid class
-        loggers_module = importlib.import_module("opto.trainer.loggers")
-        logger_class = getattr(loggers_module, logger)
-    # else if logger is an instance
-    elif issubclass(logger, BaseLogger):
-        logger_class = logger
-    else:
-        raise ValueError(f"Invalid logger type: {type(logger)}")
-    logger = logger_class(**logger_kwargs)
-
-
-    # Load trainer from opto.trainer.algorithms
-    if type(trainer) is str:
-        # check if trainer is a valid class
-        trainers_module = importlib.import_module("opto.trainer.algorithms")
-        trainer_class = getattr(trainers_module, trainer)
-    # else if trainer is an instance
-    elif issubclass(trainer, Trainer):
-        trainer_class = trainer
-    else:
-        raise ValueError(f"Invalid trainer type: {type(trainer)}")
-    trainer = trainer_class(
-        agent,
+    algo = trainer_class(
+        model,
         optimizer,
         logger
     )
 
-    return trainer.train(
+    return algo.train(
         guide=guide,
         train_dataset=train_dataset,
         **trainer_kwargs)
+
+
+def load_optimizer(optimizer: Union[Optimizer, str], model: trace.Module, **kwargs) -> Optimizer:
+    if isinstance(optimizer, Optimizer):
+        return optimizer
+    elif isinstance(optimizer, str):
+        optimizers_module = importlib.import_module("opto.optimizers")
+        optimizer_class = getattr(optimizers_module, optimizer)
+        return optimizer_class(model.parameters(), **kwargs)
+    elif issubclass(optimizer, Optimizer):
+        return optimizer(model.parameters(), **kwargs)
+    else:
+        raise ValueError(f"Invalid optimizer type: {type(optimizer)}")
+
+
+def load_guide(guide: Union[Guide, str], **kwargs) -> Guide:
+    if isinstance(guide, Guide):
+        return guide
+    elif isinstance(guide, str):
+        guides_module = importlib.import_module("opto.trainer.guide")
+        guide_class = getattr(guides_module, guide)
+        return guide_class(**kwargs)
+    elif issubclass(guide, Guide):
+        return guide(**kwargs)
+    else:
+        raise ValueError(f"Invalid guide type: {type(guide)}")
+
+def load_logger(logger: Union[BaseLogger, str], **kwargs) -> BaseLogger:
+    if isinstance(logger, BaseLogger):
+        return logger
+    elif isinstance(logger, str):
+        loggers_module = importlib.import_module("opto.trainer.loggers")
+        logger_class = getattr(loggers_module, logger)
+        return logger_class(**kwargs)
+    elif issubclass(logger, BaseLogger):
+        return logger(**kwargs)
+    else:
+        raise ValueError(f"Invalid logger type: {type(logger)}")
+
+def load_trainer_class(trainer: Union[Trainer, str]) -> Trainer:
+    if isinstance(trainer, str):
+        trainers_module = importlib.import_module("opto.trainer.algorithms")
+        trainer_class = getattr(trainers_module, trainer)
+    elif issubclass(trainer, Trainer):
+        trainer_class = trainer
+    else:
+        raise ValueError(f"Invalid trainer type: {type(trainer)}")
+
+    return trainer_class
