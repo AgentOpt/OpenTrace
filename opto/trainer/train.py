@@ -6,6 +6,7 @@ from opto.trainer.algorithms import Trainer
 from opto.trainer.guide import Guide
 from opto.trainer.loggers import BaseLogger
 from opto.optimizers.optimizer import Optimizer
+from opto.trace.nodes import ParameterNode
 
 
 def dataset_check(dataset):
@@ -16,11 +17,11 @@ def dataset_check(dataset):
 
 def train(
     *,
-    model: trace.Module,
+    model: Union[trace.Module, ParameterNode],
     train_dataset: dict,
     # class of optimizer
     algorithm: Union[Trainer, str] = 'MinibatchAlgorithm',
-    optimizer: Union[Optimizer, str] = "OptoPrimeV2",
+    optimizer: Union[Optimizer, str] = None,
     guide: Union[Guide, str] = 'LLMJudge',
     logger: Union[BaseLogger, str] = 'ConsoleLogger',
     # extra configs
@@ -42,7 +43,19 @@ def train(
     #  TODO check eligible optimizer, trainer
     dataset_check(train_dataset)
 
-    # TODO remove duplicate codes
+    if optimizer is None:
+        optimizer = "OPROv2" if isinstance(model, ParameterNode) else "OptoPrimeV2"
+
+    # Convert ParameterNode to Module
+    if isinstance(model, ParameterNode):
+        assert model.trainable, "The parameter must be trainable."
+        @trace.model
+        class SingleNodeModel:
+            def __init__(self, param):
+                self.param = param  # ParameterNode
+            def forward(self, x):
+                return self.param
+        model = SingleNodeModel(model)
 
     # Check model parameters is non-empty
     parameters = model.parameters()
@@ -61,7 +74,7 @@ def train(
     algo = trainer_class(
         model,
         optimizer,
-        logger
+        logger=logger
     )
 
     return algo.train(
