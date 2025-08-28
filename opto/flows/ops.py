@@ -1,5 +1,7 @@
 import pydantic
 import opto.trace as trace
+from typing import Union
+from opto.utils.llm import AbstractModel, LLM
 
 """
 TracedLLM:
@@ -25,17 +27,24 @@ scorer(doc="The response is ...")
 
 @trace.model
 class TracedLLM:
-    def __init__(self, system_prompt: str):
+    def __init__(self,
+                 system_prompt: Union[str, None, trace.Node] = None,
+                 llm: AbstractModel = None):
         """Initialize TracedLLM with a system prompt.
-        
+
         Args:
             system_prompt: The system prompt to use for LLM calls
+            llm: The LLM model to use for inference
         """
-        self.system_prompt = trace.node(system_prompt, trainable=True)
-    
+        self.system_prompt = trace.node(system_prompt)
+        if llm is None:
+            llm = LLM()
+        assert isinstance(llm, AbstractModel), f"{llm} must be an instance of AbstractModel"
+        self.llm = llm
+
     def forward(self, user_prompt: str) -> str:
         """Call the LLM with user prompt, using the configured system prompt."""
-        return trace.operators.call_llm(self.system_prompt, user_prompt)
+        return trace.operators.call_llm(self.llm, self.system_prompt, user_prompt)
 
 
 if __name__ == '__main__':

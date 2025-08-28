@@ -589,23 +589,8 @@ def set_update(x: Any, y: Any):
     return x
 
 
-# @bundle(catch_execution_error=False)
-# def call_llm(system_prompt, *user_prompts, **kwargs):
-#     """Query the language model of system_prompt with user_prompts."""
-#     if system_prompt is not None:
-#         messages = [{"role": "system", "content": system_prompt}]
-#     else:
-#         messages = [{"role": "system", "content": "You are a helpful assistant.\n"}]
-#     for user_prompt in user_prompts:
-#         messages.append({"role": "user", "content": user_prompt})
-#     from opto.utils.llm import LLM
-#     llm = LLM()
-#     response = llm(messages=messages, **kwargs)
-#     return response.choices[0].message.content
-
-
 @bundle(catch_execution_error=False)
-def call_llm(llm, system_prompt: str, user_prompt: str) -> str:
+def call_llm(llm, system_prompt: str, *user_prompts: List[str], **kwargs) -> str:
     """Call the LLM model.
 
     Args:
@@ -618,8 +603,8 @@ def call_llm(llm, system_prompt: str, user_prompt: str) -> str:
     messages = []
     if system_prompt is not None:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": user_prompt})
-    # TODO support multi-turn conversation
+    for user_prompt in user_prompts:
+        messages.append({"role": "user", "content": user_prompt})
     # TODO auto-parsing results
-    response = llm(messages=messages)
+    response = llm(messages=messages, **kwargs)
     return response.choices[0].message.content
