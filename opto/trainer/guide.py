@@ -95,7 +95,7 @@ class LLMJudge(Guide):
                  prompt_template: Optional[str] = None,
                  system_prompt: Optional[str] = None,
                  correctness_template: Optional[str] = None,
-                 use_formatted_response: bool = True
+                 use_formatted_response: bool = False
                  ):
         """
         Initialize the VerbalGuide with an LLM and prompt templates.
