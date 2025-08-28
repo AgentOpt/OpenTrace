@@ -1,1 +1,1 @@
-from opto.flows.ops import TracedLLM
+from opto.flows.compose import TracedLLM

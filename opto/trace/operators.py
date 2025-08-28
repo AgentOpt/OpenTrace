@@ -1,6 +1,6 @@
 from __future__ import annotations
 import trace
-from typing import TYPE_CHECKING, Any, Dict, Union
+from typing import TYPE_CHECKING, Any, Dict, Union, List
 
 if TYPE_CHECKING:  # to prevent circular import
     from opto.trace.nodes import Node
