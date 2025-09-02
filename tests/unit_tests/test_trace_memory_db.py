@@ -46,6 +46,10 @@ def enable_trace_memory_for_optoprime(memory_db: Optional[TraceMemoryDB] = None)
     # Store original methods
     original_init = OptoPrime.__init__
     original_step = OptoPrime._step
+    # Expose originals on the class so other tests can restore
+    # them if needed to avoid cross-test interference.
+    OptoPrime._orig_init = original_init  # type: ignore[attr-defined]
+    OptoPrime._orig_step = original_step  # type: ignore[attr-defined]
     
     @functools.wraps(original_init)
     def new_init(self, *args, **kwargs):
