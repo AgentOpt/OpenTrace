@@ -4,6 +4,7 @@ import opto.trace as trace
 from typing import Union, get_type_hints, Any, Dict
 from opto.utils.llm import AbstractModel, LLM
 from opto.flows.types import TracedInput, TracedOutput, DynamicModelMixin
+from opto.optimizers.utils import extract_xml_like_data
 import inspect
 import json
 import re
@@ -30,6 +31,32 @@ class Scorer(TracedLLM):
 scorer = Scorer()  # if a system prompt is passed in here, it will override the docstring.
 response = scorer(doc="The response is ...")
 print(response.score)
+
+When using the inheritance mode, the system prompt augmented to be as follow:
+
+-------------
+You are a helpful assistant generates output based on the instructions and inputs below.
+
+## Inputs 
+
+### input_name
+<description>
+</description>
+value
+
+## Instructions
+{original system prompt docstring}
+
+## Outputs
+output_name1 [type=str]: description \n
+output_name2 [type=List[int]]: description
+
+## Output Format
+Your output should be in the following XML/HTML format:
+
+<output_name1>
+value
+</output_name1>
 """
 
 
@@ -92,9 +119,10 @@ class StructuredInputOutputMixin:
     # TODO: 3. use the dynamic ResponseModel to do the parsing
     def _extract_structured_data(self, llm_response: str) -> Dict[str, Any]:
         """Extract structured data from LLM response - delegates to TracedOutput instances."""
-        # Strategy 1: Try to parse as JSON if it looks like JSON
+        # Try to parse as JSON if it looks like JSON
         llm_response_stripped = llm_response.strip()
         if llm_response_stripped.startswith('{') and llm_response_stripped.endswith('}'):
+            # TODO: implement pydantic parsing instead
             try:
                 json_data = json.loads(llm_response_stripped)
                 # Validate that all fields are expected
@@ -108,7 +136,8 @@ class StructuredInputOutputMixin:
             except json.JSONDecodeError:
                 pass
         
-        # Strategy 2: Delegate to each TracedOutput instance for parsing
+        # Then treat it like XML, re-format it into JSON, and use Pydantic to parse
+        # TODO: implement that
         extracted_data = {}
         
         for field_name in self._output_fields:
