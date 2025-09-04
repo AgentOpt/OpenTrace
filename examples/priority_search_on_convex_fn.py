@@ -218,6 +218,7 @@ from opto.trainer.loggers import TensorboardLogger
 from opto.trainer.guide import LLMJudge
 from typing import Any
 from opto import trainer
+from typing import Tuple
 
 
 class RewardGuide(Guide):
