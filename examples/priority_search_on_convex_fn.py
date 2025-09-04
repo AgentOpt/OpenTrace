@@ -229,7 +229,7 @@ class RewardGuide(Guide):
         # score, feedbak str
         obs, reward, done, info = self.env.step(response)
 
-        return -reward, obs + '\n\n' + info['feedback']
+        return reward, obs + '\n\n' + info['feedback']
 
 env = SixHumpCamel(horizon=200)
 train_dataset = dict(inputs=[None], infos=[None])
