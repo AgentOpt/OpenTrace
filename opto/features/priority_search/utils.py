@@ -45,7 +45,8 @@ def is_module_copy(a, b):
         _matched = []
         for p_b in parameters_b:
             _matched.append(is_node_copy(p_a, p_b))
-    np.array(matched)
+        matched.append(_matched)
+    matched = np.array(matched)
     if np.all(np.sum(matched, axis=1) == 1) and np.all(np.sum(matched, axis=0) == 1):
         return True
     return False

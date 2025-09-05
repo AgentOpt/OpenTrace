@@ -1,9 +1,10 @@
 import numpy as np
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
-from opto.trainer.algorithms.basic_algorithms import Minibatch
+from opto.trainer.algorithms.basic_algorithms import Trainer
 from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler, RolloutsGraph
+from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 
 # TODO save and load SearchTemplate
 # TODO async version???
@@ -55,9 +56,21 @@ class Samples:
 
 
 
-class SearchTemplate(Minibatch):
+class SearchTemplate(Trainer):
     # This only uses __init__ and evaluate of Minibatch class.
     """ This implements a generic template for search algorithm. """
+
+    def __init__(self,
+                agent,
+                optimizer,
+                num_threads: int = None,   # maximum number of threads to use for parallel execution
+                logger=None,
+                *args,
+                **kwargs,
+                ):
+        super().__init__(agent, num_threads=num_threads, logger=logger, *args, **kwargs)
+        self.optimizer = optimizer
+        self.n_iters = 0  # number of iterations
 
     def train(self,
               guide, # guide to provide feedback
@@ -222,6 +235,14 @@ class SearchTemplate(Minibatch):
         if not (self.min_score <= test_score <= self.max_score):
             print(f"Warning: Test score {test_score} is out of the range {self._score_range}.")
         return {'test_score': test_score}
+
+    def evaluate(self, agent, guide, xs, infos, min_score=None, num_samples=1, num_threads=None, description=None):
+        """ Evaluate the agent on the given dataset. """
+        num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
+        test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
+                               num_samples=num_samples, description=description)
+        if all([s is not None for s in test_scores]):
+            return np.mean(test_scores)
 
     def save(self, save_path):
         self.save_agent(save_path, self.n_iters)
