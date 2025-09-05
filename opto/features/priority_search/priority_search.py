@@ -178,11 +178,20 @@ class HeapMemory:
         """ Iterate over the items in the heap memory. """
         return iter(self.memory)
 
-    def best(self):
-        """ Return the best item in the heap memory without removing it. """
+    def best(self, criterion=None):
+        """ Return the best item in the heap memory without removing it.
+
+        If criterion is None, return the item with the highest priority (lowest negative score).
+        If criterion is a callable function, return the item that maximizes the criterion.
+        """
         if not self.memory:
             raise IndexError("best from an empty heap memory")
-        return self.memory[0]
+        if criterion is None:
+            return self.memory[0]  # return the item with the highest priority (lowest negative score)
+        else:
+            assert callable(criterion), "criterion must be a callable function."
+            return max(self.memory, key=lambda x: criterion(x[1]))
+
 
 
 # TODO check saving and loading
@@ -198,11 +207,14 @@ class PrioritySearch(SearchTemplate):
             5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_proposals is set to True, the exploration candidates are also validated.
             6. The validation results are used to update the priority queue, which stores the candidates and their scores. The candidates are stored as ModuleCandidate objects, which contain the base module, update dictionary, and rollouts (i.e. raw statistics of the candidate).
 
-        This algorithm template can be subclassed to implement specific search algorithms by overriding the `exploit`, `explore`, and `compute_priority` methods.
+        This algorithm template can be subclassed to implement specific search algorithms by overriding the `exploit`, `explore`, and `compute_exploration_priority` methods.
         The `exploit` method is used to select the best candidate from the priority queue, the `explore` method is used to generate new candidates from the priority queue, and
-        the `compute_priority` method is used to compute the score for ranking in the priority queue.
+        the `compute_exploration_priority` method is used to compute the score for ranking in the priority queue.
 
-        By default, `compute_priority` computes the mean score of the rollouts. `exploit` simply returns the best candidate from the priority queue, and `explore` generates the top `num_candidates` candidates from the priority queue.
+        By default, `compute_exploration_priority` computes the mean score of the rollouts. `exploit` simply returns the candidate with highest priority from the priority queue, and `explore` generates the top `num_candidates` candidates from the priority queue.
+
+
+        `compute_exploration_priority`, `compute_exploitation_priority` can be overridden to implement different strategies for computing the priority and selecting the best candidate.
     """
 
     def train(self,
@@ -480,7 +492,7 @@ class PrioritySearch(SearchTemplate):
         print("--- Updating memory with validation results...") if verbose else None
         for candidate, rollouts in validate_results.items():
             candidate.add_rollouts(rollouts)  # add the rollouts to the candidate
-            priority = self.compute_priority(candidate)  # compute the priority for the candidate
+            priority = self.compute_exploration_priority(candidate)  # compute the priority for the candidate
             self.memory.push(priority, candidate)
 
     ####
@@ -494,11 +506,12 @@ class PrioritySearch(SearchTemplate):
         """
         print(f"--- Generating {min(len(self.memory), self.num_candidates)} exploration candidates...") if verbose else None
         # pop top self.num_candidates candidates from the priority queue
+        # self._best_candidate is the exploited candidate from the previous iteration
         top_candidates = [self._best_candidate] if self.use_best_candidate_to_explore else []
-        priorities = []  # to store the priorities of the candidates
+        priorities = []  # to store the priorities of the candidates for logging
         while len(top_candidates) < self.num_candidates and self.memory:
-            priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
-            priority = - priority  # remember that we stored negative scores in the priority queue
+            neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
+            priority = - neg_priority  # remember that we stored negative scores in the priority queue
             priorities.append(priority)  # store the priority of the candidate
             if self.use_best_candidate_to_explore:
                 if candidate == self._best_candidate:  # skip if it is already in the top candidates
@@ -516,27 +529,26 @@ class PrioritySearch(SearchTemplate):
         return top_candidates, info_dict
 
 
-    def exploit(self, verbose: bool = False, **kwargs):
-        # NOTE This function can be overridden by subclasses to compute a different score
+    def exploit(self, verbose: bool = False, **kwargs) -> Tuple[ModuleCandidate, Dict[str, Any]]:
         """ Exploit the best candidate from the priority queue. This method should not change the priority queue.
         Args:
+            verbose (bool, optional): Whether to print verbose output. Defaults to False.
             **kwargs: Additional keyword arguments that may be used by the implementation.
         Returns:
             ModuleCandidate: The best candidate from the priority queue.
         """
         print("--- Exploiting the best candidate...") if verbose else None
-        # Right now, we just return the best candidate from the priority queue
-        # This function can be overridden by subclasses to implement a different exploitation strategy
         if not self.memory:
             raise ValueError("The priority queue is empty. Cannot exploit.")
-        priority, best_candidate = self.memory.best()  # (priority, candidate)
-        priority = - priority # remember that we stored negative scores in the priority queue
+        neg_priority, best_candidate = self.memory.best(self.compute_exploitation_priority)  # (priority, candidate)
+        priority = - neg_priority # remember that we stored negative scores in the priority queue
         return best_candidate, {
             'best_candidate_priority': priority,  # remember that we stored negative scores in the priority queue
             'best_candidate_mean_score': best_candidate.mean_score(),  # mean score of the candidate's rollouts
         }
 
-    def compute_priority(self, candidate):
+    # TODO refactor below to reuse scoring
+    def compute_exploitation_priority(self, candidate) -> float:
         # NOTE This function can be overridden by subclasses to compute a different score
         """ Compute the score for the candidate based on the rollouts during the validation phase.
         It can be overridden by subclasses to implement a different scoring strategy.
@@ -544,7 +556,22 @@ class PrioritySearch(SearchTemplate):
         Args:
             candidate (ModuleCandidate): The candidate for which to compute the score.
         Returns:
-            float: The computed score for the candidate.
+            float: The computed score for the candidate. Higher scores indicate higher priority.
+        """
+        if not isinstance(candidate, ModuleCandidate):
+            raise TypeError("candidate must be an instance of ModuleCandidate.")
+        # By default, we compute the mean score of the rollouts
+        return candidate.mean_score()
+
+    def compute_exploration_priority(self, candidate) -> float:
+        # NOTE This function can be overridden by subclasses to compute a different score
+        """ Compute the score for the candidate based on the rollouts during the validation phase.
+        It can be overridden by subclasses to implement a different scoring strategy.
+
+        Args:
+            candidate (ModuleCandidate): The candidate for which to compute the score.
+        Returns:
+            float: The computed score for the candidate. Higher scores indicate higher priority.
         """
         if not isinstance(candidate, ModuleCandidate):
             raise TypeError("candidate must be an instance of ModuleCandidate.")
