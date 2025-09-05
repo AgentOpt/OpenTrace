@@ -238,12 +238,15 @@ initial_input = instruction.split("\n")[0].strip()
 param = trace.node(initial_input, description='Input x into the hidden function to get y.', trainable=True)
 
 guide = RewardGuide(env)
+logger = TensorboardLogger(log_dir='./logs/priority_search_on_convex_fn')
 
 trainer.train(
     model=param,
     # optimizer='OptoPrimeV2',  # by default, OPROv2 is used for single-node optimization
     algorithm=SearchAlgorithm,
     train_dataset=train_dataset,
+    logger=logger,
+    score_range=[-100, 100],
     # trainer kwargs
     num_epochs=5,
     batch_size=1,
@@ -251,6 +254,7 @@ trainer.train(
     guide=guide,
     num_candidates=4,
     num_proposals=4,
+    validate_proposal=True, # XXX
     optimizer_kwargs={'objective':"You have a task of guessing two numbers. You should make sure your guess minimizes y.",
                      'memory_size': 0}
 )
