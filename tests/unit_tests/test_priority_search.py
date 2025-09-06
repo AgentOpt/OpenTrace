@@ -69,7 +69,7 @@ class PrioritySearch(_PrioritySearch):
         # In this example this will always be value 5
         assert isinstance(candidates, list), "Expected candidates to be a list"
         assert all(isinstance(c, ModuleCandidate) for c in candidates), "All candidates should be ModuleCandidate instances"
-        assert len(candidates) == samples.n_sub_batches * self.num_proposals, f"Expected {samples.n_sub_batches * self.num_proposals} candidates, got {len(candidates)}"
+        assert len(candidates) == samples.n_batchrollouts * self.num_proposals, f"Expected {samples.n_batchrollouts * self.num_proposals} candidates, got {len(candidates)}"
         return candidates
 
     def validate(self, candidates, samples, verbose=False, **kwargs):

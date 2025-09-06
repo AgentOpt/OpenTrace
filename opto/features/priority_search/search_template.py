@@ -3,44 +3,47 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trainer.algorithms.basic_algorithms import Trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler, RolloutsGraph
+from opto.features.priority_search.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
+from dataclasses import dataclass
 
 # TODO save and load SearchTemplate
 # TODO async version???
 # TODO create SYNC and ASYNC versions of the base class; add an attribute to the class to indicate
 
-
+@dataclass
 class Samples:
-    """ A container for samples collected during the search algorithm. It contains a list of RolloutsGraph objects
-    and a dataset with inputs and infos which created the list of RolloutsGraph. """
+    """ A container for samples collected during the search algorithm. It contains a list of BatchRollout objects
+    and a dataset with inputs and infos which created the list of BatchRollout. """
 
-    samples: List[RolloutsGraph]
-    dataset: Dict[str, List[Any]]  # contains 'inputs' and 'infos' keys
+    samples: List[BatchRollout]
+    dataset: Dict[str, List[Any]]  # contains 'inputs' and 'infos' keys  # TODO do we need this?
 
-    def __init__(self, samples: List[RolloutsGraph], dataset: Dict[str, List[Any]]):
-        assert isinstance(samples, list), "samples must be a list of RolloutsGraph objects."
-        assert all(isinstance(s, RolloutsGraph) for s in samples), "All samples must be RolloutsGraph objects."
+    def __init__(self, samples: List[BatchRollout], dataset: Dict[str, List[Any]]):
+        assert isinstance(samples, list), "samples must be a list of BatchRollout objects."
+        assert all(isinstance(s, BatchRollout) for s in samples), "All samples must be BatchRollout objects."
         assert isinstance(dataset, dict), "dataset must be a dict."
         assert 'inputs' in dataset and 'infos' in dataset, "dataset must contain 'inputs' and 'infos' keys."
 
         self.samples = samples
-        self.dataset = dataset  # NOTE this cannot be extracted from the samples in general?
+
+        # TODO drop this
+        self._dataset = dataset  # NOTE this cannot be extracted from the samples in general?
 
     def add_samples(self, samples):
         """ Add samples to the Samples object. """
         assert isinstance(samples, Samples), "samples must be an instance of Samples."
         samples = samples.samples  # extract the samples from the Samples object
-        assert isinstance(samples, list), "samples must be a list of RolloutsGraph objects."
-        assert all(isinstance(s, RolloutsGraph) for s in samples), "All samples must be RolloutsGraph objects."
+        assert isinstance(samples, list), "samples must be a list of BatchRollout objects."
+        assert all(isinstance(s, BatchRollout) for s in samples), "All samples must be BatchRollout objects."
 
         # TODO assert xs and infos are in self.minibatch
         # add a function to extract unique inputs and infos from the samples
 
         self.samples.extend(samples)
 
-    def get_batch(self):
-        return self.dataset #['inputs'], self.minibatch['infos']
+    # def get_batch(self):
+    #     return self.dataset
 
     def __iter__(self):
         """ Iterate over the samples. """
@@ -50,7 +53,7 @@ class Samples:
         return sum(len(s) for s in self.samples)
 
     @property
-    def n_sub_batches(self) -> int:
+    def n_batchrollouts(self) -> int:
         """ Number of sub-batches in the samples. """
         return len(self.samples)
 
@@ -119,13 +122,16 @@ class SearchTemplate(Trainer):
             score_range=self._score_range
         )
         self._validate_dataset = validate_dataset  # if None, the current batch will be used for validation
-        self.validate_sampler = Sampler(
-            DataLoader(validate_dataset if validate_dataset else {'inputs':[],'infos':[]}, batch_size=batch_size),
-            validate_guide or guide,
-            num_threads=self.num_threads,
-            sub_batch_size=None,  # no sub-batch size for validation
-            score_range=self._score_range
-        )
+        if validate_dataset is not None:
+            self.validate_sampler = Sampler(
+                DataLoader(validate_dataset, batch_size=batch_size),
+                validate_guide or guide,
+                num_threads=self.num_threads,
+                sub_batch_size=None,  # no sub-batch size for validation
+                score_range=self._score_range
+            )
+        else:
+            self.validate_sampler = self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
 
         # Evaluate the agent before learning
         # NOTE set test_frequency < 0 to skip first evaluation
@@ -204,7 +210,7 @@ class SearchTemplate(Trainer):
         """
         samples = Samples(*self.train_sampler.sample(agents, description_prefix='Sampling training minibatch: '))  # create a Samples object to store the samples and the minibatch
         # Log information about the sampling
-        scores = [ g.get_scores() for g in samples.samples]  # list of list of scores for each RolloutsGraph
+        scores = [ g.get_scores() for g in samples.samples]  # list of list of scores for each BatchRollout
         scores = [item for sublist in scores for item in sublist]  # flatten the list of scores
         log_info = {
             'mean_score': np.mean(scores),

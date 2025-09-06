@@ -5,9 +5,10 @@ import time
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trace.nodes import ParameterNode
+from opto.optimizers.optimizer import Optimizer
 from opto.trainer.utils import async_run
 from opto.trainer.algorithms.basic_algorithms import batchify
-from opto.features.priority_search.search_template import SearchTemplate, Samples
+from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
 
 
@@ -15,8 +16,9 @@ class ModuleCandidate:
     """ A container used by PrioritySearch to store a candidate module as (its base module and update dictionary) and its statistics. """
 
     def __init__(self,
-                 base_module: Optional[trace.Module],
+                 base_module: trace.Module,
                  update_dict: Optional[Dict[ParameterNode, Any]] = None,
+                 optimizer: Optimizer = None,
                  ):
         """ A candidate module with its base module and update dictionary.
         Args:
@@ -25,10 +27,14 @@ class ModuleCandidate:
             stats (dict): A dictionary of statistics about the candidate.
         """
         assert isinstance(base_module, trace.Module), "base_module must be a trace.Module."
+        if update_dict is not None:
+            assert isinstance(optimizer, Optimizer), "optimizer must be an instance of Optimizer when update_dict is provided."
+
         self.base_module = base_module
         self.update_dict = update_dict if update_dict is not None else {}
+        self.optimizer = optimizer  # the optimizer used to generate the update_dict; can be None, which indicates the base_module is used.
         self.update_dict = remap_update_dict(self.base_module, self.update_dict)
-        self.rollouts = []  # list of dicts containing the rollout information (not RolloutsGraph, but a list of dicts)
+        self.rollouts = []  # list of dicts containing the rollout information (not BatchRollout, but a list of dicts)
         self.created_time = time.time()
 
     def get_module(self):
@@ -60,7 +66,6 @@ class ModuleCandidate:
         assert isinstance(other, ModuleCandidate), "other must be an instance of ModuleCandidate."
         return (self.update_dict == other.update_dict) and is_module_copy(self.base_module, other.base_module)
 
-    # TODO better way?
     def __lt__(self, other):
         """ Compare two candidates based on their update_dict. """
         assert isinstance(other, ModuleCandidate), "other must be an instance of ModuleCandidate."
@@ -202,9 +207,9 @@ class PrioritySearch(SearchTemplate):
         In each iteration,
             1. It proposes a best agent and a set of `num_candidates` exploration agents that have the highest scores in the priority queue.
             2. The best agent is tested for performance if eval_frequency is met.
-            3. A minibatch of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of size `sub_batch_size` are grouped together as a connected subgraph (represented as the RolloutsGraph object). In total, this step creates `num_subgraphs = num_candidates * ceil(batch_size / sub_batch_size)` subgraphs.
+            3. A minibatch of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of size `sub_batch_size` are grouped together as a connected subgraph (represented as the BatchRollout object). In total, this step creates `num_subgraphs = num_candidates * ceil(batch_size / sub_batch_size)` subgraphs.
             4. Optimizer is run on each subgraph to propose new parameters for the agents. `num_proposals` proposals are generated for each subgraph. This results in `num_subgraphs * num_proposals` total proposals.
-            5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_proposals is set to True, the exploration candidates are also validated.
+            5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_exploration_candidates is set to True, the exploration candidates are also validated.
             6. The validation results are used to update the priority queue, which stores the candidates and their scores. The candidates are stored as ModuleCandidate objects, which contain the base module, update dictionary, and rollouts (i.e. raw statistics of the candidate).
 
         This algorithm template can be subclassed to implement specific search algorithms by overriding the `exploit`, `explore`, and `compute_exploration_priority` methods.
@@ -242,7 +247,7 @@ class PrioritySearch(SearchTemplate):
               # Priority Search specific parameters
               num_candidates: int = 10,  # number of candidates to propose for exploration
               num_proposals: int = 1,  # number of proposals to generate per optimizer
-              validate_proposals: bool = True,  # whether to validate the proposed parameters for exploration
+              validate_exploration_candidates: bool = True,  # whether to validate the proposed parameters for exploration
               use_best_candidate_to_explore: bool = True,  # whether to use the best candidate as part of the exploration candidates
               memory_size: Optional[int] = None,  # size of the heap memory to store the candidates; if None, no limit is set
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
@@ -271,7 +276,7 @@ class PrioritySearch(SearchTemplate):
             save_path (str, optional): The path to save the agent. Defaults to "checkpoints/agent.pkl".
             num_candidates (int, optional): The number of candidates to propose for exploration. Defaults to 10.
             num_proposals (int, optional): The number of proposals to generate per optimizer. Defaults to 1.
-            validate_proposals (bool, optional): Whether to validate the proposed parameters for exploration. Defaults to True.
+            validate_exploration_candidates (bool, optional): Whether to validate the proposed parameters for exploration. Defaults to True.
             use_best_candidate_to_explore (bool, optional): Whether to use the best candidate as part of the exploration candidates. Defaults to True.
             memory_size (int, optional): The size of the heap memory to store the candidates. If None, no limit is set. Defaults to None.
             score_function (str, optional): The function to compute the score for the candidates; 'mean' or 'ucb'. Defaults to 'mean'.
@@ -283,7 +288,7 @@ class PrioritySearch(SearchTemplate):
         # Create agents and optimizers for search
         self.num_candidates = num_candidates  # number of candidates to propose by each optimizer call
         self.num_proposals = num_proposals
-        self.validate_proposals = validate_proposals  # whether to validate the proposed parameters
+        self.validate_exploration_candidates = validate_exploration_candidates  # whether to validate the proposed parameters
         self.use_best_candidate_to_explore = use_best_candidate_to_explore
         self.score_function = score_function  # function to compute the score for the candidates
         if score_range is None:
@@ -294,6 +299,7 @@ class PrioritySearch(SearchTemplate):
 
         self.ucb_exploration_constant = ucb_exploration_constant
         self._exploration_candidates = None  # This stores the latest candidates used for exploration
+        self._best_candidate = None  # This stores the latest best candidate used for exploitation
 
         self.memory = HeapMemory(size=memory_size)  # Initialize the heap memory with a size limit
 
@@ -315,7 +321,6 @@ class PrioritySearch(SearchTemplate):
                       save_path=save_path,
                       **kwargs)
 
-
     def update(self,
                samples: Union[Samples, None] = None,
                verbose: bool = False,
@@ -332,7 +337,7 @@ class PrioritySearch(SearchTemplate):
             # 3. Update the priority queue with the validation results
             self.update_memory(validate_results, verbose=verbose, **kwargs)  # samples are provided here in case candidates do not capture full information
         else:  # The first iteration.
-            if len(self.memory) == 0:
+            if len(self.memory) < self.num_candidates:
                 self.memory.push(self.max_score, ModuleCandidate(self.agent))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
         # 4. Explore and exploit the priority queue
         self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
@@ -348,12 +353,46 @@ class PrioritySearch(SearchTemplate):
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
 
-    def propose(self, samples, verbose=False, **kwargs):
+
+    ## Illustration of `propose``
+    # Suppose we have 2 exploration candidates.
+    # exploration_candidates = [candidate(param1, optimizer_1), candidate(param2, optimizer_2)]
+    # and two subbatches are collected by sampler.
+    #
+    # In samples returned by sampler, we have data
+    #   module(param1_copy1), subbatch_1
+    #   module(param1_copy2), subbatch_2
+    #   module(param2_copy1), subbatch_1
+    #   module(param2_copy2), subbatch_2
+    #
+    # We first match the samples with the exploration candidates as
+    #   candidate_batchrollouts_list =
+    #       [ (candidate(param1, optimizer_1), subbatch_1), (candidate(param1, optimizer_1), subbatch_2),
+    #         (candidate(param2, optimizer_2), subbatch_1), (candidate(param2, optimizer_2), subbatch_2) ]
+    #
+    # In backward, we create deepcopies of the optimizers for each subbatch, and run backward asynchronously.
+    #    optimizer_1_copy_1(param1) <- feedback from subbatch_1
+    #    optimizer_1_copy_2(param1) <- feedback from subbatch_2
+    #    optimizer_2_copy_1(param2) <- feedback from subbatch_1
+    #    optimizer_2_copy_2(param2) <- feedback from subbatch_2
+    #
+    # In step, we further create deepcopies of the optimizers for each proposal, and run step asynchronously.
+    # for n_proposals = 2, we have
+    #    optimizer_1_copy_1_copy_1(param1) -> proposal_1
+    #    optimizer_1_copy_1_copy_2(param1) -> proposal_2
+    #    ...
+    #    optimizer_2_copy_2_copy_1(param2) -> proposal_7
+    #    optimizer_2_copy_2_copy_2(param2) -> proposal_8
+    # which form the new candidate list returned by `propose`.
+    #
+    def propose(self,
+                samples : Samples,
+                verbose : bool = False,
+                **kwargs):
         """ Analyzing samples and propose new parameters using self.optimizer. An independent optimizer is used for the minibatch generated by one agent and generates n_proposals proposals.
 
         Args:
-            samples (list): A list of samples from the previous iteration. If None, the agent's parameters are returned without updating.
-            n_proposals (int): Number of proposals to generate per optimizer. Defaults to 1.
+            samples (Samples): Samples collected by the exploration candidates. If None, the agent's parameters are returned without updating.
             verbose (bool, optional): Whether to print verbose output. Defaults to False.
             **kwargs: Additional keyword arguments that may be used by the implementation.
 
@@ -362,13 +401,21 @@ class PrioritySearch(SearchTemplate):
         """
         print("--- Proposing new parameters...") if verbose else None
         assert isinstance(samples, Samples), "samples must be an instance of Samples."
-        samples = samples.samples  # list of RolloutsGraph objects
+        samples = samples.samples  # list of BatchRollout objects
         n_proposals = self.num_proposals  # number of proposals to generate per optimizer
 
+        # Associate each BatchRollout with self._exploration_candidates
+        matched_candidates_and_samples = self.match_candidates_and_samples(self._exploration_candidates, samples)
+        candidate_batchrollouts_list = [ (k,b) for k, v in matched_candidates_and_samples.items() for b in v]
+        assert len(samples) == len(candidate_batchrollouts_list), "All samples must be associated with exploration candidates."
+        n_subbatches = len(samples)  # number of batch rollouts in the samples
+
+        # need to copy optimizer for the n_subbatches
         def _backward(n):
-            optimizer = copy.deepcopy(self.optimizer)  # create a copy of the optimizer to avoid modifying the original one
-            rollouts = samples[n]  # RolloutsGraph
-            # Make sure all rollouts are based on the same module, so they can be viewed as a minibatch.
+            candidate, rollouts = candidate_batchrollouts_list[n]
+            optimizer = candidate.optimizer or self.optimizer
+            # Create a copy of the optimizer to avoid modifying the original one and to allow parallel execution
+            optimizer = copy.deepcopy(optimizer)
             optimizer.parameters = rollouts.module.parameters()  # set the optimizer's parameters to the proposal's parameters
             targets = [r.target for r in rollouts]
             feedbacks = [r.feedback for r in rollouts]
@@ -380,19 +427,26 @@ class PrioritySearch(SearchTemplate):
             optimizer.backward(target, feedback)  # compute the gradients based on the targets and feedbacks
             return optimizer
 
-        n_subgraphs = len(samples)  # number of subgraphs (agents) in the samples
-        args_list = [(n,) for n in range(n_subgraphs)]
-        optimizers = async_run([_backward]*n_subgraphs*n_proposals,  # run the optimizer step for each agent in parallel
-                                  args_list=args_list,
-                                  max_workers=self.num_threads,  # use the number of threads specified in the class
-                                  description=None)
+        args_list = [(n,) for n in range(n_subbatches)]
+        optimizers = async_run([_backward]*n_subbatches,  # run the optimizer step for each agent in parallel
+                                 args_list=args_list,
+                                 max_workers=self.num_threads,  # use the number of threads specified in the class
+                                 description=None)
+        assert len(optimizers) == n_subbatches, "Number of optimizers must match number of batch rollouts."
+
+        # need to copy optimizer for the n_proposals
+        # NOTE when optimizer is deepcopied, its parameters are not copied.
+        optimizers = [copy.deepcopy(o) for o in optimizers ] * n_proposals  # repeat args_list n_proposals times
+        assert len(optimizers) == n_subbatches * n_proposals, "Number of optimizers must match number of batch rollouts times number of proposals."
 
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
-        def _step(optimizer):
+        def _step(n):
+            optimizer = optimizers[n]
             update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
             # update_dict may only contain some of the parameters of the agent, we need to make sure it contains all the parameters
+            # since the current agent might have different parameters than the one used by the optimizer
             for param in optimizer.parameters: # for all parameters
                 if param not in update_dict: # update_dict misses some parameters
                     update_dict[param] = param.data # add the parameter to the update_dict
@@ -400,19 +454,23 @@ class PrioritySearch(SearchTemplate):
             update_dict = remap_update_dict(self.agent, update_dict)  # remap the update dict to the agent's parameters
             return update_dict  # return the proposed parameters
 
-        args_list = [(o,) for o in optimizers ] * n_proposals  # repeat args_list n_proposals times
-        assert len(args_list) == n_subgraphs * n_proposals, "args_list must have length n_subgraphs * n_proposals"
-        update_dicts = async_run([_step]*n_subgraphs*n_proposals,  # run the optimizer step for each agent in parallel
+        args_list = [(n,) for n in range(n_subbatches*n_proposals)]
+        update_dicts = async_run([_step]*n_subbatches*n_proposals,  # run the optimizer step for each agent in parallel
                                   args_list=args_list,
                                   max_workers=self.num_threads,  # use the number of threads specified in the class
-                                  description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_subgraphs} sub batches",)
+                                  description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_subbatches} sub batches",)
 
-        # update_dicts is a list of dicts of length n_agents * n_proposals
-        # Create ModuleCandidate objects for each proposed update_dict
-        candidates = [ModuleCandidate(self.agent, update_dict) for update_dict in update_dicts if update_dict is not None]  # filter out None updates
+        # update_dicts is a list of dicts of length n_subbatches * n_proposals
+        # Create ModuleCandidate objects for each proposed update_dict that is non-trivial
+        candidates = [ModuleCandidate(self.agent, update_dict, optimizer)
+                        for update_dict, optimizer in zip(update_dicts, optimizers) if update_dict is not None]  # filter out None updates
         return candidates
 
-    def validate(self, candidates, samples, verbose=False, **kwargs):
+    def validate(self,
+                 candidates: List[ModuleCandidate],
+                 samples: Samples,
+                 verbose: bool = False,
+                 **kwargs):
         """ Validate the proposed candidate parameters
         Args:
             candidates (list of ModuleCandidate): A list of ModuleCandidate objects representing the proposed parameters.
@@ -423,65 +481,80 @@ class PrioritySearch(SearchTemplate):
             results (dict): A dictionary where the keys are ids of ModuleCandidate objects and the values are ModuleCandidate and lists of rollouts (list of dicts) containing the module, x, info, target, score, feedback.
         """
         print("--- Validating candidates...") if verbose else None
-
-        # Get the validation dataset from the samples. If no validation dataset is provided, use the current batch.
-        if self._validate_dataset is None:
-            # If no validation dataset is provided, use the current batch
-            validate_dataset = samples.get_batch()  # get the batch of inputs and infos from the samples
-            self.validate_sampler.dataset = validate_dataset  # set the validation dataset in the sampler
-            self.validate_sampler.batch_size = len(validate_dataset['inputs'])  # set the batch size to the number of inputs in the validation dataset
-
-        candidate_agents = [c.get_module() for c in candidates]  # get the modules from the candidates
-        validate_samples = Samples(*self.validate_sampler.sample(candidate_agents, description_prefix='Validating newly proposed candidates: '))  # list of RolloutsGraph objects
-
-
+        assert isinstance(samples, Samples), "samples must be an instance of Samples."
         exploration_candidates = self._exploration_candidates  # exploration candidates from the previous iteration
-        assert exploration_candidates is not None, "exploration_candidates must be set before calling validate."
-        if self.validate_proposals:
-            if self._validate_dataset is None:
-                # NOTE this might contain some duplicates due to sub_batch_size < batch_size
-                validate_samples.add_samples(samples)  # if no validation dataset is provided, append the samples to the validate_samples
-            else:  # validate the agents in the validate_dataset
-                # exploration_agents = [rollouts.module for rollouts in samples.samples]  # NOTE this might contain some duplicates due to sub_batch_size < batch_size
+        assert self._exploration_candidates is not None, "exploration_candidates must be set before calling validate."
+
+        # The current batch of samples can be used to validate the exploration candidates
+        validate_samples = copy.copy(samples)
+
+        # Validate newly proposed candidates
+        use_prev_batch = self._validate_dataset is None  # when True, self.validate_sampler == self.train_sampler, and the current batch is used for validation
+        candidate_agents = [c.get_module() for c in candidates]  # get the modules from the candidates
+        validate_samples.add_samples(Samples(*self.validate_sampler.sample(candidate_agents,
+                                                                use_prev_batch=use_prev_batch,
+                                                                description_prefix='Validating newly proposed candidates: ')))  # list of BatchRollout objects
+
+        if self.validate_exploration_candidates:
+            if self._validate_dataset is not None:   # validate the exploration candidates that collected the samples as well
+                # validate the agents in the validate_dataset
                 exploration_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
-                exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents, description_prefix='Validating exploration candidates: '))  # sample the exploration agents
+                exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
+                                                            description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
 
 
-        # TODO some ModuleCandidate are the same in parameters though they have different ids
+        matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates + candidates, validate_samples.samples)
+        results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
+        for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
+            results[c] = [ r for rr in rollouts for r in rr.to_list()]  # we only need the list of dicts
 
-        # In validate_samples, there may be multiple rollouts collected by the same agent (or their copies).
-        # We need to group the rollouts by the agent (ModuleCandidate) and return a dictionary where the keys are the ModuleCandidate objects and the values are lists of rollouts (list of dicts).
+        # Some  ModuleCandidate have the same parameters though they have different ids. We need to merge their rollouts
+        for c1 in list(results.keys()):
+            for c2 in list(results.keys()):
+                if id(c1) != id(c2) and c1 == c2:  # same parameters, different candidates
+                    results[c1].extend(results[c2])  # merge the rollouts
+                    del results[c2]  # remove c2 from results
+
+        return results
+
+    def match_candidates_and_samples(
+            self,
+            candidates: List[ModuleCandidate],
+            samples: List[BatchRollout]):
+        """
+        Match the given candidates with the provided samples.
+
+        Args:
+            candidates (list of ModuleCandidate): A list of ModuleCandidate objects representing the proposed parameters.
+            samples (list of BatchRollout): A Samples object containing a list of BatchRollout objects, where each BatchRollout contains rollouts collected by an agent on different inputs.
+        Returns:
+            results (dict): A dictionary where the keys are ModuleCandidate objects and the values are lists of BatchRollouts collected by the corresponding ModuleCandidate.
+
+        """
+        # In general, there may be multiple BatchRollouts collected by the same ModuleCandidate.
+        # We group the rollouts by the agent (ModuleCandidate) and return a dictionary
+        # where the keys are the ModuleCandidate objects and the values are Samples
+
         # Group the samples by the ModuleCandidate id
-        _results = {}  # dict of ModuleCandidate: list of rollouts (list of dicts)
-        for c in exploration_candidates + candidates:
-            _results[id(c)] = []
+        _results = { c: [] for c in candidates}  # dict of ModuleCandidate: list of BatchRollouts
+        ids = {id(c): c for c in candidates}  # dict of ModuleCandidate id: ModuleCandidate
 
-        for rollouts in validate_samples.samples:
+        for rollouts in samples:
+            assert isinstance(rollouts, BatchRollout), "Each element in samples must be a BatchRollout object."
+            # rollouts is a BatchRollout object
             module = rollouts.module  # trace.Module
             key = getattr(module, '__TRACE_RESERVED_module_candidate_id')  # use the candidate as the key
-            if key not in _results:
+            if key not in ids:
                 raise ValueError(f"ModuleCandidate with id {key} not found in results. Samples are not collected by known candidates.")
             # Append the rollouts to the list of rollouts for the key
-            _results[key].extend(rollouts.to_list())
+            _results[ids[key]].append(rollouts)
+        # assert all candidates have at least one rollout
+        for c in candidates:
 
-        # Merge rollouts of ModuleCandidates sharing the same parameters
-        results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
-        for c in exploration_candidates + candidates:
-            rollouts_list = _results[id(c)]
-            matched = False
-            for k in results.keys():
-                if k == c:
-                    matched = True
-                    if id(k) != id(c):  # merging rollouts of candidates with the same parameters
-                        rollouts_list += c.rollouts
-                    results[k].extend(rollouts_list)  # add the rollouts to the candidate
-                    break
-            if not matched:  # key not found in results
-                results[c] = rollouts_list  # add the rollouts to the candidate
-        # NOTE what if propose creates multiple exploration_candidates that have the same parameters and the same rollouts stats?
-        # For example, it copies candidates. This would create a bug.
-        return results
+            assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
+
+        return _results
 
     def update_memory(self, validate_results, verbose: bool = False, **kwargs):
         """ Update the priority queue with the validation results.
@@ -495,7 +568,6 @@ class PrioritySearch(SearchTemplate):
             priority = self.compute_exploration_priority(candidate)  # compute the priority for the candidate
             self.memory.push(priority, candidate)
 
-    ####
     def explore(self, verbose: bool = False, **kwargs):
         """ Explore the parameter space and propose new candidates.
         Args:
@@ -512,14 +584,14 @@ class PrioritySearch(SearchTemplate):
         while len(top_candidates) < self.num_candidates and self.memory:
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue
-            priorities.append(priority)  # store the priority of the candidate
             if self.use_best_candidate_to_explore:
                 if candidate == self._best_candidate:  # skip if it is already in the top candidates
                     continue
+            priorities.append(priority)  # store the priority of the candidate
             top_candidates.append(candidate)  # add the candidate to the top candidates
 
         mean_scores = [c.mean_score() for c in top_candidates]
-        mean_scores = [ s for s in mean_scores if s is not None]  # filter out None scores
+        mean_scores = [s for s in mean_scores if s is not None]  # filter out None scores
         info_dict = {
             'num_exploration_candidates': len(top_candidates),
             'exploration_candidates_mean_priority': np.mean(priorities),  # list of priorities of the exploration candidates
@@ -527,7 +599,6 @@ class PrioritySearch(SearchTemplate):
         }
 
         return top_candidates, info_dict
-
 
     def exploit(self, verbose: bool = False, **kwargs) -> Tuple[ModuleCandidate, Dict[str, Any]]:
         """ Exploit the best candidate from the priority queue. This method should not change the priority queue.

@@ -1,5 +1,5 @@
 from typing import Any, List, Dict
-
+import copy
 from opto.trace.nodes import ParameterNode, Node
 from opto.trace.propagators import GraphPropagator
 from opto.trace.propagators.propagators import Propagator
@@ -102,3 +102,15 @@ class Optimizer(AbstractOptimizer):
     def load(self, path: str):
         """Load the optimizer state from a file."""
         pass
+
+    def __deepcopy__(self, memo):
+        # deepcopy everything except self.parameters
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if k != 'parameters':
+                setattr(result, k, copy.deepcopy(v, memo))
+            else:
+                setattr(result, k, v)  # parameters is not copied, it is the original parameters
+        return result

@@ -246,15 +246,15 @@ trainer.train(
     algorithm=SearchAlgorithm,
     train_dataset=train_dataset,
     logger=logger,
-    score_range=[-100, 100],
+    score_range=[-10, 10],
     # trainer kwargs
     num_epochs=5,
-    batch_size=1,
-    verbose='output', # 'output', 'all'
+    batch_size=2,  # this is just for testing. effectively, this is the same batch_size=1 and num_proposals=4
+    sub_batch_size=1,
+    verbose='output',
     guide=guide,
     num_candidates=4,
-    num_proposals=4,
-    validate_proposal=True, # XXX
+    num_proposals=2,
     optimizer_kwargs={'objective':"You have a task of guessing two numbers. You should make sure your guess minimizes y.",
-                     'memory_size': 0}
+                     'memory_size': 10}
 )
