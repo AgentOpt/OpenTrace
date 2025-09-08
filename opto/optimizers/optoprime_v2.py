@@ -409,12 +409,15 @@ class OptoPrimeV2(OptoPrime):
             max_tokens=4096,
             log=True,
             initial_var_char_limit=100,
-            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
+            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
             **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
+
+        if optimizer_prompt_symbol_set is None:
+            optimizer_prompt_symbol_set = OptimizerPromptSymbolSet()
 
         self.truncate_expression = truncate_expression
 

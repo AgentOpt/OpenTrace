@@ -64,7 +64,7 @@ class ModuleCandidate:
     def __eq__(self, other):
         """ Check if two candidates are equal based on their base_module and update_dict. """
         assert isinstance(other, ModuleCandidate), "other must be an instance of ModuleCandidate."
-        return (self.update_dict == other.update_dict) and is_module_copy(self.base_module, other.base_module)
+        return (self.update_dict == other.update_dict) and is_module_copy(self.base_module, other.base_module) and (id(self.optimizer) == id(other.optimizer))
 
     def __lt__(self, other):
         """ Compare two candidates based on their update_dict. """
@@ -75,7 +75,7 @@ class ModuleCandidate:
 
     def __hash__(self):
         """ Hash the candidate based on its update_dict. """
-        return hash(frozenset(self.update_dict.items()))
+        return hash((frozenset(self.update_dict.items()), id(self.optimizer), id(self.base_module)))
 
     def add_rollouts(self, rollouts: List[Dict[str, Any]]):
         """ Add rollouts to the candidate. """
@@ -288,8 +288,12 @@ class PrioritySearch(SearchTemplate):
 
 
         # Create agents and optimizers for search
-        self.num_candidates = num_candidates  # number of candidates to propose by each optimizer call
-        self.num_proposals = num_proposals
+        if num_candidates < len(self._optimizers):
+            print(f"Warning: num_candidates {num_candidates} is less than the number of optimizers {len(self._optimizers)}. Setting num_candidates to {len(self._optimizers)}.")
+            num_candidates = len(self._optimizers)
+        self.num_candidates = num_candidates  # number of candidates for exploration
+        self.num_proposals = num_proposals  # number of candidates to propose by each optimizer call
+
         self.validate_exploration_candidates = validate_exploration_candidates  # whether to validate the proposed parameters
         self.use_best_candidate_to_explore = use_best_candidate_to_explore
         self.score_function = score_function  # function to compute the score for the candidates
@@ -340,12 +344,12 @@ class PrioritySearch(SearchTemplate):
             self.update_memory(validate_results, verbose=verbose, **kwargs)  # samples are provided here in case candidates do not capture full information
         else:  # The first iteration.
             while len(self.memory) < self.num_candidates:
-                self.memory.push(self.max_score, ModuleCandidate(self.agent))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
+                self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
         # 4. Explore and exploit the priority queue
         self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
         self._exploration_candidates, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
-
-
+        if samples is None:  # first iteration
+            assert len(self.memory) == 0, "Memory should be empty in the first iteration."
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -408,6 +412,7 @@ class PrioritySearch(SearchTemplate):
 
         # Associate each BatchRollout with self._exploration_candidates
         matched_candidates_and_samples = self.match_candidates_and_samples(self._exploration_candidates, samples)
+        # NOTE len(matched_candidates_and_samples) <= len(self._exploration_candidates) since some exploration candidates might be duplicated.
         candidate_batchrollouts_list = [ (k,b) for k, v in matched_candidates_and_samples.items() for b in v]
         assert len(samples) == len(candidate_batchrollouts_list), "All samples must be associated with exploration candidates."
         n_subbatches = len(samples)  # number of batch rollouts in the samples
@@ -435,7 +440,6 @@ class PrioritySearch(SearchTemplate):
                                  max_workers=self.num_threads,  # use the number of threads specified in the class
                                  description=None)
         assert len(optimizers) == n_subbatches, "Number of optimizers must match number of batch rollouts."
-
         # need to copy optimizer for the n_proposals
         # NOTE when optimizer is deepcopied, its parameters are not copied.
         optimizers = [copy.deepcopy(o) for o in optimizers ] * n_proposals  # repeat args_list n_proposals times
@@ -511,13 +515,6 @@ class PrioritySearch(SearchTemplate):
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
             results[c] = [ r for rr in rollouts for r in rr.to_list()]  # we only need the list of dicts
 
-        # Some  ModuleCandidate have the same parameters though they have different ids. We need to merge their rollouts
-        for c1 in list(results.keys()):
-            for c2 in list(results.keys()):
-                if id(c1) != id(c2) and c1 == c2:  # same parameters, different candidates
-                    results[c1].extend(results[c2])  # merge the rollouts
-                    del results[c2]  # remove c2 from results
-
         return results
 
     def match_candidates_and_samples(
@@ -553,7 +550,6 @@ class PrioritySearch(SearchTemplate):
             _results[ids[key]].append(rollouts)
         # assert all candidates have at least one rollout
         for c in candidates:
-
             assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
 
         return _results
@@ -587,11 +583,11 @@ class PrioritySearch(SearchTemplate):
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue
             if self.use_best_candidate_to_explore:
-                if candidate == self._best_candidate:  # skip if it is already in the top candidates
+                if candidate is self._best_candidate:  # skip if it is already in the top candidates
                     continue
             priorities.append(priority)  # store the priority of the candidate
             top_candidates.append(candidate)  # add the candidate to the top candidates
-
+        # NOTE some top_candidates can be duplicates
         mean_scores = [c.mean_score() for c in top_candidates]
         mean_scores = [s for s in mean_scores if s is not None]  # filter out None scores
         info_dict = {

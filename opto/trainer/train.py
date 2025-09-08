@@ -61,12 +61,18 @@ def train(
     parameters = model.parameters()
     assert len(parameters) >0, "Model must have non-empty parameters."
 
-    optimizer = load_optimizer(optimizer, model, **optimizer_kwargs)
+    if isinstance(optimizer_kwargs, list):  # support multiple optimizers
+        assert all(isinstance(d, dict) for d in optimizer_kwargs), "optimizer_kwargs must be a list of dictionaries."
+        optimizer = [load_optimizer(optimizer, model, **d) for d in optimizer_kwargs ]
+        assert all(isinstance(o, Optimizer) for o in optimizer)
+    else:
+        optimizer = load_optimizer(optimizer, model, **optimizer_kwargs)
+        assert isinstance(optimizer, Optimizer)
+
     guide = load_guide(guide, **guide_kwargs)
     logger = load_logger(logger, **logger_kwargs)
     trainer_class = load_trainer_class(algorithm)
 
-    assert isinstance(optimizer, Optimizer)
     assert isinstance(guide, Guide)
     assert isinstance(logger, BaseLogger)
     assert issubclass(trainer_class, Trainer)
@@ -122,8 +128,13 @@ def load_logger(logger: Union[BaseLogger, str], **kwargs) -> BaseLogger:
 
 def load_trainer_class(trainer: Union[Trainer, str]) -> Trainer:
     if isinstance(trainer, str):
-        trainers_module = importlib.import_module("opto.trainer.algorithms")
-        trainer_class = getattr(trainers_module, trainer)
+        if trainer.lower() == 'PrioritySearch'.lower():
+            print('Warning: You are using PrioritySearch trainer, which is an experimental feature. Please report any issues you encounter.')
+            trainers_module = importlib.import_module("opto.features.priority_search")
+            trainer_class = getattr(trainers_module, trainer)
+        else:
+            trainers_module = importlib.import_module("opto.trainer.algorithms")
+            trainer_class = getattr(trainers_module, trainer)
     elif issubclass(trainer, Trainer):
         trainer_class = trainer
     else:
