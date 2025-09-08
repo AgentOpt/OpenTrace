@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
+from opto.optimizers.optimizer import Optimizer
+from opto.trainer.loggers import BaseLogger
 from opto.trainer.algorithms.basic_algorithms import Trainer
 from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler, BatchRollout
@@ -58,22 +60,45 @@ class Samples:
         return len(self.samples)
 
 
+def check_optimizer_parameters(optimizer: Optimizer, agent: trace.Module):
+    """ Check if the optimizer's parameters are the same as the agent's parameters. """
+    assert isinstance(optimizer, Optimizer), "optimizer must be an instance of Optimizer."
+    agent_params = set(agent.parameters())
+    optimizer_params = set(optimizer.parameters)
+    assert agent_params == optimizer_params, "Optimizer parameters do not match agent parameters."
+
 
 class SearchTemplate(Trainer):
     # This only uses __init__ and evaluate of Minibatch class.
     """ This implements a generic template for search algorithm. """
 
     def __init__(self,
-                agent,
-                optimizer,
+                agent: trace.Module,
+                optimizer : Union[Optimizer, List[Optimizer]],
                 num_threads: int = None,   # maximum number of threads to use for parallel execution
-                logger=None,
+                logger: Union[BaseLogger, None] =None,
                 *args,
                 **kwargs,
                 ):
         super().__init__(agent, num_threads=num_threads, logger=logger, *args, **kwargs)
-        self.optimizer = optimizer
+
+        # TODO assert agent parameters are the same as optimizer.parameters
+        if isinstance(optimizer, list):
+            assert len(optimizer) > 0, "Optimizers list is empty."
+            for opt in optimizer:
+                check_optimizer_parameters(opt, agent)
+            self._optimizers = optimizer
+        else:
+            check_optimizer_parameters(optimizer, agent)
+            self._optimizers = [optimizer]
+
         self.n_iters = 0  # number of iterations
+        self._optimizer_index = -1  # index of the current optimizer to use
+
+    @property
+    def optimizer(self):
+        self._optimizer_index += 1
+        return self._optimizers[self._optimizer_index % len(self._optimizers)]  # return the current optimizer
 
     def train(self,
               guide, # guide to provide feedback

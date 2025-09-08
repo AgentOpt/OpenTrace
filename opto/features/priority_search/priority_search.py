@@ -195,9 +195,11 @@ class HeapMemory:
             return self.memory[0]  # return the item with the highest priority (lowest negative score)
         else:
             assert callable(criterion), "criterion must be a callable function."
-            return max(self.memory, key=lambda x: criterion(x[1]))
-
-
+            def _criterion(x):
+                neg_score, candidate = x
+                p = criterion(candidate)
+                return p if p is not None else 0
+            return max(self.memory, key=lambda x: _criterion(x))
 
 # TODO check saving and loading
 class PrioritySearch(SearchTemplate):
@@ -337,7 +339,7 @@ class PrioritySearch(SearchTemplate):
             # 3. Update the priority queue with the validation results
             self.update_memory(validate_results, verbose=verbose, **kwargs)  # samples are provided here in case candidates do not capture full information
         else:  # The first iteration.
-            if len(self.memory) < self.num_candidates:
+            while len(self.memory) < self.num_candidates:
                 self.memory.push(self.max_score, ModuleCandidate(self.agent))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
         # 4. Explore and exploit the priority queue
         self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
