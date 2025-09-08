@@ -109,7 +109,7 @@ class SearchTemplate(Trainer):
               validate_guide = None,  #  to provide scores for the validation set
               # training loop
               batch_size = 1,  # batch size for updating the agent
-              sub_batch_size = None,  # sub-batch size for broadcasting the agents
+              num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
               num_threads = None,  # maximum number of threads to use
@@ -125,6 +125,7 @@ class SearchTemplate(Trainer):
               save_path: str = "checkpoints/agent.pkl",  # path to save the agent
               **kwargs
               ):
+        assert 'subbatch_size' not in kwargs, "subbatch_size should not be provided in kwargs."
 
         ## Setup
         test_frequency = eval_frequency  # use eval_frequency as test_frequency  # NOTE legacy notation
@@ -139,11 +140,13 @@ class SearchTemplate(Trainer):
         assert score_range[1] >= score_range[0], "score_range must be a tuple (min_score, max_score) with min_score <= max_score."
         self._score_range = score_range  # range of the score for the guide
 
+        subbatch_size, batch_size = batch_size, batch_size*num_batches
+
         self.train_sampler = Sampler(
             DataLoader(train_dataset, batch_size=batch_size),
             guide,
             num_threads=self.num_threads,
-            sub_batch_size=sub_batch_size,
+            subbatch_size=subbatch_size,
             score_range=self._score_range
         )
         self._validate_dataset = validate_dataset  # if None, the current batch will be used for validation
@@ -152,7 +155,7 @@ class SearchTemplate(Trainer):
                 DataLoader(validate_dataset, batch_size=batch_size),
                 validate_guide or guide,
                 num_threads=self.num_threads,
-                sub_batch_size=None,  # no sub-batch size for validation
+                subbatch_size=None,  # no sub-batch size for validation
                 score_range=self._score_range
             )
         else:

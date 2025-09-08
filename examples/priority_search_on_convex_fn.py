@@ -250,7 +250,7 @@ trainer.train(
     # trainer kwargs
     num_epochs=5,
     batch_size=2,  # this is just for testing. effectively, this is the same batch_size=1 and num_proposals=4
-    sub_batch_size=1,
+    num_batches=2,
     verbose='output',
     guide=guide,
     num_candidates=4,

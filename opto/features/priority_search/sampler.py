@@ -194,24 +194,24 @@ class Sampler:
 
     """ A sampler that samples a batch of data from the loader and evaluates the agents on the sampled inputs.
     """
-    def __init__(self, loader, guide, num_threads=1, sub_batch_size=None, forward=None, score_range=(-np.inf, np.inf)):
+    def __init__(self, loader, guide, num_threads=1, subbatch_size=None, forward=None, score_range=(-np.inf, np.inf)):
         """ Initialize the sampler with a data loader and a guide.
 
         Args:
             loader (DataLoader): The data loader to sample from.
             guide (Guide): The guide to evaluate the proposals.
             num_threads (int): Number of threads to use for sampling.
-            sub_batch_size (int, optional): Size of the sub-batch to use for sampling. If None, uses the batch size.
+            subbatch_size (int, optional): Size of the sub-batch to use for sampling. If None, uses the batch size.
             score_range (tuple): The range of scores to consider valid.
         """
         self.loader = loader
         self.guide = guide
         self.num_threads = num_threads
-        if sub_batch_size is None:
-            sub_batch_size = loader.batch_size
+        if subbatch_size is None:
+            subbatch_size = loader.batch_size
         else:
-            assert sub_batch_size <= loader.batch_size, "sub_batch_size must be less than or equal to the loader's batch size."
-        self.sub_batch_size = sub_batch_size
+            assert subbatch_size <= loader.batch_size, "subbatch_size must be less than or equal to the loader's batch size."
+        self.subbatch_size = subbatch_size
         self.score_range = score_range
         if forward is None:
             self.forward = standard_forward
@@ -291,7 +291,7 @@ class Sampler:
         # agents : a1, a2
         # inputs: x1, x2, x3
         # infos: i1, i2, i3
-        # sub_batch_size: 2
+        # subbatch_size: 2
         #
         # The forward is called in this order:
         # (a1, x1, i1, guide1),
@@ -308,7 +308,7 @@ class Sampler:
         for agent in agents:
             _xs, _infos = [], []
             for i in range(batch_size):
-                if i % self.sub_batch_size == 0 and i > 0:
+                if i % self.subbatch_size == 0 and i > 0:
                     configs.append(RolloutConfig(module=agent, xs=_xs, infos=_infos, guide=self.guide))
                     # reset
                     agent = copy.deepcopy(agent) # create a deep copy of the agent for the next sub-batch
@@ -326,6 +326,6 @@ class Sampler:
                         min_score=self.score_range[0],
                         description=description)
 
-        assert len(samples) == len(agents)*(batch_size // self.sub_batch_size + (1 if batch_size % self.sub_batch_size > 0 else 0)), f"Expected {len(agents)*(batch_size // self.sub_batch_size + (1 if batch_size % self.sub_batch_size > 0 else 0))} samples, got {len(samples)}"
+        assert len(samples) == len(agents)*(batch_size // self.subbatch_size + (1 if batch_size % self.subbatch_size > 0 else 0)), f"Expected {len(agents)*(batch_size // self.subbatch_size + (1 if batch_size % self.subbatch_size > 0 else 0))} samples, got {len(samples)}"
 
         return samples, batch

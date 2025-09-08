@@ -73,7 +73,6 @@ def test_trainer_saving_loading():
     xs = [1, 2, 3, 4, 5]
     infos = [1, 2, 3, 4, 5]
     batch_size = 3
-    sub_batch_size = 2
     num_threads = 2 # 2
     dataset = {'inputs': xs, 'infos': infos}
     loader = DataLoader(dataset, batch_size=batch_size)

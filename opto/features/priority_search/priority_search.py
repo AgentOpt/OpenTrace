@@ -209,7 +209,7 @@ class PrioritySearch(SearchTemplate):
         In each iteration,
             1. It proposes a best agent and a set of `num_candidates` exploration agents that have the highest scores in the priority queue.
             2. The best agent is tested for performance if eval_frequency is met.
-            3. A minibatch of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of size `sub_batch_size` are grouped together as a connected subgraph (represented as the BatchRollout object). In total, this step creates `num_subgraphs = num_candidates * ceil(batch_size / sub_batch_size)` subgraphs.
+            3. `num_batches` minibatches of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of each minibatch are grouped together as a connected subgraph (represented as the BatchRollout object). In total, this step creates `num_candidates * num_batches` subgraphs.
             4. Optimizer is run on each subgraph to propose new parameters for the agents. `num_proposals` proposals are generated for each subgraph. This results in `num_subgraphs * num_proposals` total proposals.
             5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_exploration_candidates is set to True, the exploration candidates are also validated.
             6. The validation results are used to update the priority queue, which stores the candidates and their scores. The candidates are stored as ModuleCandidate objects, which contain the base module, update dictionary, and rollouts (i.e. raw statistics of the candidate).
@@ -233,7 +233,7 @@ class PrioritySearch(SearchTemplate):
               validate_guide = None,  #  to provide scores for the validation set
               # training loop
               batch_size = 1,  # batch size for updating the agent
-              sub_batch_size = None,  # sub-batch size that each optimizer attends to
+              num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
               num_threads = None,  # maximum number of threads to use
@@ -265,7 +265,7 @@ class PrioritySearch(SearchTemplate):
             validate_dataset (list, optional): A list of (x, info) pairs to validate the proposed candidates. If None, the current batch is used. Defaults to None.
             validate_guide (callable, optional): A function that provides feedback for the validation set. If None, the training guide is used. Defaults to None.
             batch_size (int, optional): The batch size for updating the agent. Defaults to 1.
-            sub_batch_size (int, optional): The sub-batch size that each optimizer attends to. If None, it is set to batch_size. Defaults to None.
+            num_batches (int, optional): The number of batches to use from the dataset in each iteration. Defaults to 1.
             score_range (tuple, optional): A tuple of (min_score, max_score) to clip the scores. If None, no clipping is applied. Defaults to None.
             num_epochs (int, optional): The number of training epochs. Defaults to 1.
             num_threads (int, optional): The maximum number of threads to use. If None, it uses the number of CPU cores. Defaults to None.
@@ -314,7 +314,7 @@ class PrioritySearch(SearchTemplate):
                       validate_dataset=validate_dataset,
                       validate_guide=validate_guide,
                       batch_size=batch_size,
-                      sub_batch_size=sub_batch_size,
+                      num_batches=num_batches,
                       score_range=score_range,
                       num_epochs=num_epochs,
                       num_threads=num_threads,
@@ -363,24 +363,24 @@ class PrioritySearch(SearchTemplate):
     ## Illustration of `propose``
     # Suppose we have 2 exploration candidates.
     # exploration_candidates = [candidate(param1, optimizer_1), candidate(param2, optimizer_2)]
-    # and two subbatches are collected by sampler.
+    # and two batches are collected by sampler.
     #
     # In samples returned by sampler, we have data
-    #   module(param1_copy1), subbatch_1
-    #   module(param1_copy2), subbatch_2
-    #   module(param2_copy1), subbatch_1
-    #   module(param2_copy2), subbatch_2
+    #   module(param1_copy1), batch_1
+    #   module(param1_copy2), batch_2
+    #   module(param2_copy1), batch_1
+    #   module(param2_copy2), batch_2
     #
     # We first match the samples with the exploration candidates as
     #   candidate_batchrollouts_list =
-    #       [ (candidate(param1, optimizer_1), subbatch_1), (candidate(param1, optimizer_1), subbatch_2),
-    #         (candidate(param2, optimizer_2), subbatch_1), (candidate(param2, optimizer_2), subbatch_2) ]
+    #       [ (candidate(param1, optimizer_1), batch_1), (candidate(param1, optimizer_1), batch_2),
+    #         (candidate(param2, optimizer_2), batch_1), (candidate(param2, optimizer_2), batch_2) ]
     #
-    # In backward, we create deepcopies of the optimizers for each subbatch, and run backward asynchronously.
-    #    optimizer_1_copy_1(param1) <- feedback from subbatch_1
-    #    optimizer_1_copy_2(param1) <- feedback from subbatch_2
-    #    optimizer_2_copy_1(param2) <- feedback from subbatch_1
-    #    optimizer_2_copy_2(param2) <- feedback from subbatch_2
+    # In backward, we create deepcopies of the optimizers for each batch, and run backward asynchronously.
+    #    optimizer_1_copy_1(param1) <- feedback from batch_1
+    #    optimizer_1_copy_2(param1) <- feedback from batch_2
+    #    optimizer_2_copy_1(param2) <- feedback from batch_1
+    #    optimizer_2_copy_2(param2) <- feedback from batch_2
     #
     # In step, we further create deepcopies of the optimizers for each proposal, and run step asynchronously.
     # for n_proposals = 2, we have
@@ -415,9 +415,9 @@ class PrioritySearch(SearchTemplate):
         # NOTE len(matched_candidates_and_samples) <= len(self._exploration_candidates) since some exploration candidates might be duplicated.
         candidate_batchrollouts_list = [ (k,b) for k, v in matched_candidates_and_samples.items() for b in v]
         assert len(samples) == len(candidate_batchrollouts_list), "All samples must be associated with exploration candidates."
-        n_subbatches = len(samples)  # number of batch rollouts in the samples
+        n_batches = len(samples)  # number of batch rollouts in the samples
 
-        # need to copy optimizer for the n_subbatches
+        # need to copy optimizer for the n_batches
         def _backward(n):
             candidate, rollouts = candidate_batchrollouts_list[n]
             optimizer = candidate.optimizer or self.optimizer
@@ -434,16 +434,16 @@ class PrioritySearch(SearchTemplate):
             optimizer.backward(target, feedback)  # compute the gradients based on the targets and feedbacks
             return optimizer
 
-        args_list = [(n,) for n in range(n_subbatches)]
-        optimizers = async_run([_backward]*n_subbatches,  # run the optimizer step for each agent in parallel
+        args_list = [(n,) for n in range(n_batches)]
+        optimizers = async_run([_backward]*n_batches,  # run the optimizer step for each agent in parallel
                                  args_list=args_list,
                                  max_workers=self.num_threads,  # use the number of threads specified in the class
                                  description=None)
-        assert len(optimizers) == n_subbatches, "Number of optimizers must match number of batch rollouts."
+        assert len(optimizers) == n_batches, "Number of optimizers must match number of batch rollouts."
         # need to copy optimizer for the n_proposals
         # NOTE when optimizer is deepcopied, its parameters are not copied.
         optimizers = [copy.deepcopy(o) for o in optimizers ] * n_proposals  # repeat args_list n_proposals times
-        assert len(optimizers) == n_subbatches * n_proposals, "Number of optimizers must match number of batch rollouts times number of proposals."
+        assert len(optimizers) == n_batches * n_proposals, "Number of optimizers must match number of batch rollouts times number of proposals."
 
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
         def _step(n):
@@ -460,13 +460,13 @@ class PrioritySearch(SearchTemplate):
             update_dict = remap_update_dict(self.agent, update_dict)  # remap the update dict to the agent's parameters
             return update_dict  # return the proposed parameters
 
-        args_list = [(n,) for n in range(n_subbatches*n_proposals)]
-        update_dicts = async_run([_step]*n_subbatches*n_proposals,  # run the optimizer step for each agent in parallel
+        args_list = [(n,) for n in range(n_batches*n_proposals)]
+        update_dicts = async_run([_step]*n_batches*n_proposals,  # run the optimizer step for each agent in parallel
                                   args_list=args_list,
                                   max_workers=self.num_threads,  # use the number of threads specified in the class
-                                  description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_subbatches} sub batches",)
+                                  description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_batches} batches",)
 
-        # update_dicts is a list of dicts of length n_subbatches * n_proposals
+        # update_dicts is a list of dicts of length n_batches * n_proposals
         # Create ModuleCandidate objects for each proposed update_dict that is non-trivial
         candidates = [ModuleCandidate(self.agent, update_dict, optimizer)
                         for update_dict, optimizer in zip(update_dicts, optimizers) if update_dict is not None]  # filter out None updates

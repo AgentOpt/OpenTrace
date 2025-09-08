@@ -55,7 +55,7 @@ def main():
     seed = 42
     num_epochs = 1
     batch_size = 3  # number of queries to sample from the training data
-    sub_batch_size = 2  # number of queries each optimizer sees
+    num_batches = 2  # number of queries each optimizer sees
     num_proposals = 3  # number of proposals to generate for each query
     num_candidates = 2  # number of candidates for exploration
     score_range = (0, 1)  # range of the score for the guide
@@ -97,7 +97,7 @@ def main():
               eval_frequency=eval_frequency,
               test_dataset=test_dataset,
               num_threads=num_threads,
-              sub_batch_size=sub_batch_size,
+              num_batches=num_batches,
               num_proposals=num_proposals,
               num_candidates=num_candidates,
               score_range=score_range,

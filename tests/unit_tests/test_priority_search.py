@@ -46,11 +46,9 @@ class Agent:
 xs = [1, 2, 3, 4, 5]
 infos = [1, 2, 3, 4, 5]
 batch_size = 3
-sub_batch_size = 2
+num_batches = 2
 num_threads = 2 # 2
 dataset = {'inputs': xs, 'infos': infos}
-loader = DataLoader(dataset, batch_size=batch_size, randomize=False)
-sampler = Sampler(loader=loader, guide=Guide(), sub_batch_size=sub_batch_size, num_threads=num_threads)
 
 num_proposals = 10
 num_candidates = 5
@@ -158,7 +156,7 @@ def test_priority_search():
         guide=Guide(),
         train_dataset=dataset,
         batch_size=batch_size,
-        sub_batch_size=sub_batch_size,
+        num_batches=num_batches,
         num_threads=num_threads,
         num_candidates=num_candidates,
         num_proposals=num_proposals,

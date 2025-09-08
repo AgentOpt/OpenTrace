@@ -16,7 +16,7 @@ class SequentialUpdate(PrioritySearch):
 
         This is the same as MinibatchAlgorithm when
             1. no validation set is provided
-            2. sub_batch_size is None or batch_size.
+            2. num_batches = 1
 
         validate_proposals here acts the same as `ensure_improvement` flag in MinibatchAlgorithm
     """
@@ -30,7 +30,7 @@ class SequentialUpdate(PrioritySearch):
               validate_guide = None,  #  to provide scores for the validation set
               # training loop
               batch_size = 1,  # batch size for updating the agent
-              sub_batch_size = None,  # sub-batch size that each optimizer attends to
+              num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
               num_threads = None,  # maximum number of threads to use
@@ -62,7 +62,7 @@ class SequentialUpdate(PrioritySearch):
                       validate_dataset=validate_dataset,
                       validate_guide=validate_guide,
                       batch_size=batch_size,
-                      sub_batch_size=sub_batch_size,
+                      num_batches=num_batches,
                       score_range=score_range,
                       num_epochs=num_epochs,
                       num_threads=num_threads,
@@ -90,7 +90,7 @@ class SequentialSearch(PrioritySearch):
         This is the same as BasicSearchAlgorithm when
             1. a validation set is provided
             2. validate_proposals is True.
-            3. sub_batch_size is None or batch_size.
+            3. num_batches is 1.
     """
 
     def train(self,
@@ -102,7 +102,7 @@ class SequentialSearch(PrioritySearch):
               validate_guide = None,  #  to provide scores for the validation set
               # training loop
               batch_size = 1,  # batch size for updating the agent
-              sub_batch_size = None,  # sub-batch size that each optimizer attends to
+              num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
               num_threads = None,  # maximum number of threads to use
@@ -133,7 +133,7 @@ class SequentialSearch(PrioritySearch):
                       validate_dataset=validate_dataset,
                       validate_guide=validate_guide,
                       batch_size=batch_size,
-                      sub_batch_size=sub_batch_size,
+                      num_batches=num_batches,
                       score_range=score_range,
                       num_epochs=num_epochs,
                       num_threads=num_threads,
@@ -168,7 +168,7 @@ class BeamSearch(PrioritySearch):
               validate_guide = None,  #  to provide scores for the validation set
               # training loop
               batch_size = 1,  # batch size for updating the agent
-              sub_batch_size = None,  # sub-batch size that each optimizer attends to
+              num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
               num_threads = None,  # maximum number of threads to use
@@ -196,7 +196,7 @@ class BeamSearch(PrioritySearch):
                        validate_dataset=validate_dataset,
                        validate_guide=validate_guide,
                        batch_size=batch_size,
-                       sub_batch_size=sub_batch_size,
+                        num_batches=num_batches,
                        score_range=score_range,
                        num_epochs=num_epochs,
                        num_threads=num_threads,
