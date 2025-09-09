@@ -649,6 +649,8 @@ class PrioritySearch(SearchTemplate):
         if self.score_function == 'mean':
             # Compute the mean score of the candidate's rollouts
             return candidate.mean_score()
+        elif self.score_function == 'time':
+            return -candidate.created_time  # latest candidates have higher priority
         elif self.score_function == 'ucb':
             # Compute the Upper Confidence Bound (UCB) score
             lcb_score, mean_score, ucb_score = candidate.compute_score_confidence(
