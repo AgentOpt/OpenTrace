@@ -1,4 +1,4 @@
-from typing import Any, List, Dict, Union, Tuple
+from typing import Any, List, Dict, Union, Tuple, Optional
 from dataclasses import dataclass, asdict
 from textwrap import dedent, indent
 import warnings
@@ -6,6 +6,7 @@ import json
 import re
 import copy
 import pickle
+import ast
 from opto.trace.nodes import ParameterNode, Node, MessageNode
 from opto.trace.propagators import TraceGraph, GraphPropagator
 from opto.trace.propagators.propagators import Propagator
@@ -534,35 +535,87 @@ class OptoPrime(Optimizer):
         self, suggestion: Dict[str, Any]
     ) -> Dict[ParameterNode, Any]:
         """Convert the suggestion in text into the right data type."""
-        # TODO: might need some automatic type conversion
-        update_dict = {}
-        for node in self.parameters:
-            if node.trainable and node.py_name in suggestion:
+        try:
+            from black import format_str, FileMode
+
+            def _format_code(s: str) -> str:
                 try:
-                    formatted_suggestion = suggestion[node.py_name]
-                    update_dict[node] = type(node.data)(formatted_suggestion)
-                except (ValueError, KeyError) as e:
-                    # catch error due to suggestion missing the key or wrong data type
-                    if self.ignore_extraction_error:
-                        warnings.warn(
-                            f"Cannot convert the suggestion '{suggestion[node.py_name]}' for {node.py_name} to the right data type"
-                        )
-                    else:
-                        raise e
+                    return format_str(s, mode=FileMode())
+                except Exception:
+                    return s
+
+        except Exception:
+            def _format_code(s: str) -> str:
+                return s
+
+        def _find_key(node_name: str, sugg: Dict[str, Any]) -> Optional[str]:
+            """Return the key in *suggestion* that corresponds to *node_name*.
+
+            - Exact match first.
+            - Otherwise allow the `__code8`  ↔ `__code:8` alias by
+            stripping one optional ':' between the stem and trailing digits.
+            """
+
+            if node_name in sugg:
+                return node_name
+
+            norm = re.sub(r":(?=\d+$)", "", node_name)
+            for k in sugg:
+                if re.sub(r":(?=\d+$)", "", k) == norm:
+                    return k
+            return None
+
+        update_dict: Dict[ParameterNode, Any] = {}
+
+        for node in self.parameters:
+            if not node.trainable:
+                continue
+
+            key = _find_key(node.py_name, suggestion)
+            if key is None:
+                continue
+
+            try:
+                raw_val = suggestion[key]
+                if isinstance(raw_val, str) and "def" in raw_val:
+                    raw_val = _format_code(raw_val)
+                if getattr(node, "data", None) is None:
+                    converted = raw_val
+                else:
+                    target_type = type(node.data)
+                    if isinstance(raw_val, str) and target_type is not str:
+                        try:
+                            literal = ast.literal_eval(raw_val)
+                            raw_val = literal
+                        except Exception:
+                            pass
+                    try:
+                        converted = target_type(raw_val)
+                    except Exception:
+                        converted = raw_val
+                update_dict[node] = converted
+            except (ValueError, KeyError, TypeError) as e:
+                if self.ignore_extraction_error:
+                    warnings.warn(
+                        f"Cannot convert the suggestion '{suggestion.get(key, '<missing>')}' for {node.py_name}: {e}"
+                    )
+                else:
+                    raise e
         return update_dict
 
     def extract_llm_suggestion(self, response: str):
         """Extract the suggestion from the response."""
         suggestion_tag = self.default_json_keys["suggestion"]
 
+        json_extracted = {}
         suggestion = {}
         attempt_n = 0
         while attempt_n < 2:
             try:
-                suggestion = json.loads(response)[suggestion_tag]
+                json_extracted = json.loads(response)
+                suggestion = json_extracted.get(suggestion_tag, json_extracted)
                 break
             except json.JSONDecodeError:
-                # Remove things outside the brackets
                 response = re.findall(r"{.*}", response, re.DOTALL)
                 if len(response) > 0:
                     response = response[0]
@@ -571,31 +624,23 @@ class OptoPrime(Optimizer):
                 attempt_n += 1
 
         if not isinstance(suggestion, dict):
-            suggestion = {}
+            suggestion = json_extracted if isinstance(json_extracted, dict) else {}
 
         if len(suggestion) == 0:
-            # we try to extract key/value separately and return it as a dictionary
             pattern = rf'"{suggestion_tag}"\s*:\s*\{{(.*?)\}}'
             suggestion_match = re.search(pattern, str(response), re.DOTALL)
             if suggestion_match:
                 suggestion = {}
-                # Extract the entire content of the suggestion dictionary
                 suggestion_content = suggestion_match.group(1)
-                # Regex to extract each key-value pair;
-                # This scheme assumes double quotes but is robust to missing commas at the end of the line
                 pair_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"(.*)"'
-                # Find all matches of key-value pairs
                 pairs = re.findall(pair_pattern, suggestion_content, re.DOTALL)
                 for key, value in pairs:
                     suggestion[key] = value
 
-        if len(suggestion) == 0:
-            if not self.ignore_extraction_error:
-                print(f"Cannot extract {self.default_json_keys['suggestion']} from LLM's response:")
-                print(response)
+        if len(suggestion) == 0 and not self.ignore_extraction_error:
+            print(f"Cannot extract {self.default_json_keys['suggestion']} from LLM's response:")
+            print(response)
 
-        # if the suggested value is a code, and the entire code body is empty (i.e., not even function signature is present)
-        # then we remove such suggestion
         keys_to_remove = []
         for key, value in suggestion.items():
             if "__code" in key and value.strip() == "":
