@@ -1,3 +1,16 @@
+"""
+Tests validating the robustness and efficiency of the improved
+``construct_update_dict`` and ``extract_llm_suggestion`` helpers in
+``OptoPrime``.
+
+Stable parsing and type conversion of LLM suggestions are critical for
+optimizers built directly on ``OptoPrime`` and those that inherit from it,
+including ``OptoPrimeMulti``, ``OptoPrimeV2``, ``OPRO``, and ``OPROv2``. The
+tests below cover tricky edge cases while also benchmarking against the
+previous implementations to ensure the new code does not introduce
+significant overhead.
+"""
+
 import json
 import re
 import timeit
