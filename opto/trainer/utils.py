@@ -33,7 +33,7 @@ def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, de
     if kwargs_list is None:
         kwargs_list = [{}] * len(runs)
 
-    if (max_workers == 1) and allow_sequential_run: # run without asyncio
+    if (max_workers == 1) and allow_sequential_run:  # run without asyncio
         print(f"{description} (Running sequentially).")
         return [run(*args, **kwargs) for run, args, kwargs in zip(runs, args_list, kwargs_list)]
     else:
@@ -41,14 +41,24 @@ def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, de
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 tasks = [loop.run_in_executor(executor, functools.partial(run, *args, **kwargs))
-                        for run, args, kwargs, in zip(runs, args_list, kwargs_list)]
+                         for run, args, kwargs, in zip(runs, args_list, kwargs_list)]
 
                 # Use the description in the tqdm progress bar if provided
                 if description:
                     return await tqdm_asyncio.gather(*tasks, desc=description)
                 else:
                     return await tqdm_asyncio.gather(*tasks)
-        return asyncio.run(_run())
+
+        # Handle Jupyter notebook
+        try:
+            return asyncio.run(_run())
+        except RuntimeError:
+            loop = asyncio.get_running_loop()
+            # We're in a loop (like Jupyter), so we need to run in a new thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _run())
+                return future.result()
 
 
 def batch_run(max_workers=None, description=None):

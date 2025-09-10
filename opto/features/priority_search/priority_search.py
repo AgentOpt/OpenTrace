@@ -408,7 +408,7 @@ class PrioritySearch(SearchTemplate):
                 validate_samples.add_samples(samples)  # if no validation dataset is provided, append the samples to the validate_samples
             else:  # validate the agents in the validate_dataset
                 # exploration_agents = [rollouts.module for rollouts in samples.samples]  # NOTE this might contain some duplicates due to sub_batch_size < batch_size
-                exploitation_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
+                exploration_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents, description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
 

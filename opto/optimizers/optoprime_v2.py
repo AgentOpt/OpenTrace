@@ -495,18 +495,24 @@ class OptoPrimeV2(OptoPrime):
             others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", "")
         )
 
-    @staticmethod
-    def repr_node_value(node_dict):
+    def repr_node_value(self, node_dict, node_tag="node",
+                        value_tag="value", constraint_tag="constraint"):
         temp_list = []
         for k, v in node_dict.items():
             if "__code" not in k:
-                constraint_expr = f"<constraint> ({type(v[0]).__name__}) {k}: {v[1]} </constraint>"
-                temp_list.append(
-                    f"<node name=\"{k}\" type=\"{type(v[0]).__name__}\">\n<value>{v[0]}</value>\n{constraint_expr}\n</node>\n")
+                if v[1] is not None and node_tag == self.optimizer_prompt_symbol_set.variable_tag:
+                    constraint_expr = f"<{constraint_tag}>\n{v[1]}\n</{constraint_tag}>"
+                    temp_list.append(
+                        f"<{node_tag} name=\"{k}\" type=\"{type(v[0]).__name__}\">\n<{value_tag}>\n{v[0]}\n</{value_tag}>\n{constraint_expr}\n</{node_tag}>\n")
+                else:
+                    temp_list.append(
+                        f"<{node_tag} name=\"{k}\" type=\"{type(v[0]).__name__}\">\n<{value_tag}>\n{v[0]}\n</{value_tag}>\n</{node_tag}>\n")
             else:
                 constraint_expr = f"<constraint>\n{v[1]}\n</constraint>"
+                signature = v[1].replace("The code should start with:\n", "")
+                func_body = v[0].replace(signature, "")
                 temp_list.append(
-                    f"<node name=\"{k}\" type=\"code\">\n<value>\n{v[0]}\n</value>\n{constraint_expr}\n</node>\n")
+                    f"<{node_tag} name=\"{k}\" type=\"code\">\n<{value_tag}>\n{signature}{func_body}\n</{value_tag}>\n{constraint_expr}\n</{node_tag}>\n")
         return "\n".join(temp_list)
 
     def repr_node_value_compact(self, node_dict, node_tag="node",
@@ -596,7 +602,7 @@ class OptoPrimeV2(OptoPrime):
                 else ""
             ),
             variables=(
-                self.repr_node_value_compact(summary.variables, node_tag=self.optimizer_prompt_symbol_set.variable_tag,
+                self.repr_node_value(summary.variables, node_tag=self.optimizer_prompt_symbol_set.variable_tag,
                                              value_tag=self.optimizer_prompt_symbol_set.value_tag,
                                              constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag)
                 if self.optimizer_prompt_symbol_set.variables_section_title not in mask
