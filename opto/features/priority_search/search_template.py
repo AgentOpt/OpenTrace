@@ -117,7 +117,7 @@ class SearchTemplate(Trainer):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent; if None, use train_dataset
               test_guide = None, # guide to provide scores for the test set; if None, use guide
-              eval_frequency: Union[int, None] = 1,  # frequency of evaluation
+              eval_frequency: Union[int, None] = 1,  # frequency of evaluation NOTE set test_frequency < 0 to skip first evaluation
               num_eval_samples: int = 1,  # number of samples to use to evaluate each input
               # logging
               log_frequency = None,  # frequency of logging
@@ -161,12 +161,6 @@ class SearchTemplate(Trainer):
         else:
             self.validate_sampler = self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
 
-        # Evaluate the agent before learning
-        # NOTE set test_frequency < 0 to skip first evaluation
-        if (test_frequency is not None) and test_frequency > 0:
-            info_test = self.test(test_dataset, test_guide)  # test self.agent
-            self.log(info_test)
-
         # Save the agent before learning if save_frequency > 0
         if (save_frequency is not None) and save_frequency > 0:
             self.save(save_path)
@@ -191,8 +185,11 @@ class SearchTemplate(Trainer):
 
             # Evaluate the agent after update
             if (test_frequency is not None) and (self.n_iters % test_frequency == 0):
-                info_test = self.test(test_dataset, test_guide)  # test self.agent
-                self.log(info_test, prefix="Test: ")
+                if self.n_iters == 0 and test_frequency < 0:
+                    print("Skipping first evaluation.")
+                else:
+                    info_test = self.test(test_dataset, test_guide)  # test self.agent
+                    self.log(info_test, prefix="Test: ")
 
             # Save the algorithm state
             if (save_frequency is not None and save_frequency > 0) and self.n_iters % save_frequency == 0:
