@@ -8,7 +8,7 @@ from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 from dataclasses import dataclass
-
+import pickle
 # TODO save and load SearchTemplate
 # TODO async version???
 # TODO create SYNC and ASYNC versions of the base class; add an attribute to the class to indicate
@@ -68,6 +68,20 @@ def check_optimizer_parameters(optimizer: Optimizer, agent: trace.Module):
     assert agent_params == optimizer_params, "Optimizer parameters do not match agent parameters."
 
 
+def save_train_config(function):
+    """ Decorator to save the inputs of a class method. """
+    def wrapper(self, **kwargs):
+        _kwargs = kwargs.copy()
+        del _kwargs['train_dataset']  # remove train_dataset from the saved kwargs
+        if _kwargs.get('validate_dataset') is not None:
+            del _kwargs['validate_dataset'] # remove validate_dataset from the saved kwargs
+        if _kwargs.get('test_dataset') is not None:
+            del _kwargs['test_dataset']  # remove test_dataset from the saved kwargs
+        setattr(self, f'_train_last_kwargs', _kwargs)
+        return function(self, **kwargs)
+    return wrapper
+
+
 class SearchTemplate(Trainer):
     # This only uses __init__ and evaluate of Minibatch class.
     """ This implements a generic template for search algorithm. """
@@ -100,10 +114,11 @@ class SearchTemplate(Trainer):
         self._optimizer_index += 1
         return self._optimizers[self._optimizer_index % len(self._optimizers)]  # return the current optimizer
 
+    @save_train_config
     def train(self,
+              *,
               guide, # guide to provide feedback
               train_dataset,  # dataset of (x, info) pairs to train the agent
-              *,
               # validation
               validate_dataset = None, # same format as train_dataset; if None use the current batch.
               validate_guide = None,  #  to provide scores for the validation set
@@ -112,6 +127,8 @@ class SearchTemplate(Trainer):
               num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
+              _init_epoch = 0,  # initial epoch number (for resuming training)
+              _init_n_samples = 0,  # initial number of samples (for resuming training)
               num_threads = None,  # maximum number of threads to use
               verbose = False,  # whether to print the output of the agent
               # evaluation
@@ -122,7 +139,7 @@ class SearchTemplate(Trainer):
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
-              save_path: str = "checkpoints/agent.pkl",  # path to save the agent
+              save_path: str = "search_checkpoints/",  # path to save the agent
               **kwargs
               ):
         assert 'subbatch_size' not in kwargs, "subbatch_size should not be provided in kwargs."
@@ -166,13 +183,13 @@ class SearchTemplate(Trainer):
             self.save(save_path)
 
         samples = None
-        self.n_epochs = 0 # number of epochs (full passes over the dataset) performed by the algorithm (This is incremented in sample)
-        self.n_samples = 0 # number of training samples processed by the algorithm (This is incremented in sample)
+        n_epochs = _init_epoch  # number of epochs (full passes over the dataset) performed by the algorithm (This is incremented in sample)
+        n_samples = _init_n_samples  # number of training samples processed by the algorithm (This is incremented in sample)
         train_scores = []  # to store the scores of the agent during training
 
-        while self.n_epochs < num_epochs :
+        while n_epochs < num_epochs :
 
-            print(f"Epoch: {self.n_epochs}. Iteration: {self.n_iters}")
+            print(f"Epoch: {n_epochs}. Iteration: {self.n_iters}")
 
             # 1. Propose new parameters given the current state of the algorithm
             # proposals: list of trace.Modules
@@ -189,7 +206,7 @@ class SearchTemplate(Trainer):
                     print("Skipping first evaluation.")
                 else:
                     info_test = self.test(test_dataset, test_guide)  # test self.agent
-                    self.log(info_test, prefix="Test: ")
+                    self.log(info_test, prefix="Test/")
 
             # Save the algorithm state
             if (save_frequency is not None and save_frequency > 0) and self.n_iters % save_frequency == 0:
@@ -201,17 +218,17 @@ class SearchTemplate(Trainer):
 
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
             if self.n_iters % log_frequency == 0:
-                self.logger.log('Average train score', np.mean(train_scores), self.n_iters, color='blue')
-                self.log(info_update, prefix="Update: ")
-                self.log(info_sample, prefix="Sample: ")
-                self.n_samples += len(samples)  # update the number of samples processed
-                self.logger.log('Number of samples', self.n_samples, self.n_iters, color='blue')
+                self.logger.log('Algo/Average train score', np.mean(train_scores), self.n_iters, color='blue')
+                self.log(info_update, prefix="Update/")
+                self.log(info_sample, prefix="Sample/")
+                n_samples += len(samples)  # update the number of samples processed
+                self.logger.log('Algo/Number of samples', n_samples, self.n_iters, color='blue')
                 # Log parameters
                 for p in self.agent.parameters():
-                    self.logger.log(f"Parameter: {p.name}", p.data, self.n_iters, color='red')
+                    self.logger.log(f"Parameter/{p.name}", p.data, self.n_iters, color='red')
 
             # Update counters
-            self.n_epochs = info_sample['n_epochs']  # update the number of epochs completed
+            n_epochs = info_sample['n_epochs']  # update the number of epochs completed
             self.n_iters += 1
         return
 
@@ -276,8 +293,42 @@ class SearchTemplate(Trainer):
             return np.mean(test_scores)
 
     def save(self, save_path):
-        self.save_agent(save_path, self.n_iters)
-        # TODO save full state of self
+        with open(save_path+'/algo.pkl', 'wb') as f:
+            pickle.dump(state, f)
+
+    def load(self, load_path):
+        with open(load_path+'/algo.pkl', 'rb') as f:
+            state = pickle.load(f)
+        self.__dict__.update(state)
+        print(f"Loaded algorithm state from {load_path}/algo.pkl")
+        return
+
+
+    def resume(self,
+               load_path,
+               train_dataset,
+               validate_dataset = None,
+               test_dataset = None,
+               **kwargs):
+        """ Resume training from a saved state.
+
+        Args:
+            load_path (str): Path to the saved state.
+            train_dataset: Dataset to resume training.
+            validate_dataset: Dataset for validation. If None, use the current batch.
+            test_dataset: Dataset for testing. If None, use train_dataset.
+            **kwargs: Additional keyword arguments for the training method. If not provided, the same parameters as the last training call are used.
+        """
+        self.load(load_path)  # load the saved state
+        # Resume training with the same parameters as before
+        last_train_kwargs = getattr(self, '_train_last_kwargs', {}).copy()
+        last_train_kwargs['train_dataset'] = train_dataset
+        last_train_kwargs['validate_dataset'] = validate_dataset
+        last_train_kwargs['test_dataset'] = test_dataset
+        last_train_kwargs.update(kwargs)  # update with any new parameters provided
+        print(f"Resuming training with parameters: {last_train_kwargs}")
+        self.train(**last_train_kwargs)
+
 
     # Unimplemented methods that should be implemented by subclasses
     def update(self, samples=None, verbose=False, **kwargs):

@@ -61,27 +61,14 @@ class DataLoader:
         except StopIteration:
             return self.sample()
 
-    def save(self, path):
-        """Save the dataset to a file."""
-        with open(path, 'wb') as f:
-            pickle.dump(
-                {'_indices': self._indices,
-                 '_i': self._i,
-                 'batch_size': self.batch_size,
-                 'replacement': self.replacement,
-                 'shuffle': self.shuffle,
-                 'dataset': self.dataset},
-                f
-            )
+    def __getstate__(self):
+        """Get the state of the dataset for pickling."""
+        state = self.__dict__.copy()
+        state.pop('dataset', None)  # Remove dataset to avoid pickling issues
+        return state
 
-    def load(self, path):
-        """Load the dataset from a file."""
-        import pickle
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-            self._indices = data['_indices']
-            self._i = data['_i']
-            self.batch_size = data['batch_size']
-            self.replacement = data['replacement']
-            self.shuffle = data['shuffle']
-            self.dataset = data['dataset']
+    def __setstate__(self, state):
+        """Set the state of the dataset from pickling."""
+        self.__dict__.update(state)
+        # Note: dataset needs to be set manually after unpickling
+        print("Warning: dataset needs to be set manually after unpickling.")

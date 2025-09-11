@@ -310,7 +310,8 @@ class PrioritySearch(SearchTemplate):
         self.memory = HeapMemory(size=memory_size)  # Initialize the heap memory with a size limit
 
 
-        super().train(guide, train_dataset,
+        super().train(guide=guide,
+                      train_dataset=train_dataset,
                       validate_dataset=validate_dataset,
                       validate_guide=validate_guide,
                       batch_size=batch_size,
@@ -343,7 +344,8 @@ class PrioritySearch(SearchTemplate):
             # 3. Update the priority queue with the validation results
             self.update_memory(validate_results, verbose=verbose, **kwargs)  # samples are provided here in case candidates do not capture full information
         else:  # The first iteration.
-            while len(self.memory) < self.num_candidates:
+            max_mem_size = self.memory.size if self.memory.size is not None else float('inf')
+            while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
         # 4. Explore and exploit the priority queue
         self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
@@ -579,7 +581,7 @@ class PrioritySearch(SearchTemplate):
         # self._best_candidate is the exploited candidate from the previous iteration
         top_candidates = [self._best_candidate] if self.use_best_candidate_to_explore else []
         priorities = []  # to store the priorities of the candidates for logging
-        while len(top_candidates) < self.num_candidates and self.memory:
+        while len(top_candidates) < self.num_candidates and len(self.memory) > 0:
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue
             if self.use_best_candidate_to_explore:

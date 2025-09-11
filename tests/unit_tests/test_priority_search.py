@@ -47,7 +47,7 @@ xs = [1, 2, 3, 4, 5]
 infos = [1, 2, 3, 4, 5]
 batch_size = 3
 num_batches = 2
-num_threads = 2 # 2
+num_threads = 2
 dataset = {'inputs': xs, 'infos': infos}
 
 num_proposals = 10
@@ -104,8 +104,8 @@ class PrioritySearch(_PrioritySearch):
         assert isinstance(candidates, list)
         assert isinstance(info_dict, dict)
 
-        if self.n_iters == 0:
-            assert len(candidates) == 2, f"Expected 2 candidates, got {len(candidates)}"
+        if self.n_iters == 0:  # NOTE use +1 since we hacked exploit above using deepcopy, the returned object does not have the same reference
+            assert len(candidates) == min(memory_size, num_candidates) + 1, f"Expected {min(memory_size, num_candidates) + 1} candidates, got {len(candidates)}"
             # one from the init parameter and one from the hacked best candidate
         else:
             assert len(candidates) <= self.num_candidates, f"Expect no more than {self.num_candidates} candidates at iter {self.n_iters}, got {len(candidates)}"
