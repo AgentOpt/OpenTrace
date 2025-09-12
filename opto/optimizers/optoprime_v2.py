@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Dict, Union, Tuple
+from typing import Any, List, Dict, Union, Tuple, Optional
 from dataclasses import dataclass, asdict
 from opto.optimizers.optoprime import OptoPrime, FunctionFeedback
 from opto.trace.utils import dedent
@@ -92,9 +92,10 @@ class OptimizerPromptSymbolSet:
         else:
             # Build the output string in the same XML-like format as self.output_format
             output = []
-            output.append(f"<{self.reasoning_tag}>")
-            output.append(reasoning)
-            output.append(f"</{self.reasoning_tag}>")
+            if reasoning != "":
+                output.append(f"<{self.reasoning_tag}>")
+                output.append(reasoning)
+                output.append(f"</{self.reasoning_tag}>")
             for var_name, value in variables.items():
                 output.append(f"<{self.improved_variable_tag}>")
                 output.append(f"<{self.name_tag}>{var_name}</{self.name_tag}>")
@@ -103,7 +104,6 @@ class OptimizerPromptSymbolSet:
                 output.append(f"</{self.value_tag}>")
                 output.append(f"</{self.improved_variable_tag}>")
             return "\n".join(output)
-
 
     def output_response_extractor(self, response: str) -> Dict[str, Any]:
         # the response here should just be plain text
@@ -142,6 +142,7 @@ class OptimizerPromptSymbolSet:
             "code": self.code_section_title,
             "documentation": self.documentation_section_title,
         }
+
 
 class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
     """We enforce a JSON output format extraction"""
@@ -231,6 +232,7 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
 
         return extracted_data
 
+
 class OptimizerPromptSymbolSet2(OptimizerPromptSymbolSet):
     variables_section_title = "# Variables"
     inputs_section_title = "# Inputs"
@@ -306,11 +308,47 @@ class ProblemInstance:
         )
 
 
+@dataclass
+class MemoryInstance:
+    variables: Dict[str, Tuple[Any, str]] # name -> (data, constraint)
+    feedback: str
+    optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
+
+    memory_example_template = dedent(
+        """<round{index}>{variables}<feedback>{feedback}</feedback>
+        </round{index}>"""
+    )
+
+    def __init__(self, variables: Dict[str, Any], feedback: str, optimizer_prompt_symbol_set: OptimizerPromptSymbolSet,
+                 index: Optional[int] = None):
+        self.feedback = feedback
+        self.optimizer_prompt_symbol_set = optimizer_prompt_symbol_set
+        self.variables = variables
+        self.index = index
+
+    def __str__(self) -> str:
+        var_repr = ""
+        for k, v in self.variables.items():
+            var_repr += dedent(f"""
+            <{self.optimizer_prompt_symbol_set.improved_variable_tag}>
+            <{self.optimizer_prompt_symbol_set.name_tag}>{k}</{self.optimizer_prompt_symbol_set.name_tag}>
+            <{self.optimizer_prompt_symbol_set.value_tag}>
+            {v[0]}
+            </{self.optimizer_prompt_symbol_set.value_tag}>
+            </{self.optimizer_prompt_symbol_set.improved_variable_tag}>
+        """)
+
+        return self.memory_example_template.format(
+            variables=var_repr,
+            feedback=self.feedback,
+            index=" " + str(self.index) if self.index is not None else ""
+        )
+
+
 class OptoPrimeV2(OptoPrime):
     # This is generic representation prompt, which just explains how to read the problem.
     representation_prompt = dedent(
-        """
-        You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
+        """You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
 
         Specifically, a problem will be composed of the following parts:
         - {instruction_section_title}: the instruction which describes the things you need to do or the question you should answer.
@@ -327,8 +365,7 @@ class OptoPrimeV2(OptoPrime):
         For variables we express as this:
         {variable_expression_format}
 
-        If `data_type` is `code`, it means `{value_tag}` is the source code of a python code, which may include docstring and definitions.
-        """
+        If `data_type` is `code`, it means `{value_tag}` is the source code of a python code, which may include docstring and definitions."""
     )
 
     # Optimization
@@ -567,16 +604,11 @@ class OptoPrimeV2(OptoPrime):
             formatted_final = self.final_prompt.format(names=var_names)
             prefix = user_prompt.split(formatted_final)[0]
             examples = []
+            index = 0
             for variables, feedback in self.memory:
-                examples.append(
-                    json.dumps(
-                        {
-                            "variables": {k: v[0] for k, v in variables.items()},
-                            "feedback": feedback,
-                        },
-                        indent=4,
-                    )
-                )
+                index += 1
+                examples.append(str(MemoryInstance(variables, feedback, self.optimizer_prompt_symbol_set, index=index)))
+
             examples = "\n".join(examples)
             user_prompt = (
                     prefix
@@ -603,8 +635,8 @@ class OptoPrimeV2(OptoPrime):
             ),
             variables=(
                 self.repr_node_value(summary.variables, node_tag=self.optimizer_prompt_symbol_set.variable_tag,
-                                             value_tag=self.optimizer_prompt_symbol_set.value_tag,
-                                             constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag)
+                                     value_tag=self.optimizer_prompt_symbol_set.value_tag,
+                                     constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag)
                 if self.optimizer_prompt_symbol_set.variables_section_title not in mask
                 else ""
             ),
@@ -699,7 +731,6 @@ class OptoPrimeV2(OptoPrime):
         if verbose:
             print("LLM response:\n", response)
         return response
-
 
     def save(self, path: str):
         """Save the optimizer state to a file."""
