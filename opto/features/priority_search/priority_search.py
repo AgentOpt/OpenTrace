@@ -49,6 +49,15 @@ class ModuleCandidate:
         """ Apply update to the base_module in place. """
         set_module_parameters(base_module or self.base_module, self.update_dict)
 
+    def __getstate__(self):
+        """ Get the state of the candidate for serialization. """
+        state = copy.deepcopy(self.__dict__)  # this will detach the nodes from the computation graph
+        return state
+
+    def __setstate__(self, state):
+        """ Set the state of the candidate from serialization. """
+        self.__dict__.update(state)
+
     def __deepcopy__(self, memo):
         """ Create a deep copy, except for the base_module which is not copied, it is the original module. """
         cls = self.__class__
@@ -350,8 +359,6 @@ class PrioritySearch(SearchTemplate):
         # 4. Explore and exploit the priority queue
         self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
         self._exploration_candidates, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
-        if samples is None:  # first iteration
-            assert len(self.memory) == 0, "Memory should be empty in the first iteration."
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -497,14 +504,14 @@ class PrioritySearch(SearchTemplate):
         validate_samples = copy.copy(samples)
 
         # Validate newly proposed candidates
-        use_prev_batch = self._validate_dataset is None  # when True, self.validate_sampler == self.train_sampler, and the current batch is used for validation
+        use_prev_batch = self.use_prev_batch  # when True, self.validate_sampler == self.train_sampler, and the current batch is used for validation
         candidate_agents = [c.get_module() for c in candidates]  # get the modules from the candidates
         validate_samples.add_samples(Samples(*self.validate_sampler.sample(candidate_agents,
                                                                 use_prev_batch=use_prev_batch,
                                                                 description_prefix='Validating newly proposed candidates: ')))  # list of BatchRollout objects
 
         if self.validate_exploration_candidates:
-            if self._validate_dataset is not None:   # validate the exploration candidates that collected the samples as well
+            if not use_prev_batch:   # validate the exploration candidates that collected the samples as well
                 # validate the agents in the validate_dataset
                 exploration_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
@@ -596,6 +603,7 @@ class PrioritySearch(SearchTemplate):
             'num_exploration_candidates': len(top_candidates),
             'exploration_candidates_mean_priority': np.mean(priorities),  # list of priorities of the exploration candidates
             'exploration_candidates_mean_score': np.mean(mean_scores),  # list of mean scores of the exploration candidates
+            'exploration_candidates_average_num_rollouts': np.mean([c.num_rollouts for c in top_candidates]),
         }
 
         return top_candidates, info_dict
@@ -616,6 +624,7 @@ class PrioritySearch(SearchTemplate):
         return best_candidate, {
             'best_candidate_priority': priority,  # remember that we stored negative scores in the priority queue
             'best_candidate_mean_score': best_candidate.mean_score(),  # mean score of the candidate's rollouts
+            'best_candidate_num_rollouts': best_candidate.num_rollouts,  # number of rollouts of the candidate
         }
 
     # TODO refactor below to reuse scoring

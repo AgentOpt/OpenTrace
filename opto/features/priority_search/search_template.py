@@ -8,7 +8,7 @@ from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 from dataclasses import dataclass
-import pickle
+import pickle, copy, os
 # TODO save and load SearchTemplate
 # TODO async version???
 # TODO create SYNC and ASYNC versions of the base class; add an attribute to the class to indicate
@@ -81,7 +81,6 @@ def save_train_config(function):
         return function(self, **kwargs)
     return wrapper
 
-
 class SearchTemplate(Trainer):
     # This only uses __init__ and evaluate of Minibatch class.
     """ This implements a generic template for search algorithm. """
@@ -107,7 +106,11 @@ class SearchTemplate(Trainer):
             self._optimizers = [optimizer]
 
         self.n_iters = 0  # number of iterations
+        self.n_epochs = 0  # number of epochs (full passes over the dataset) performed by the algorithm (This is incremented in sample)
+        self.n_samples = 0  # number of training samples processed by the algorithm (This is incremented in sample)
         self._optimizer_index = -1  # index of the current optimizer to use
+        self.train_sampler = None  # will be initialized in train
+        self.validate_sampler = None  # will be initialized in train
 
     @property
     def optimizer(self):
@@ -127,8 +130,6 @@ class SearchTemplate(Trainer):
               num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
               num_epochs = 1,  # number of training epochs
-              _init_epoch = 0,  # initial epoch number (for resuming training)
-              _init_n_samples = 0,  # initial number of samples (for resuming training)
               num_threads = None,  # maximum number of threads to use
               verbose = False,  # whether to print the output of the agent
               # evaluation
@@ -159,37 +160,45 @@ class SearchTemplate(Trainer):
 
         subbatch_size, batch_size = batch_size, batch_size*num_batches
 
-        self.train_sampler = Sampler(
-            DataLoader(train_dataset, batch_size=batch_size),
-            guide,
-            num_threads=self.num_threads,
-            subbatch_size=subbatch_size,
-            score_range=self._score_range
-        )
-        self._validate_dataset = validate_dataset  # if None, the current batch will be used for validation
-        if validate_dataset is not None:
-            self.validate_sampler = Sampler(
-                DataLoader(validate_dataset, batch_size=batch_size),
-                validate_guide or guide,
+        if self.train_sampler is None:
+            self.train_sampler = Sampler(
+                DataLoader(train_dataset, batch_size=batch_size),
+                guide,
                 num_threads=self.num_threads,
-                subbatch_size=None,  # no sub-batch size for validation
+                subbatch_size=subbatch_size,
                 score_range=self._score_range
-            )
+        )
         else:
-            self.validate_sampler = self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
+            self.train_sampler.loader.dataset = train_dataset  # update the train dataset in the sampler
+
+        self.use_prev_batch = validate_dataset is None  # whether to use the current batch for validation
+        if self.validate_sampler is None:
+            if not self.use_prev_batch:
+                self.validate_sampler = Sampler(
+                    DataLoader(validate_dataset, batch_size=batch_size),
+                    validate_guide or guide,
+                    num_threads=self.num_threads,
+                    subbatch_size=None,  # no sub-batch size for validation
+                    score_range=self._score_range
+                )
+            else:
+                self.validate_sampler = self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
+        else:
+            if not self.use_prev_batch:
+                self.validate_sampler.loader.dataset = validate_dataset  # update the validate dataset in the sampler
+            else:
+                assert self.validate_sampler == self.train_sampler, "Expected validate_sampler to be train_sampler if no validate_dataset is provided."
 
         # Save the agent before learning if save_frequency > 0
         if (save_frequency is not None) and save_frequency > 0:
             self.save(save_path)
 
         samples = None
-        n_epochs = _init_epoch  # number of epochs (full passes over the dataset) performed by the algorithm (This is incremented in sample)
-        n_samples = _init_n_samples  # number of training samples processed by the algorithm (This is incremented in sample)
         train_scores = []  # to store the scores of the agent during training
 
-        while n_epochs < num_epochs :
+        while self.n_epochs < num_epochs :
 
-            print(f"Epoch: {n_epochs}. Iteration: {self.n_iters}")
+            print(f"Epoch: {self.n_epochs}. Iteration: {self.n_iters}")
 
             # 1. Propose new parameters given the current state of the algorithm
             # proposals: list of trace.Modules
@@ -214,21 +223,21 @@ class SearchTemplate(Trainer):
 
             # Log information
             assert 'mean_score' in info_sample, "info_sample must contain 'mean_score'."
-            assert 'n_epochs' in info_sample, "info_sample must contain 'n_epochs'."
+            assert 'self.n_epochs' in info_sample, "info_sample must contain 'self.n_epochs'."
 
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
             if self.n_iters % log_frequency == 0:
                 self.logger.log('Algo/Average train score', np.mean(train_scores), self.n_iters, color='blue')
                 self.log(info_update, prefix="Update/")
                 self.log(info_sample, prefix="Sample/")
-                n_samples += len(samples)  # update the number of samples processed
-                self.logger.log('Algo/Number of samples', n_samples, self.n_iters, color='blue')
+                self.n_samples += len(samples)  # update the number of samples processed
+                self.logger.log('Algo/Number of samples', self.n_samples, self.n_iters, color='blue')
                 # Log parameters
                 for p in self.agent.parameters():
                     self.logger.log(f"Parameter/{p.name}", p.data, self.n_iters, color='red')
 
             # Update counters
-            n_epochs = info_sample['n_epochs']  # update the number of epochs completed
+            self.n_epochs = info_sample['self.n_epochs']  # update the number of epochs completed
             self.n_iters += 1
         return
 
@@ -256,7 +265,7 @@ class SearchTemplate(Trainer):
         scores = [item for sublist in scores for item in sublist]  # flatten the list of scores
         log_info = {
             'mean_score': np.mean(scores),
-            'n_epochs': self.train_sampler.n_epochs,
+            'self.n_epochs': self.train_sampler.n_epochs,
         }
         # check if the scores are within the score range
         if not (self.min_score <= log_info['mean_score'] <= self.max_score):
@@ -293,41 +302,54 @@ class SearchTemplate(Trainer):
             return np.mean(test_scores)
 
     def save(self, save_path):
+        print(f"Saving algorithm state to {save_path} at iteration {self.n_iters}.")
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        obj = copy.deepcopy(self)  # to detach nodes from the computation graph
         with open(save_path+'/algo.pkl', 'wb') as f:
-            pickle.dump(state, f)
+            pickle.dump(obj, f)
 
-    def load(self, load_path):
+    @classmethod
+    def load(cls, load_path: str):
         with open(load_path+'/algo.pkl', 'rb') as f:
-            state = pickle.load(f)
-        self.__dict__.update(state)
-        print(f"Loaded algorithm state from {load_path}/algo.pkl")
-        return
+            algo = pickle.load(f)
+        assert isinstance(algo, cls), f"Loaded object is not an instance of {cls.__name__}."
+        return algo
 
 
-    def resume(self,
-               load_path,
-               train_dataset,
+    def resume(self, *,
+               model: trace.Module,
+               train_dataset: dict ,
                validate_dataset = None,
                test_dataset = None,
                **kwargs):
         """ Resume training from a saved state.
 
         Args:
-            load_path (str): Path to the saved state.
+            model: The model to be trained.
             train_dataset: Dataset to resume training.
             validate_dataset: Dataset for validation. If None, use the current batch.
             test_dataset: Dataset for testing. If None, use train_dataset.
             **kwargs: Additional keyword arguments for the training method. If not provided, the same parameters as the last training call are used.
         """
-        self.load(load_path)  # load the saved state
+        # Set the state of the model to the provided model
+        assert isinstance(model, trace.Module), "model must be an instance of trace.Module."
+        state = self.agent.__getstate__()
+        model.__setstate__(state)  # load the state into the provided model
+        self.agent = model  # replace the model with the provided model
+
         # Resume training with the same parameters as before
         last_train_kwargs = getattr(self, '_train_last_kwargs', {}).copy()
+        if self.use_prev_batch:
+            assert validate_dataset is None, "Loaded algo has use_prev_batch enabled. validate_dataset must be None when use_prev_batch is True."
+            assert self.validate_sampler == self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
+
+        last_train_kwargs.update(kwargs)  # update with any new parameters provided
         last_train_kwargs['train_dataset'] = train_dataset
         last_train_kwargs['validate_dataset'] = validate_dataset
         last_train_kwargs['test_dataset'] = test_dataset
-        last_train_kwargs.update(kwargs)  # update with any new parameters provided
         print(f"Resuming training with parameters: {last_train_kwargs}")
-        self.train(**last_train_kwargs)
+        return self.train(**last_train_kwargs)
 
 
     # Unimplemented methods that should be implemented by subclasses

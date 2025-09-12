@@ -7,7 +7,7 @@ from opto.optimizers import OptoPrimeV2
 from opto.trainer.guide import Guide
 from opto.utils.llm import DummyLLM
 
-import re
+import re, os
 import numpy as np
 import copy
 import pickle
@@ -49,6 +49,7 @@ infos = [1, 2, 3, 4, 5]
 batch_size = 3
 num_batches = 2
 num_threads = 2
+num_epochs = 3
 dataset = {'inputs': xs, 'infos': infos}
 
 num_proposals = 10
@@ -162,6 +163,7 @@ def test_priority_search():
         num_candidates=num_candidates,
         num_proposals=num_proposals,
         memory_size=memory_size,
+        num_epochs=num_epochs,
         verbose=False, #'output',
     )
 
@@ -192,24 +194,66 @@ def test_resume():
 
     save_path="./test_priority_search_save"
 
-    # algo.train(
-    #     guide=Guide(),
-    #     train_dataset=dataset,
-    #     batch_size=batch_size,
-    #     num_batches=num_batches,
-    #     num_threads=num_threads,
-    #     num_candidates=num_candidates,
-    #     num_proposals=num_proposals,
-    #     memory_size=memory_size,
-    #     verbose=False, #'output',
-    #     save_path=save_path,
-    #     save_frequency=1,
-    # )
+    algo.train(
+        guide=Guide(),
+        train_dataset=dataset,
+        batch_size=batch_size,
+        num_batches=num_batches,
+        num_threads=num_threads,
+        num_candidates=num_candidates,
+        num_proposals=num_proposals,
+        memory_size=memory_size,
+        verbose=False, #'output',
+        save_path=save_path,
+        save_frequency=1,
+        num_epochs=num_epochs,
+    )
 
-    # new_algo = PrioritySearch.load(save_path)
-    # assert new_algo.n_iters == algo.n_iters, "Resumed algorithm should have the same number of iterations as the original."
+    new_algo = PrioritySearch.load(save_path)
+    assert new_algo.n_iters == algo.n_iters - 1, "Resumed algorithm should have the same number of iterations as the original."
+    new_agent = Agent()
+    new_algo.resume(
+        model=new_agent,
+        train_dataset=dataset,
+        num_epochs=num_epochs+2)
+    assert new_algo.n_iters == num_epochs+2, "Resumed algorithm should have completed the additional epochs."
 
-    # new_algo.resume(
-    #     train_dataset=dataset)
+    os.system(f"rm -rf {save_path}")
 
-    # os.system(f"rm -rf {save_path}")
+
+def test_trainer_train_and_resume():
+
+    dummy_llm = DummyLLM(_llm_callable)
+    agent = Agent()
+    optimizer = OptoPrimeV2(
+        agent.parameters(),
+        llm=dummy_llm,
+    )
+
+    trainer.train(
+        algorithm='PrioritySearch',
+        model=agent,
+        optimizer=optimizer,
+        guide=Guide(),
+        train_dataset=dataset,
+        batch_size=batch_size,
+        num_batches=num_batches,
+        num_threads=num_threads,
+        num_candidates=num_candidates,
+        num_proposals=num_proposals,
+        memory_size=memory_size,
+        verbose=False, #'output',
+        save_path="./test_priority_search_save_trainer",
+        save_frequency=1,
+        num_epochs=num_epochs,
+    )
+
+    new_agent = Agent()
+    trainer.train(
+        algorithm='PrioritySearch',
+        resume_training="./test_priority_search_save_trainer",
+        model=new_agent,
+        train_dataset=dataset,
+        num_epochs=num_epochs+2)
+
+    os.system(f"rm -rf ./test_priority_search_save_trainer")

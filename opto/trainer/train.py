@@ -44,6 +44,18 @@ def train(
     #  TODO check eligible optimizer, trainer
     dataset_check(train_dataset)
 
+
+    trainer_class = load_trainer_class(algorithm)
+    assert issubclass(trainer_class, Trainer)
+    if resume_training:
+        assert isinstance(resume_training, str), "resume_training must be a path string."
+        assert hasattr(trainer_class, 'resume'), f"{trainer_class} does not support resume."
+        assert hasattr(trainer_class, 'load'), f"{trainer_class} does not support load."
+        algo = trainer_class.load(resume_training)  # load the saved state
+        return algo.resume(model=model,
+                           train_dataset=train_dataset,
+                           **trainer_kwargs)
+
     if optimizer is None:
         optimizer = "OPROv2" if isinstance(model, ParameterNode) else "OptoPrimeV2"
 
@@ -71,23 +83,16 @@ def train(
         assert isinstance(optimizer, Optimizer)
 
     guide = load_guide(guide, **guide_kwargs)
-    logger = load_logger(logger, **logger_kwargs)
-    trainer_class = load_trainer_class(algorithm)
-
     assert isinstance(guide, Guide)
+
+    logger = load_logger(logger, **logger_kwargs)
     assert isinstance(logger, BaseLogger)
-    assert issubclass(trainer_class, Trainer)
 
     algo = trainer_class(
         model,
         optimizer,
         logger=logger
     )
-
-    if resume_training:
-        assert isinstance(resume_training, str), "resume_training must be a path string."
-        assert hasattr(algo, 'resume'), f"{trainer_class} does not support resume."
-        return algo.resume(load_path=resume_training)
 
     return algo.train(
         guide=guide,
