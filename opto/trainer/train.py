@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Any
 import importlib
 
 from opto import trace
@@ -19,6 +19,7 @@ def train(
     *,
     model: Union[trace.Module, ParameterNode],
     train_dataset: dict,
+    resume_training: Union[str, bool] = False,  # path to load checkpoint or False
     # class of optimizer
     algorithm: Union[Trainer, str] = 'MinibatchAlgorithm',
     optimizer: Union[Optimizer, str] = None,
@@ -30,7 +31,7 @@ def train(
     logger_kwargs: Union[dict, None] = None,
     # The rest is treated as trainer config
     **trainer_kwargs,
-) -> None:
+) -> Any:
     """ A high-level helper function to train the model using trainer.
 
     A trainer algorithm applies an optimizer to train a model under a guide on a train_dataset.
@@ -82,6 +83,11 @@ def train(
         optimizer,
         logger=logger
     )
+
+    if resume_training:
+        assert isinstance(resume_training, str), "resume_training must be a path string."
+        assert hasattr(algo, 'resume'), f"{trainer_class} does not support resume."
+        return algo.resume(load_path=resume_training)
 
     return algo.train(
         guide=guide,

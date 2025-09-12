@@ -1,4 +1,4 @@
-from opto import trace
+from opto import trace, trainer
 from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler
 from opto.features.priority_search.priority_search import PrioritySearch as _PrioritySearch
@@ -10,6 +10,7 @@ from opto.utils.llm import DummyLLM
 import re
 import numpy as np
 import copy
+import pickle
 
 
 class Guide(Guide):
@@ -92,7 +93,7 @@ class PrioritySearch(_PrioritySearch):
         assert self.use_best_candidate_to_explore, "Expected use_best_candidate_to_explore to be True in this unit test"
         candidate = copy.deepcopy(candidate)  # Ensure we return a copy
         for p in candidate.base_module.parameters():
-            candidate.update_dict[p] = p.data + 100
+            candidate.update_dict[p] = p._data + 100
             # This will be different the exploration candidates
 
         return candidate, info_dict
@@ -163,3 +164,52 @@ def test_priority_search():
         memory_size=memory_size,
         verbose=False, #'output',
     )
+
+
+def test_resume():
+    """
+    Test resuming the PrioritySearch algorithm from a saved state.
+    """
+    # Create a dummy LLM and an agent
+    dummy_llm = DummyLLM(_llm_callable)
+    agent = Agent()
+    optimizer = OptoPrimeV2(
+        agent.parameters(),
+        llm=dummy_llm,
+    )
+
+    algo = PrioritySearch(
+        agent,
+        optimizer,
+    )
+
+    # test pickling objects
+    pickle.dumps(agent)
+    pickle.dumps(dummy_llm)
+    pickle.dumps(optimizer)
+    pickle.dumps(algo)
+
+
+    save_path="./test_priority_search_save"
+
+    # algo.train(
+    #     guide=Guide(),
+    #     train_dataset=dataset,
+    #     batch_size=batch_size,
+    #     num_batches=num_batches,
+    #     num_threads=num_threads,
+    #     num_candidates=num_candidates,
+    #     num_proposals=num_proposals,
+    #     memory_size=memory_size,
+    #     verbose=False, #'output',
+    #     save_path=save_path,
+    #     save_frequency=1,
+    # )
+
+    # new_algo = PrioritySearch.load(save_path)
+    # assert new_algo.n_iters == algo.n_iters, "Resumed algorithm should have the same number of iterations as the original."
+
+    # new_algo.resume(
+    #     train_dataset=dataset)
+
+    # os.system(f"rm -rf {save_path}")
