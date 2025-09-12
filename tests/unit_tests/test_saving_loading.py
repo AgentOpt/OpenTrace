@@ -36,6 +36,28 @@ def test_saving_load():
     a, b = fun(x)
     print(a, b)
 
+suggested_value = 5
+
+def _llm_callable(messages, **kwargs):
+    """
+    A dummy LLM callable that simulates a response.
+    """
+    problem = messages[1]['content']
+
+    # extract name from <variable name= name ... >
+    name = re.findall(r"<variable name=\"\s*(.*?)\" type=.*>", problem)
+    if name:
+        name = name[0]
+    else:
+        name = "unknown"
+
+    return f"""
+    <reasoning> Dummy reasoning based on the input messages. </reasoning>
+    <variable>
+    <name> {name} </name>
+    <value> {suggested_value} </value>
+    </variable>
+    """
 
 def test_trainer_saving_loading():
 
@@ -79,29 +101,7 @@ def test_trainer_saving_loading():
     num_proposals = 10
     num_candidates = 5
     memory_size = 3
-    suggested_value = 5
 
-
-    def _llm_callable(messages, **kwargs):
-        """
-        A dummy LLM callable that simulates a response.
-        """
-        problem = messages[1]['content']
-
-        # extract name from <variable name= name ... >
-        name = re.findall(r"<variable name=\"\s*(.*?)\" type=.*>", problem)
-        if name:
-            name = name[0]
-        else:
-            name = "unknown"
-
-        return f"""
-        <reasoning> Dummy reasoning based on the input messages. </reasoning>
-        <variable>
-        <name> {name} </name>
-        <value> {suggested_value} </value>
-        </variable>
-        """
 
      # Create a dummy LLM and an agent
     dummy_llm = DummyLLM(_llm_callable)

@@ -527,27 +527,3 @@ class TextGrad(Optimizer):
                     response = response.message.content
 
         return response
-
-
-    def save(self, path: str):
-        """
-        Save the optimizer state to a file.
-        """
-        with open(path, 'wb') as f:
-            pickle.dump({
-                'print_limit': self.print_limit,
-                'max_tokens': self.max_tokens,
-                'new_variable_tags': self.new_variable_tags,
-                'optimizer_system_prompt': self.optimizer_system_prompt,
-        }, f)
-
-    def load(self, path: str):
-        """
-        Load the optimizer state from a file.
-        """
-        with open(path, 'rb') as f:
-            state = pickle.load(f)
-            self.print_limit = state['print_limit']
-            self.max_tokens = state['max_tokens']
-            self.new_variable_tags = state['new_variable_tags']
-            self.optimizer_system_prompt = state['optimizer_system_prompt']

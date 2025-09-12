@@ -97,6 +97,48 @@ def model(cls):
             with open(filename, "w") as f:
                 f.write(trace_model_body)
 
+
+        def __deepcopy__(self, memo):
+            # regular deepcopy behavior, because we will overwrite __setstate__ and __getstate__ for pickling
+            cls = self.__class__
+            result = cls.__new__(cls)
+            memo[id(self)] = result
+            for k, v in self.__dict__.items():
+                setattr(result, k, copy.deepcopy(v, memo))
+            return result
+
+        def __getstate__(self):
+            parameters_dict = self.parameters_dict()
+            non_parameters_dict = {}
+            for k, v in self.__dict__.items():
+                if k not in parameters_dict:
+                    if k.startswith('__TRACE_RESERVED_'):
+                        # These are reserved for internal use.
+                        continue
+                    non_parameters_dict[k] = v
+            return dict(parameters_dict=parameters_dict,
+                        non_parameters_dict=non_parameters_dict)
+
+        def __setstate__(self, state):
+            parameters_dict = state['parameters_dict']
+            non_parameters_dict = state['non_parameters_dict']
+            self._set(parameters_dict)
+            # self.__dict__.update(non_parameters_dict)
+
+        def save(self, file_name: str):
+            """Save the parameters of the model to a pickle file."""
+            directory = os.path.dirname(file_name)
+            if directory != "":
+                os.makedirs(directory, exist_ok=True)
+            with open(file_name, "wb") as f:
+                pickle.dump(copy.deepcopy(self.__getstate__()), f)
+
+        def load(self, file_name):
+            """Load the parameters of the model from a pickle file."""
+            with open(file_name, "rb") as f:
+                loaded_data = pickle.load(f)
+                self.__setstate__(loaded_data)
+
     return ModelWrapper
 
 

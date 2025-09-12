@@ -211,7 +211,7 @@ class CustomLLM(AbstractModel):
         server_api_key = os.environ.get('TRACE_CUSTOMLLM_API_KEY',
                                         'sk-Xhg...')  # we assume the server has an API key
         # the server API is set through `master_key` in `config.yaml` for LiteLLM proxy server
-        
+
         self.model_name = model
         self.cache = cache
         factory = lambda: self._factory(base_url, server_api_key)  # an LLM instance uses a fixed model
@@ -241,15 +241,15 @@ _LLM_REGISTRY = {
 
 class LLMFactory:
     """Factory for creating LLM instances with predefined profiles.
-    
+
     The code comes with these built-in profiles:
 
         llm_default = LLM(profile="default")     # gpt-4o-mini
-        llm_premium = LLM(profile="premium")     # gpt-4  
+        llm_premium = LLM(profile="premium")     # gpt-4
         llm_cheap = LLM(profile="cheap")         # gpt-4o-mini
         llm_fast = LLM(profile="fast")           # gpt-3.5-turbo-mini
         llm_reasoning = LLM(profile="reasoning") # o1-mini
-    
+
     You can override those built-in profiles:
 
         LLMFactory.register_profile("default", "LiteLLM", model="gpt-4o", temperature=0.5)
@@ -257,7 +257,7 @@ class LLMFactory:
         LLMFactory.register_profile("cheap", "LiteLLM", model="gpt-3.5-turbo", temperature=0.9)
         LLMFactory.register_profile("fast", "LiteLLM", model="gpt-3.5-turbo", max_tokens=500)
         LLMFactory.register_profile("reasoning", "LiteLLM", model="o1-preview")
-        
+
     An Example of using Different Backends
 
         # Register custom profiles for different use cases
@@ -276,7 +276,7 @@ class LLMFactory:
         # Multi-LLM optimizer with multiple profiles
         optimizer2 = OptoPrimeMulti(parameters, llm_profiles=["cheap", "premium", "claude_sonnet"], generation_technique="multi_llm")
     """
-    
+
     # Default profiles for different use cases
     _profiles = {
         'default': {'backend': 'LiteLLM', 'params': {'model': 'gpt-4o-mini'}},
@@ -285,27 +285,27 @@ class LLMFactory:
         'fast': {'backend': 'LiteLLM', 'params': {'model': 'gpt-3.5-turbo-mini'}},
         'reasoning': {'backend': 'LiteLLM', 'params': {'model': 'o1-mini'}},
     }
-    
+
     @classmethod
     def get_llm(cls, profile: str = 'default') -> AbstractModel:
         """Get an LLM instance for the specified profile."""
         if profile not in cls._profiles:
             raise ValueError(f"Unknown profile '{profile}'. Available profiles: {list(cls._profiles.keys())}")
-        
+
         config = cls._profiles[profile]
         backend_cls = _LLM_REGISTRY[config['backend']]
         return backend_cls(**config['params'])
-    
+
     @classmethod
     def register_profile(cls, name: str, backend: str, **params):
         """Register a new LLM profile."""
         cls._profiles[name] = {'backend': backend, 'params': params}
-    
+
     @classmethod
     def list_profiles(cls):
         """List all available profiles."""
         return list(cls._profiles.keys())
-    
+
     @classmethod
     def get_profile_info(cls, profile: str = None):
         """Get information about a profile or all profiles."""
@@ -316,21 +316,20 @@ class LLMFactory:
 
 class DummyLLM(AbstractModel):
     """A dummy LLM that does nothing. Used for testing purposes."""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  callable,
                  reset_freq: Union[int, None] = None) -> None:
         # self.message = message
         self.callable = callable
-        factory = lambda: self._factory()
-        super().__init__(factory, reset_freq)
+        super().__init__(self._factory, reset_freq)
 
     def _factory(self):
 
         # set response.choices[0].message.content
         # create a fake container with above format
 
-        class Message: 
+        class Message:
             def __init__(self, content):
                 self.content = content
         class Choice:
@@ -346,7 +345,7 @@ class DummyLLM(AbstractModel):
 class LLM:
     """
     A unified entry point for all supported LLM backends.
-    
+
     Usage:
       # pick by env var (default: LiteLLM)
       llm = LLM()
