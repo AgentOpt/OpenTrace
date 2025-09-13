@@ -249,9 +249,9 @@ def test_trainer_train_and_resume():
     )
 
     new_agent = Agent()
-    trainer.train(
+    trainer.resume(
+        "./test_priority_search_save_trainer",
         algorithm='PrioritySearch',
-        resume_training="./test_priority_search_save_trainer",
         model=new_agent,
         train_dataset=dataset,
         num_epochs=num_epochs+2)
