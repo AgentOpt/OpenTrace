@@ -92,12 +92,13 @@ class Trainer(AbstractAlgorithm):
               ):
         raise NotImplementedError
 
+    def save(self, save_path: str):
+        raise NotImplementedError
 
     @classmethod
     def load(cls,
              load_path: str):
         raise NotImplementedError
-
 
     def resume(self, *,
                model: Module,
@@ -105,9 +106,12 @@ class Trainer(AbstractAlgorithm):
                **kwargs):
         raise NotImplementedError
 
-    # NOTE old code which may be useful in the future
+
+
+
+    # TODO remove these old save and load methods
     # def save(self, path: str):
-    #     """ Save the guide to a file. """
+
     #     with open(path, 'wb') as f:
     #         d = {}
     #         for key, value in self.__dict__.items():
