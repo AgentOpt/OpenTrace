@@ -286,7 +286,7 @@ class SearchTemplate(Trainer):
         min_score = self.min_score
         # Test the agent's performance
         test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
-                          min_score=min_score, num_threads=self.num_threads,
+                          min_score=min_score, num_threads=self.num_threads,num_samples=self.num_eval_samples,
                           description=f"Evaluating agent")  # and log
         # check if the test_score is within the score range
         if not (self.min_score <= test_score <= self.max_score):
