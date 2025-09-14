@@ -11,7 +11,7 @@ from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
 from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
-
+from opto.features.priority_search.utils import retry_with_exponential_backoff
 
 class ModuleCandidate:
     """ A container used by PrioritySearch to store a candidate module as (its base module and update dictionary) and its statistics. """
@@ -354,13 +354,7 @@ class PrioritySearch(SearchTemplate):
         # samples is None in the first iteration
         if samples is not None:
             # 1. Propose new parameters based on running LLM optimizers on the collected samples
-            from opto.features.priority_search.utils import retry_with_exponential_backoff
-            candidates = retry_with_exponential_backoff(
-                lambda: self.propose(samples, verbose=verbose, **kwargs),
-                max_retries=10,
-                base_delay=1.0,
-                operation_name="propose_new_parameters"
-            )  # List of ModuleCandidates
+            candidates = self.propose(samples, verbose=verbose, **kwargs)
             # # 2. Validate the proposed parameters
             validate_results = self.validate(candidates, samples, verbose=verbose, **kwargs)  # this updates the priority queue
             # # 3. Update the priority queue with the validation results
@@ -473,7 +467,13 @@ class PrioritySearch(SearchTemplate):
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
         def _step(n):
             optimizer = optimizers[n]
-            update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
+            
+            update_dict = retry_with_exponential_backoff(
+                lambda: optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs),
+                max_retries=10,
+                base_delay=1.0,
+                operation_name="optimizer_step"
+            )
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
             # update_dict may only contain some of the parameters of the agent, we need to make sure it contains all the parameters
