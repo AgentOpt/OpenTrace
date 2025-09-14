@@ -621,8 +621,9 @@ class PrioritySearch(SearchTemplate):
         print(f"--- Generating {min(len(self.memory), self.num_candidates)} exploration candidates...")  if verbose else None
         # pop top self.num_candidates candidates from the priority queue
         # self._best_candidate is the exploited candidate from the previous iteration
-        top_candidates = [self._best_candidate] if self.use_best_candidate_to_explore else []
-        priorities = []  # to store the priorities of the candidates for logging
+        neg_priority, best_candidate = self.memory.best(self.compute_exploitation_priority)
+        top_candidates = [best_candidate] if self.use_best_candidate_to_explore else []
+        priorities = [-neg_priority]  # to store the priorities of the candidates for logging
         while len(top_candidates) < self.num_candidates and len(self.memory) > 0:
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue
