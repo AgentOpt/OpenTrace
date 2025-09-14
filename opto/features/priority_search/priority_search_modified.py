@@ -603,10 +603,10 @@ class PrioritySearch(SearchTemplate):
         # Reorder the memory according to the predicted scores
         self.memory.reorder_according_to_predicted_scores()
         # For debugging, print the memory stats
-        self.print_memory_stats()
+        #self.print_memory_stats()
 
     def print_memory_stats(self):
-        # For debugging, print all candidates: number, mean_score(), num_rollouts, predicted_score
+        # For debugging, print all candidates: number, mean_score(), num_rollouts, predicted_score. It is better to see an increasing trend in the predicted scores.
         for i, (neg_predicted_score, candidate) in enumerate(self.memory):
             print(f"Candidate {i}, Mean Score: {candidate.mean_score()}, Num Rollouts: {candidate.num_rollouts}, Predicted Score: {-neg_predicted_score}")
 
