@@ -217,7 +217,7 @@ class PrioritySearch(SearchTemplate):
         It provides a scalable template for implementing search algorithms based on asynchronous generation, validation, and testing.
         In each iteration,
             1. It proposes a best agent and a set of `num_candidates` exploration agents that have the highest scores in the priority queue.
-            2. The best agent is tested for performance if eval_frequency is met.
+            2. The best agent is tested for performance if test_frequency is met.
             3. `num_batches` minibatches of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of each minibatch are grouped together as a connected subgraph (represented as the BatchRollout object). In total, this step creates `num_candidates * num_batches` subgraphs.
             4. Optimizer is run on each subgraph to propose new parameters for the agents. `num_proposals` proposals are generated for each subgraph. This results in `num_subgraphs * num_proposals` total proposals.
             5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_exploration_candidates is set to True, the exploration candidates are also validated.
@@ -250,7 +250,7 @@ class PrioritySearch(SearchTemplate):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
               test_frequency: Union[int, None] = 1, # frequency of evaluation (set it to be negative to skip the first evaluation)
-              num_eval_samples: int = 1,  # number of times to evaluate each input; when greater than 1, the scores are averaged.
+              num_test_samples: int = 1,  # number of times to evaluate each input; when greater than 1, the scores are averaged.
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -281,7 +281,7 @@ class PrioritySearch(SearchTemplate):
             verbose (bool, optional): Whether to print the output of the agent. Defaults to False.
             test_dataset (list, optional): A list of (x, info) pairs to evaluate the agent. If None, no evaluation is performed. Defaults to None.
             test_frequency (int or None, optional): The frequency of evaluation. If None, no evaluation is performed. If negative, skips the first evaluation. Defaults to 1.
-            num_eval_samples (int, optional): The number of times to evaluate each input; when greater than 1, the scores are averaged. Defaults to 1.
+            num_test_samples (int, optional): The number of times to evaluate each input; when greater than 1, the scores are averaged. Defaults to 1.
             log_frequency (int or None, optional): The frequency of logging. If None, no logging is performed. Defaults to None.
             save_frequency (int or None, optional): The frequency of saving the agent. If None, no saving is performed. Defaults to None.
             save_path (str, optional): The path to save the agent. Defaults to "checkpoints/agent.pkl".
@@ -331,7 +331,7 @@ class PrioritySearch(SearchTemplate):
                       verbose=verbose,
                       test_dataset=test_dataset,
                       test_frequency=test_frequency,
-                      num_eval_samples=num_eval_samples,
+                      num_test_samples=num_test_samples,
                       log_frequency=log_frequency,
                       save_frequency=save_frequency,
                       save_path=save_path,

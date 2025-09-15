@@ -258,7 +258,7 @@ def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
         test_dataset=val_dataset,
         num_epochs=1,
         batch_size=4,  # Process multiple examples at a time
-        eval_frequency=1,  # Evaluate every 5 steps
+        test_frequency=1,  # Evaluate every 5 steps
         save_frequency=5,  # Save every 5 steps
         save_dir=save_dir,
         num_threads=4,

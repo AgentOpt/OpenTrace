@@ -213,7 +213,7 @@ def main():
                        help='Training batch size')
     parser.add_argument('--num_threads', type=int, default=10,
                        help='Number of threads for parallel processing')
-    parser.add_argument('--eval_frequency', type=int, default=2,
+    parser.add_argument('--test_frequency', type=int, default=2,
                        help='How often to run evaluation')
     parser.add_argument('--log_frequency', type=int, default=10,
                        help='How often to log results')
@@ -342,7 +342,7 @@ def main():
         "test_dataset": test_dataset,
         "validate_dataset": validate_dataset,
         "validate_guide": validate_guide,
-        "eval_frequency": args.eval_frequency,
+        "test_frequency": args.test_frequency,
         "log_frequency": args.log_frequency,
         "validation_dataset_size": args.validation_dataset_size,
     }

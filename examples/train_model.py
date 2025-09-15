@@ -51,7 +51,7 @@ def main():
     seed = 42
     num_epochs = 1
     batch_size = 3  # number of queries to sample from the training data
-    eval_frequency = -1
+    test_frequency = -1
 
     num_threads = 10
     datasize = 5
@@ -71,7 +71,7 @@ def main():
         # trainer kwargs
         num_epochs=num_epochs,
         batch_size=batch_size,
-        eval_frequency=eval_frequency,
+        test_frequency=test_frequency,
         num_threads=num_threads,
         verbose='output',
     )
