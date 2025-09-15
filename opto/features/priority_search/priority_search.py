@@ -127,6 +127,8 @@ class ModuleCandidate:
         """
         # Get scores from rollouts
         scores = [r['score'] for r in self.rollouts]
+        # Filter out None scores
+        scores = [s for s in scores if s is not None]
 
         if not scores:
             return min_score, None, max_score

@@ -149,8 +149,7 @@ class Minibatch(Trainer):
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
                                num_samples=num_samples, description=description)
-        if all([s is not None for s in test_scores]):
-            return np.mean(test_scores)
+        return np.mean([s for s in test_scores if s is not None])
 
     def has_improvement(self, xs, guide, infos, current_score, current_outputs, backup_dict, threshold=0, num_threads=None, *args, **kwargs):
         # This function can be overridden by subclasses to implement their own improvement check.
