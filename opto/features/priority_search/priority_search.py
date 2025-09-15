@@ -168,12 +168,12 @@ class HeapMemory:
     def __init__(self, size=None):
         """ Initialize an empty heap memory. """
         self.memory = []
-        self.size = size  # Optional size limit for the heap memory
+        self._size = size  # Optional size limit for the heap memory
 
     def push(self, score, data):
         """ Push an item to the heap memory. """
         heapq.heappush(self.memory, (-score, data))
-        if self.size is not None and len(self.memory) > self.size:
+        if len(self.memory) > self.size:
             # NOTE a heuristic for now
             self.memory = self.memory[:self.size]  # Keep only the top `size` items
 
@@ -182,6 +182,23 @@ class HeapMemory:
         if not self.memory:
             raise IndexError("pop from an empty heap memory")
         return heapq.heappop(self.memory)
+
+    def append(self, memory):
+        """ Append another heap memory to this heap memory. """
+        assert isinstance(memory, HeapMemory), "memory must be an instance of HeapMemory."
+        for item in memory:
+            self.push(-item[0], item[1])  # item is (-score, data)
+        if len(self.memory) > self.size:
+            self.memory = self.memory[:self.size]  # Keep only the top `size` items
+
+    def reset(self):
+        """ Reset the heap memory to be empty. """
+        self.memory = []
+
+    @property
+    def size(self):
+        """ Return the size limit of the heap memory. """
+        return self._size if self._size is not None else float('inf')
 
     def __len__(self):
         """ Return the number of items in the heap memory. """
@@ -263,7 +280,9 @@ class PrioritySearch(SearchTemplate):
               num_proposals: int = 1,  # number of proposals to generate per optimizer
               validate_exploration_candidates: bool = True,  # whether to validate the proposed parameters for exploration
               use_best_candidate_to_explore: bool = True,  # whether to use the best candidate as part of the exploration candidates
-              memory_size: Optional[int] = None,  # size of the heap memory to store the candidates; if None, no limit is set
+              memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
+              short_term_memory_size: Optional[int] = None,  # size of the short-term memory to store the most recent candidates; if None, no limit is set
+              short_term_memory_duration: Optional[int] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used.
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               # Additional keyword arguments
@@ -293,6 +312,8 @@ class PrioritySearch(SearchTemplate):
             validate_exploration_candidates (bool, optional): Whether to validate the proposed parameters for exploration. Defaults to True.
             use_best_candidate_to_explore (bool, optional): Whether to use the best candidate as part of the exploration candidates. Defaults to True.
             memory_size (int, optional): The size of the heap memory to store the candidates. If None, no limit is set. Defaults to None.
+            short_term_memory_size (int, optional): The size of the short-term memory to store the most recent candidates. If None, no limit is set. Defaults to None.
+            short_term_memory_duration (int, optional): The number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. Defaults to 0.
             score_function (str, optional): The function to compute the score for the candidates; 'mean' or 'ucb'. Defaults to 'mean'.
             ucb_exploration_constant (float, optional): The exploration constant for UCB score function. Defaults to 1.0.
             **kwargs: Additional keyword arguments that may be used by the implementation.
@@ -321,8 +342,9 @@ class PrioritySearch(SearchTemplate):
         self._best_candidate = None  # This stores the latest best candidate used for exploitation
         self._best_candidate_priority = None  # This stores the latest best candidate's priority used for exploitation
 
-        self.memory = HeapMemory(size=memory_size)  # Initialize the heap memory with a size limit
-
+        self.long_term_memory = HeapMemory(size=memory_size)  # Initialize the long-term memory with a size limit
+        self.short_term_memory = HeapMemory(size=short_term_memory_size)  # Initialize the short-term memory with a size limit
+        self.short_term_memory_duration = short_term_memory_duration  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory
 
         super().train(guide=guide,
                       train_dataset=train_dataset,
@@ -373,6 +395,20 @@ class PrioritySearch(SearchTemplate):
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
 
+    @property
+    def memory(self):
+        if self.short_term_memory.size == 0 or self.short_term_memory_duration == 0:
+            return self.long_term_memory
+        # short_term_memory is finite and non-zero
+        if self.n_iters % self.short_term_memory_duration == 0:
+            # merge the the short-term memory into the long-term memory
+            if len(self.short_term_memory) > 0:
+                self.long_term_memory.append(self.short_term_memory)
+                self.short_term_memory.reset()
+                print('Merging short-term memory into long-term memory of PrioritySearch.')
+            return self.long_term_memory
+        else:
+            return self.short_term_memory
 
     ## Illustration of `propose``
     # Suppose we have 2 exploration candidates.
