@@ -456,7 +456,7 @@ class PrioritySearch_with_Regressor(SearchTemplate):
         args_list = [(n,) for n in range(n_batches)]
         optimizers = async_run([_backward]*n_batches,  # run the optimizer step for each agent in parallel
                                  args_list=args_list,
-                                 max_workers=self.num_threads,  # use the number of threads specified in the class
+                                 max_workers=1000,  # use the number of threads specified in the class
                                  description=None)
         assert len(optimizers) == n_batches, "Number of optimizers must match number of batch rollouts."
         # need to copy optimizer for the n_proposals
@@ -488,7 +488,7 @@ class PrioritySearch_with_Regressor(SearchTemplate):
         args_list = [(n,) for n in range(n_batches*n_proposals)]
         update_dicts = async_run([_step]*n_batches*n_proposals,  # run the optimizer step for each agent in parallel
                                   args_list=args_list,
-                                  max_workers=self.num_threads,  # use the number of threads specified in the class
+                                  max_workers=1000,  # use the number of threads specified in the class
                                   description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_batches} batches",)
 
         # update_dicts is a list of dicts of length n_batches * n_proposals
