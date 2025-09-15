@@ -261,7 +261,7 @@ class SearchTemplate(Trainer):
         samples = Samples(*self.train_sampler.sample(agents, description_prefix='Sampling training minibatch: '))  # create a Samples object to store the samples and the minibatch
         # Log information about the sampling
         scores = [ g.get_scores() for g in samples.samples]  # list of list of scores for each BatchRollout
-        scores = [item for sublist in scores for item in sublist]  # flatten the list of scores
+        scores = [item for sublist in scores for item in sublist if item is not None]  # flatten the list of scores
         log_info = {
             'mean_score': np.mean(scores),
             'self.n_epochs': self.train_sampler.n_epochs,

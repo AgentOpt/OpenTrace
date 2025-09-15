@@ -101,7 +101,7 @@ class ModuleCandidate:
         """ Compute the score of the candidate based on the rollouts. """
         if not self.rollouts:
             return None
-        scores = [r['score'] for r in self.rollouts]
+        scores = [r['score'] for r in self.rollouts if r['score'] is not None]
         return np.mean(scores) if scores else None
 
     def compute_score_confidence(self, min_score, max_score, scaling_constant=1.0, total_trials=1):
@@ -218,7 +218,7 @@ class HeapMemory:
         heapq.heapify(self.memory)
 
 # TODO check saving and loading
-class PrioritySearch(SearchTemplate):
+class PrioritySearch_with_Regressor(SearchTemplate):
     """ A search algorithm that uses a priority queue to explore the parameter space and propose new candidates.
 
         It provides a scalable template for implementing search algorithms based on asynchronous generation, validation, and testing.
@@ -462,7 +462,7 @@ class PrioritySearch(SearchTemplate):
         args_list = [(n,) for n in range(n_batches)]
         optimizers = async_run([_backward]*n_batches,  # run the optimizer step for each agent in parallel
                                  args_list=args_list,
-                                 max_workers=self.num_threads,  # use the number of threads specified in the class
+                                 max_workers=1000,  # use the number of threads specified in the class
                                  description=None)
         assert len(optimizers) == n_batches, "Number of optimizers must match number of batch rollouts."
         # need to copy optimizer for the n_proposals
@@ -473,7 +473,13 @@ class PrioritySearch(SearchTemplate):
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
         def _step(n):
             optimizer = optimizers[n]
-            update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
+            
+            update_dict = retry_with_exponential_backoff(
+                lambda: optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs),
+                max_retries=10,
+                base_delay=1.0,
+                operation_name="optimizer_step"
+            )
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
             # update_dict may only contain some of the parameters of the agent, we need to make sure it contains all the parameters
@@ -488,7 +494,7 @@ class PrioritySearch(SearchTemplate):
         args_list = [(n,) for n in range(n_batches*n_proposals)]
         update_dicts = async_run([_step]*n_batches*n_proposals,  # run the optimizer step for each agent in parallel
                                   args_list=args_list,
-                                  max_workers=self.num_threads,  # use the number of threads specified in the class
+                                  max_workers=1000,  # use the number of threads specified in the class
                                   description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_batches} batches",)
 
         # update_dicts is a list of dicts of length n_batches * n_proposals
@@ -603,10 +609,10 @@ class PrioritySearch(SearchTemplate):
         # Reorder the memory according to the predicted scores
         self.memory.reorder_according_to_predicted_scores()
         # For debugging, print the memory stats
-        self.print_memory_stats()
+        #self.print_memory_stats()
 
     def print_memory_stats(self):
-        # For debugging, print all candidates: number, mean_score(), num_rollouts, predicted_score
+        # For debugging, print all candidates: number, mean_score(), num_rollouts, predicted_score. It is better to see an increasing trend in the predicted scores.
         for i, (neg_predicted_score, candidate) in enumerate(self.memory):
             print(f"Candidate {i}, Mean Score: {candidate.mean_score()}, Num Rollouts: {candidate.num_rollouts}, Predicted Score: {-neg_predicted_score}")
 
@@ -621,8 +627,9 @@ class PrioritySearch(SearchTemplate):
         print(f"--- Generating {min(len(self.memory), self.num_candidates)} exploration candidates...")  if verbose else None
         # pop top self.num_candidates candidates from the priority queue
         # self._best_candidate is the exploited candidate from the previous iteration
-        top_candidates = [self._best_candidate] if self.use_best_candidate_to_explore else []
-        priorities = []  # to store the priorities of the candidates for logging
+        neg_priority, best_candidate = self.memory.best(self.compute_exploitation_priority)
+        top_candidates = [best_candidate] if self.use_best_candidate_to_explore else []
+        priorities = [-neg_priority]  # to store the priorities of the candidates for logging
         while len(top_candidates) < self.num_candidates and len(self.memory) > 0:
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue

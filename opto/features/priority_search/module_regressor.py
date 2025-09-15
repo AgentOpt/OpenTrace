@@ -99,7 +99,7 @@ class ModuleCandidateRegressor:
         self._update_memory_embeddings()
         
         # Get training data from memory (only candidates with rollout data)
-        training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0]
+        training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
         
         if len(training_candidates) == 0:
             print_color("Warning: No training data available for regression model.", "yellow")
