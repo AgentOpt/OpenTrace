@@ -101,7 +101,7 @@ class ModuleCandidate:
         """ Compute the score of the candidate based on the rollouts. """
         if not self.rollouts:
             return None
-        scores = [r['score'] for r in self.rollouts]
+        scores = [r['score'] for r in self.rollouts if r['score'] is not None]
         return np.mean(scores) if scores else None
 
     def compute_score_confidence(self, min_score, max_score, scaling_constant=1.0, total_trials=1):
