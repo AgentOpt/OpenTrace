@@ -27,11 +27,14 @@ class ModuleCandidate:
             stats (dict): A dictionary of statistics about the candidate.
         """
         assert isinstance(base_module, trace.Module), "base_module must be a trace.Module."
-        if update_dict is not None:
+        if update_dict is None:
+            # if no update_dict is provided, use the base_module's parameters as the update_dict
+            update_dict = {p: p.data for p in base_module.parameters()}
+        else:
             assert isinstance(optimizer, Optimizer), "optimizer must be an instance of Optimizer when update_dict is provided."
-
+        assert update_dict is not None, "update_dict must be provided."
         self.base_module = base_module
-        self.update_dict = update_dict if update_dict is not None else {}
+        self.update_dict = update_dict
         self.optimizer = optimizer  # the optimizer used to generate the update_dict; can be None, which indicates the base_module is used.
         self.update_dict = remap_update_dict(self.base_module, self.update_dict)
         self.rollouts = []  # list of dicts containing the rollout information (not BatchRollout, but a list of dicts)
@@ -314,7 +317,9 @@ class PrioritySearch(SearchTemplate):
 
         self.ucb_exploration_constant = ucb_exploration_constant
         self._exploration_candidates = None  # This stores the latest candidates used for exploration
+        self._exploration_candidates_priority = None  # This stores the latest candidates' priorities used for exploration
         self._best_candidate = None  # This stores the latest best candidate used for exploitation
+        self._best_candidate_priority = None  # This stores the latest best candidate's priority used for exploitation
 
         self.memory = HeapMemory(size=memory_size)  # Initialize the heap memory with a size limit
 
@@ -357,8 +362,8 @@ class PrioritySearch(SearchTemplate):
             while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
         # 4. Explore and exploit the priority queue
-        self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
-        self._exploration_candidates, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
+        self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
+        self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -515,7 +520,7 @@ class PrioritySearch(SearchTemplate):
                 # validate the agents in the validate_dataset
                 exploration_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
-                                                            description_prefix='Validating exploration candidates: '))  # sample the exploration agents
+                                              description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
 
 
@@ -587,7 +592,7 @@ class PrioritySearch(SearchTemplate):
         # pop top self.num_candidates candidates from the priority queue
         # self._best_candidate is the exploited candidate from the previous iteration
         top_candidates = [self._best_candidate] if self.use_best_candidate_to_explore else []
-        priorities = []  # to store the priorities of the candidates for logging
+        priorities = [self._best_candidate_priority] if self.use_best_candidate_to_explore else []  # to store the priorities of the candidates for logging
         while len(top_candidates) < self.num_candidates and len(self.memory) > 0:
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue
@@ -606,7 +611,7 @@ class PrioritySearch(SearchTemplate):
             'exploration_candidates_average_num_rollouts': np.mean([c.num_rollouts for c in top_candidates]),
         }
 
-        return top_candidates, info_dict
+        return top_candidates, priorities, info_dict
 
     def exploit(self, verbose: bool = False, **kwargs) -> Tuple[ModuleCandidate, Dict[str, Any]]:
         """ Exploit the best candidate from the priority queue. This method should not change the priority queue.
@@ -621,7 +626,7 @@ class PrioritySearch(SearchTemplate):
             raise ValueError("The priority queue is empty. Cannot exploit.")
         neg_priority, best_candidate = self.memory.best(self.compute_exploitation_priority)  # (priority, candidate)
         priority = - neg_priority # remember that we stored negative scores in the priority queue
-        return best_candidate, {
+        return best_candidate, priority, {
             'best_candidate_priority': priority,  # remember that we stored negative scores in the priority queue
             'best_candidate_mean_score': best_candidate.mean_score(),  # mean score of the candidate's rollouts
             'best_candidate_num_rollouts': best_candidate.num_rollouts,  # number of rollouts of the candidate
