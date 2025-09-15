@@ -135,8 +135,8 @@ class SearchTemplate(Trainer):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent; if None, use train_dataset
               test_guide = None, # guide to provide scores for the test set; if None, use guide
-              eval_frequency: Union[int, None] = 1,  # frequency of evaluation NOTE set test_frequency < 0 to skip first evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              test_frequency: Union[int, None] = 1,  # frequency of evaluation NOTE set test_frequency < 0 to skip first evaluation
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -146,12 +146,11 @@ class SearchTemplate(Trainer):
         assert 'subbatch_size' not in kwargs, "subbatch_size should not be provided in kwargs."
 
         ## Setup
-        test_frequency = eval_frequency  # use eval_frequency as test_frequency  # NOTE legacy notation
         log_frequency = log_frequency or test_frequency  # frequency of logging (default to test_frequency)
         self.num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_dataset = test_dataset or train_dataset  # default to train_dataset if test_dataset is not provided
         test_guide = test_guide or guide
-        self.num_eval_samples = num_eval_samples  # number of samples to use to evaluate each input
+        self.num_test_samples = num_test_samples  # number of samples to use to evaluate each input
         if score_range is None:
             score_range = (-np.inf, np.inf)
         assert len(score_range) == 2, "score_range must be a tuple (min_score, max_score)."
@@ -286,7 +285,7 @@ class SearchTemplate(Trainer):
         min_score = self.min_score
         # Test the agent's performance
         test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
-                          min_score=min_score, num_threads=self.num_threads,num_samples=self.num_eval_samples,
+                          min_score=min_score, num_threads=self.num_threads,num_samples=self.num_test_samples,
                           description=f"Evaluating agent")  # and log
         # check if the test_score is within the score range
         if not (self.min_score <= test_score <= self.max_score):

@@ -27,11 +27,14 @@ class ModuleCandidate:
             stats (dict): A dictionary of statistics about the candidate.
         """
         assert isinstance(base_module, trace.Module), "base_module must be a trace.Module."
-        if update_dict is not None:
+        if update_dict is None:
+            # if no update_dict is provided, use the base_module's parameters as the update_dict
+            update_dict = {p: p.data for p in base_module.parameters()}
+        else:
             assert isinstance(optimizer, Optimizer), "optimizer must be an instance of Optimizer when update_dict is provided."
-
+        assert update_dict is not None, "update_dict must be provided."
         self.base_module = base_module
-        self.update_dict = update_dict if update_dict is not None else {}
+        self.update_dict = update_dict
         self.optimizer = optimizer  # the optimizer used to generate the update_dict; can be None, which indicates the base_module is used.
         self.update_dict = remap_update_dict(self.base_module, self.update_dict)
         self.rollouts = []  # list of dicts containing the rollout information (not BatchRollout, but a list of dicts)
@@ -217,7 +220,7 @@ class PrioritySearch(SearchTemplate):
         It provides a scalable template for implementing search algorithms based on asynchronous generation, validation, and testing.
         In each iteration,
             1. It proposes a best agent and a set of `num_candidates` exploration agents that have the highest scores in the priority queue.
-            2. The best agent is tested for performance if eval_frequency is met.
+            2. The best agent is tested for performance if test_frequency is met.
             3. `num_batches` minibatches of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of each minibatch are grouped together as a connected subgraph (represented as the BatchRollout object). In total, this step creates `num_candidates * num_batches` subgraphs.
             4. Optimizer is run on each subgraph to propose new parameters for the agents. `num_proposals` proposals are generated for each subgraph. This results in `num_subgraphs * num_proposals` total proposals.
             5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_exploration_candidates is set to True, the exploration candidates are also validated.
@@ -250,7 +253,7 @@ class PrioritySearch(SearchTemplate):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
               test_frequency: Union[int, None] = 1, # frequency of evaluation (set it to be negative to skip the first evaluation)
-              num_eval_samples: int = 1,  # number of times to evaluate each input; when greater than 1, the scores are averaged.
+              num_test_samples: int = 1,  # number of times to evaluate each input; when greater than 1, the scores are averaged.
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -281,7 +284,7 @@ class PrioritySearch(SearchTemplate):
             verbose (bool, optional): Whether to print the output of the agent. Defaults to False.
             test_dataset (list, optional): A list of (x, info) pairs to evaluate the agent. If None, no evaluation is performed. Defaults to None.
             test_frequency (int or None, optional): The frequency of evaluation. If None, no evaluation is performed. If negative, skips the first evaluation. Defaults to 1.
-            num_eval_samples (int, optional): The number of times to evaluate each input; when greater than 1, the scores are averaged. Defaults to 1.
+            num_test_samples (int, optional): The number of times to evaluate each input; when greater than 1, the scores are averaged. Defaults to 1.
             log_frequency (int or None, optional): The frequency of logging. If None, no logging is performed. Defaults to None.
             save_frequency (int or None, optional): The frequency of saving the agent. If None, no saving is performed. Defaults to None.
             save_path (str, optional): The path to save the agent. Defaults to "checkpoints/agent.pkl".
@@ -314,7 +317,9 @@ class PrioritySearch(SearchTemplate):
 
         self.ucb_exploration_constant = ucb_exploration_constant
         self._exploration_candidates = None  # This stores the latest candidates used for exploration
+        self._exploration_candidates_priority = None  # This stores the latest candidates' priorities used for exploration
         self._best_candidate = None  # This stores the latest best candidate used for exploitation
+        self._best_candidate_priority = None  # This stores the latest best candidate's priority used for exploitation
 
         self.memory = HeapMemory(size=memory_size)  # Initialize the heap memory with a size limit
 
@@ -331,7 +336,7 @@ class PrioritySearch(SearchTemplate):
                       verbose=verbose,
                       test_dataset=test_dataset,
                       test_frequency=test_frequency,
-                      num_eval_samples=num_eval_samples,
+                      num_test_samples=num_test_samples,
                       log_frequency=log_frequency,
                       save_frequency=save_frequency,
                       save_path=save_path,
@@ -357,8 +362,8 @@ class PrioritySearch(SearchTemplate):
             while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
         # 4. Explore and exploit the priority queue
-        self._best_candidate, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
-        self._exploration_candidates, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
+        self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
+        self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -515,7 +520,7 @@ class PrioritySearch(SearchTemplate):
                 # validate the agents in the validate_dataset
                 exploration_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
-                                                            description_prefix='Validating exploration candidates: '))  # sample the exploration agents
+                                              description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
 
 
@@ -587,7 +592,7 @@ class PrioritySearch(SearchTemplate):
         # pop top self.num_candidates candidates from the priority queue
         # self._best_candidate is the exploited candidate from the previous iteration
         top_candidates = [self._best_candidate] if self.use_best_candidate_to_explore else []
-        priorities = []  # to store the priorities of the candidates for logging
+        priorities = [self._best_candidate_priority] if self.use_best_candidate_to_explore else []  # to store the priorities of the candidates for logging
         while len(top_candidates) < self.num_candidates and len(self.memory) > 0:
             neg_priority, candidate = self.memory.pop()  # pop the top candidate from the priority queue
             priority = - neg_priority  # remember that we stored negative scores in the priority queue
@@ -606,7 +611,7 @@ class PrioritySearch(SearchTemplate):
             'exploration_candidates_average_num_rollouts': np.mean([c.num_rollouts for c in top_candidates]),
         }
 
-        return top_candidates, info_dict
+        return top_candidates, priorities, info_dict
 
     def exploit(self, verbose: bool = False, **kwargs) -> Tuple[ModuleCandidate, Dict[str, Any]]:
         """ Exploit the best candidate from the priority queue. This method should not change the priority queue.
@@ -621,7 +626,7 @@ class PrioritySearch(SearchTemplate):
             raise ValueError("The priority queue is empty. Cannot exploit.")
         neg_priority, best_candidate = self.memory.best(self.compute_exploitation_priority)  # (priority, candidate)
         priority = - neg_priority # remember that we stored negative scores in the priority queue
-        return best_candidate, {
+        return best_candidate, priority, {
             'best_candidate_priority': priority,  # remember that we stored negative scores in the priority queue
             'best_candidate_mean_score': best_candidate.mean_score(),  # mean score of the candidate's rollouts
             'best_candidate_num_rollouts': best_candidate.num_rollouts,  # number of rollouts of the candidate

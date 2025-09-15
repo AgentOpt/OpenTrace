@@ -55,7 +55,7 @@ def main():
     seed = 42
     num_epochs = 1
     batch_size = 1
-    eval_frequency = -1
+    test_frequency = -1
     num_threads = 3
     verbose = True
     teacher_model = None  # use default model
@@ -85,7 +85,7 @@ def main():
               train_dataset,
               num_epochs=num_epochs,
               batch_size=batch_size,
-              eval_frequency=eval_frequency,
+              test_frequency=test_frequency,
               test_dataset=test_dataset,
               num_threads=num_threads,
               verbose='output' if verbose else False)

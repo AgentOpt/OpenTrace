@@ -86,7 +86,7 @@ class PrioritySearch(_PrioritySearch):
 
     def exploit(self, **kwargs):
         print("[UnitTest] Exploit at iteration:", self.n_iters)
-        candidate, info_dict = super().exploit(**kwargs)
+        candidate, priority, info_dict = super().exploit(**kwargs)
         assert isinstance(candidate, ModuleCandidate), "Expected candidate to be an instance of ModuleCandidate"
         assert isinstance(info_dict, dict), "Expected info_dict to be a dictionary"
 
@@ -97,12 +97,12 @@ class PrioritySearch(_PrioritySearch):
             candidate.update_dict[p] = p._data + 100
             # This will be different the exploration candidates
 
-        return candidate, info_dict
+        return candidate, priority, info_dict
 
     def explore(self, **kwargs):
         print("[UnitTest] Explore at iteration:", self.n_iters)
 
-        candidates, info_dict = super().explore(**kwargs)
+        candidates, priorities, info_dict = super().explore(**kwargs)
         assert isinstance(candidates, list)
         assert isinstance(info_dict, dict)
 
@@ -112,7 +112,7 @@ class PrioritySearch(_PrioritySearch):
         else:
             assert len(candidates) <= self.num_candidates, f"Expect no more than {self.num_candidates} candidates at iter {self.n_iters}, got {len(candidates)}"
         assert all(isinstance(c, ModuleCandidate) for c in candidates), "All candidates should be ModuleCandidate instances"
-        return candidates, info_dict
+        return candidates, priorities, info_dict
 
 
 

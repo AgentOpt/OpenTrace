@@ -140,7 +140,7 @@ class UCBSearchAlgorithm(MinibatchAlgorithm):
               num_search_iterations: int = 100,
               train_batch_size: int = 2,
               evaluation_batch_size: int = 20, # Renamed from validation_batch_size, used for all explicit evaluations
-              eval_frequency: int = 1,
+              test_frequency: int = 1,
               log_frequency: Optional[int] = None,
               save_frequency: Optional[int] = None,
               save_path: str = "checkpoints/ucb_agent.pkl",
@@ -157,7 +157,7 @@ class UCBSearchAlgorithm(MinibatchAlgorithm):
             validation_dataset = train_dataset
 
         num_threads = num_threads or self.num_threads
-        log_frequency = log_frequency or eval_frequency
+        log_frequency = log_frequency or test_frequency
         self.min_score = min_score_for_agent_update # Used by parent's evaluate if called, or our own _evaluate_candidate
         total_samples = 0
 

@@ -67,7 +67,7 @@ class AggregatedUpdate(Minibatch):
               num_epochs: int = 1,  # number of training epochs
               batch_size: int = 1,  # batch size for updating the agent
               test_dataset = None,  # dataset of (x, info) pairs to evaluate the agent
-              eval_frequency: int = 1,  # frequency of evaluation
+              test_frequency: int = 1,  # frequency of evaluation
               log_frequency: Union[int, None] = None,  # frequency of logging
               min_score: Union[int, None] = None,  # minimum score to update the agent
               verbose: Union[bool, str] = False,  # whether to print the output of the agent
@@ -78,7 +78,7 @@ class AggregatedUpdate(Minibatch):
         self.stepsize = stepsize  # used in self.aggregate
 
         super().train(guide, train_dataset, num_epochs=num_epochs, batch_size=batch_size,
-                      test_dataset=test_dataset, eval_frequency=eval_frequency,
+                      test_dataset=test_dataset, test_frequency=test_frequency,
                       log_frequency=log_frequency, min_score=min_score,
                       verbose=verbose, **kwargs)
 

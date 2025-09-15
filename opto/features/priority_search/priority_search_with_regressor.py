@@ -11,7 +11,7 @@ from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
 from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
-from opto.features.priority_search.utils import retry_with_exponential_backoff
+from opto.utils.auto_retry import retry_with_exponential_backoff
 
 class ModuleCandidate:
     """ A container used by PrioritySearch to store a candidate module as (its base module and update dictionary) and its statistics. """
@@ -210,7 +210,7 @@ class HeapMemory:
                 p = criterion(candidate)
                 return p if p is not None else 0
             return max(self.memory, key=lambda x: _criterion(x))
-    
+
     def reorder_according_to_predicted_scores(self):
         """ Reorder the heap memory according to the predicted scores. """
         # Now all ModuleCandidate objects in the heap memory have predicted scores. Should modify the old score to the negative predicted scores, then use heapq.heapify to reorder the heap memory.
@@ -224,7 +224,7 @@ class PrioritySearch_with_Regressor(SearchTemplate):
         It provides a scalable template for implementing search algorithms based on asynchronous generation, validation, and testing.
         In each iteration,
             1. It proposes a best agent and a set of `num_candidates` exploration agents that have the highest scores in the priority queue.
-            2. The best agent is tested for performance if eval_frequency is met.
+            2. The best agent is tested for performance if test_frequency is met.
             3. `num_batches` minibatches of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of each minibatch are grouped together as a connected subgraph (represented as the BatchRollout object). In total, this step creates `num_candidates * num_batches` subgraphs.
             4. Optimizer is run on each subgraph to propose new parameters for the agents. `num_proposals` proposals are generated for each subgraph. This results in `num_subgraphs * num_proposals` total proposals.
             5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_exploration_candidates is set to True, the exploration candidates are also validated.
@@ -257,7 +257,7 @@ class PrioritySearch_with_Regressor(SearchTemplate):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
               test_frequency: Union[int, None] = 1, # frequency of evaluation (set it to be negative to skip the first evaluation)
-              num_eval_samples: int = 1,  # number of times to evaluate each input; when greater than 1, the scores are averaged.
+              num_test_samples: int = 1,  # number of times to evaluate each input; when greater than 1, the scores are averaged.
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -288,7 +288,7 @@ class PrioritySearch_with_Regressor(SearchTemplate):
             verbose (bool, optional): Whether to print the output of the agent. Defaults to False.
             test_dataset (list, optional): A list of (x, info) pairs to evaluate the agent. If None, no evaluation is performed. Defaults to None.
             test_frequency (int or None, optional): The frequency of evaluation. If None, no evaluation is performed. If negative, skips the first evaluation. Defaults to 1.
-            num_eval_samples (int, optional): The number of times to evaluate each input; when greater than 1, the scores are averaged. Defaults to 1.
+            num_test_samples (int, optional): The number of times to evaluate each input; when greater than 1, the scores are averaged. Defaults to 1.
             log_frequency (int or None, optional): The frequency of logging. If None, no logging is performed. Defaults to None.
             save_frequency (int or None, optional): The frequency of saving the agent. If None, no saving is performed. Defaults to None.
             save_path (str, optional): The path to save the agent. Defaults to "checkpoints/agent.pkl".
@@ -334,11 +334,11 @@ class PrioritySearch_with_Regressor(SearchTemplate):
                       num_batches=num_batches,
                       score_range=score_range,
                       num_epochs=num_epochs,
-                      num_threads=num_threads, 
+                      num_threads=num_threads,
                       verbose=verbose,
                       test_dataset=test_dataset,
-                      eval_frequency=test_frequency,
-                      num_eval_samples=num_eval_samples,
+                      test_frequency=test_frequency,
+                      num_test_samples=num_test_samples,
                       log_frequency=log_frequency,
                       save_frequency=save_frequency,
                       save_path=save_path,
@@ -354,12 +354,18 @@ class PrioritySearch_with_Regressor(SearchTemplate):
         # samples is None in the first iteration
         if samples is not None:
             # 1. Propose new parameters based on running LLM optimizers on the collected samples
-            candidates = self.propose(samples, verbose=verbose, **kwargs)
+            
+            candidates = retry_with_exponential_backoff(
+                lambda: self.propose(samples, verbose=verbose, **kwargs),
+                max_retries=10,
+                base_delay=1.0,
+                operation_name="propose_new_parameters"
+            )  # List of ModuleCandidates
             # # 2. Validate the proposed parameters
             validate_results = self.validate(candidates, samples, verbose=verbose, **kwargs)  # this updates the priority queue
             # # 3. Update the priority queue with the validation results
             self.update_memory(validate_results, verbose=verbose, **kwargs)  # samples are provided here in case candidates do not capture full information
-            
+
         else:  # The first iteration.
             max_mem_size = self.memory.size if self.memory.size is not None else float('inf')
             initial_update_dict = {p: copy.deepcopy(p.data) for p in self.agent.parameters()}
@@ -589,7 +595,7 @@ class PrioritySearch_with_Regressor(SearchTemplate):
         print("--- Updating memory with validation results...") if verbose else None
         for candidate, rollouts in validate_results.items():
             candidate.add_rollouts(rollouts)  # add the rollouts to the candidate
-            
+
             # priority = self.compute_exploration_priority(candidate)  # compute the priority for the candidate
             placeholder_priority = self.max_score
             self.memory.push(placeholder_priority, candidate)
