@@ -11,7 +11,7 @@ from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
 from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
-
+from opto.utils.auto_retry import retry_with_exponential_backoff
 
 class ModuleCandidate:
     """ A container used by PrioritySearch to store a candidate module as (its base module and update dictionary) and its statistics. """
@@ -354,7 +354,7 @@ class PrioritySearch(SearchTemplate):
         # samples is None in the first iteration
         if samples is not None:
             # 1. Propose new parameters based on running LLM optimizers on the collected samples
-            from opto.features.priority_search.utils import retry_with_exponential_backoff
+            
             candidates = retry_with_exponential_backoff(
                 lambda: self.propose(samples, verbose=verbose, **kwargs),
                 max_retries=10,
