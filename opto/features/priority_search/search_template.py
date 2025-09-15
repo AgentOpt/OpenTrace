@@ -117,7 +117,6 @@ class SearchTemplate(Trainer):
         self._optimizer_index += 1
         return self._optimizers[self._optimizer_index % len(self._optimizers)]  # return the current optimizer
 
-    @save_train_config
     def train(self,
               *,
               guide, # guide to provide feedback

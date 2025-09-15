@@ -8,7 +8,7 @@ from opto.trace.nodes import ParameterNode
 from opto.optimizers.optimizer import Optimizer
 from opto.trainer.utils import async_run
 from opto.trainer.algorithms.basic_algorithms import batchify
-from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout
+from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout, save_train_config
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
 
 
@@ -255,6 +255,7 @@ class PrioritySearch(SearchTemplate):
         `compute_exploration_priority`, `compute_exploitation_priority` can be overridden to implement different strategies for computing the priority and selecting the best candidate.
     """
 
+    @save_train_config
     def train(self,
               guide, # guide to provide feedback
               train_dataset,  # dataset of (x, info) pairs to train the agent
@@ -265,7 +266,7 @@ class PrioritySearch(SearchTemplate):
               # training loop
               batch_size = 1,  # batch size for updating the agent
               num_batches = 1,  # number of batches to use from the dataset in each iteration
-              score_range = None,  # minimum score to update the agent
+              score_range = None,  # range of (min_score, max_score) to clip the scores; if None, no clipping is applied
               num_epochs = 1,  # number of training epochs
               num_threads = None,  # maximum number of threads to use
               verbose = False,  # whether to print the output of the agent
@@ -299,7 +300,7 @@ class PrioritySearch(SearchTemplate):
             validate_guide (callable, optional): A function that provides feedback for the validation set. If None, the training guide is used. Defaults to None.
             batch_size (int, optional): The batch size for updating the agent. Defaults to 1.
             num_batches (int, optional): The number of batches to use from the dataset in each iteration. Defaults to 1.
-            score_range (tuple, optional): A tuple of (min_score, max_score) to clip the scores. If None, no clipping is applied. Defaults to None.
+            score_range (tuple, optional): A tuple of (min_score, max_score) to clip the scores. If None, it's set to (0, 1).
             num_epochs (int, optional): The number of training epochs. Defaults to 1.
             num_threads (int, optional): The maximum number of threads to use. If None, it uses the number of CPU cores. Defaults to None.
             verbose (bool, optional): Whether to print the output of the agent. Defaults to False.
