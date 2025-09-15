@@ -392,6 +392,10 @@ class PrioritySearch(SearchTemplate):
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
+            'short_term_memory_size': len(self.short_term_memory),  # size of the short-term memory
+            'long_term_memory_size': len(self.long_term_memory),  # size of the long-term memory
+            'using_short_term_memory': self.memory is self.short_term_memory,  # whether the current memory is the short-term memory
+            'using_long_term_memory': self.memory is self.long_term_memory,  # whether the current memory is the long-term memory
         }
 
         info_log.update(info_exploit)  # add the info from the exploit step
