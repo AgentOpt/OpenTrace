@@ -412,6 +412,7 @@ class PrioritySearch(SearchTemplate):
             # merge the the short-term memory into the long-term memory
             if len(self.short_term_memory) > 0:
                 self.long_term_memory.append(self.short_term_memory)
+                heapq.heapify(self.long_term_memory)
                 self.short_term_memory.reset()
                 print('Merging short-term memory into long-term memory of PrioritySearch.')
             return self.long_term_memory
