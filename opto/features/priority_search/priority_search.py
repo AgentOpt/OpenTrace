@@ -405,7 +405,7 @@ class PrioritySearch(SearchTemplate):
 
     @property
     def memory(self):
-        if self.short_term_memory.size == 0 or self.short_term_memory_duration == 0:
+        if  self.short_term_memory_duration == 0:
             return self.long_term_memory
         # short_term_memory is finite and non-zero
         if self.n_iters % self.short_term_memory_duration == 0:
