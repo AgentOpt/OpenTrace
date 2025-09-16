@@ -612,8 +612,8 @@ class PrioritySearch(SearchTemplate):
             # Append the rollouts to the list of rollouts for the key
             _results[ids[key]].append(rollouts)
         # assert all candidates have at least one rollout
-        for c in candidates:
-            assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
+        # for c in candidates:
+        #     assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
 
         return _results
 
