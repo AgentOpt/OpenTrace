@@ -117,8 +117,10 @@ class ModuleCandidateRegressor:
         """Update the regression model parameters using the current memory with logistic regression."""
         start_time = time.time()
         print_color("Updating regression model using the current memory with logistic regression...", "blue")
+        # Extract candidates from memory (memory contains (neg_score, candidate) tuples)
+        batch = [candidate for _, candidate in self.memory]
         # Ensure all candidates have embeddings
-        self._update_memory_embeddings_for_batch(self.memory)
+        self._update_memory_embeddings_for_batch(batch)
         
         # Get training data from memory (only candidates with rollout data)
         training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
