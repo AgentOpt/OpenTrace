@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
-from opto.features.priority_search.search_template import Samples
+from opto.features.priority_search.search_template import Samples, SearchTemplate
 from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
@@ -66,31 +66,19 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             regressor_tolerance (float, optional): Convergence tolerance for the regressor. Defaults to 5e-3.
         """
 
-        # Create agents and optimizers for search
-        if num_candidates < len(self._optimizers):
-            print(f"Warning: num_candidates {num_candidates} is less than the number of optimizers {len(self._optimizers)}. Setting num_candidates to {len(self._optimizers)}.")
-            num_candidates = len(self._optimizers)
-        self.num_candidates = num_candidates  # number of candidates for exploration
-        self.num_proposals = num_proposals  # number of candidates to propose by each optimizer call
-
-        self.validate_exploration_candidates = validate_exploration_candidates  # whether to validate the proposed parameters
-        self.use_best_candidate_to_explore = use_best_candidate_to_explore
-        self.score_function = score_function  # function to compute the score for the candidates
-        if score_range is None:
-            score_range = (0, 1)
-        if score_function == 'ucb':  # this requires a bounded score range. By default, it is set to (0, 1)
-            assert score_range[1]-score_range[0] < float('inf'), \
-                "For UCB score function, score_range must be finite. Use 'mean' score function if you want to use unbounded scores."
-
-        self.ucb_exploration_constant = ucb_exploration_constant
-        self._exploration_candidates = None  # This stores the latest candidates used for exploration
-        self._exploration_candidates_priority = None  # This stores the latest candidates' priorities used for exploration
-        self._best_candidate = None  # This stores the latest best candidate used for exploitation
-        self._best_candidate_priority = None  # This stores the latest best candidate's priority used for exploitation
-
-        self.long_term_memory = HeapMemory(size=memory_size)  # Initialize the long-term memory with a size limit
-        self.short_term_memory = HeapMemory(size=short_term_memory_size)  # Initialize the short-term memory with a size limit
-        self.short_term_memory_duration = short_term_memory_duration  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory
+        # Initialize the search parameters and memory
+        self._initialize_search_parameters(
+            num_candidates=num_candidates,
+            num_proposals=num_proposals,
+            validate_exploration_candidates=validate_exploration_candidates,
+            use_best_candidate_to_explore=use_best_candidate_to_explore,
+            score_function=score_function,
+            score_range=score_range,
+            ucb_exploration_constant=ucb_exploration_constant,
+            memory_size=memory_size,
+            short_term_memory_size=short_term_memory_size,
+            short_term_memory_duration=short_term_memory_duration
+        )
         
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
         self.regressor = ModuleCandidateRegressor(
@@ -103,7 +91,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             tolerance=regressor_tolerance
         )
 
-        super().train(guide=guide,
+        SearchTemplate.train(self, guide=guide,
                       train_dataset=train_dataset,
                       validate_dataset=validate_dataset,
                       validate_guide=validate_guide,
@@ -140,9 +128,10 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             max_mem_size = self.memory.size if self.memory.size is not None else float('inf')
             while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
-        if self.memory is self.long_term_memory:    # Only update the regressor if we are using the long-term memory
-            self.regressor.update()
-        self.regressor.predict_scores(self.memory) # The only difference from the parent class
+
+        
+        self.update_memory_with_regressor(verbose=verbose, **kwargs)
+
         # 4. Explore and exploit the priority queue
         self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
         self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
@@ -193,11 +182,14 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         """ Update the priority queue with the regressor results.
         """
         print("--- Updating memory with regressor results...") if verbose else None
-        # Update predicted scores for all candidates in the memory
-        self.regressor.predict_scores()
+        if self.memory is self.long_term_memory:    # Only update the regressor if we are using the long-term memory
+            self.regressor.update()
+        self.regressor.predict_scores(self.memory) # The only difference from the parent class
         # Reorder the memory according to the predicted scores
-        self.memory = [(-candidate.predicted_score, candidate) for candidate in self.memory]
-        heapq.heapify(self.memory)
+        # Extract candidates from memory tuples and reorder by predicted scores
+        candidates_with_scores = [(-candidate.predicted_score, candidate) for _, candidate in self.memory]
+        self.memory.memory = candidates_with_scores  # Update the internal list of HeapMemory
+        heapq.heapify(self.memory.memory)  # Heapify the internal list
 
     def print_memory_stats(self):
         # For debugging, print all candidates: number, mean_score(), num_rollouts, predicted_score. It is better to see an increasing trend in the predicted scores.
