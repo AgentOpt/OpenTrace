@@ -104,7 +104,7 @@ class ModuleCandidate:
         """ Compute the score of the candidate based on the rollouts. """
         if not self.rollouts:
             return None
-        scores = [r['score'] for r in self.rollouts]
+        scores = [r['score'] for r in self.rollouts if r['score'] is not None]
         return np.mean(scores) if scores else None
 
     def compute_score_confidence(self, min_score, max_score, scaling_constant=1.0, total_trials=1):
@@ -551,12 +551,8 @@ class PrioritySearch(SearchTemplate):
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
         def _step(n):
             optimizer = optimizers[n]
-            update_dict = retry_with_exponential_backoff(
-                lambda: optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs),
-                max_retries=10,
-                base_delay=1.0,
-                operation_name="optimizer_step"
-            )
+            update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
+                
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
             # update_dict may only contain some of the parameters of the agent, we need to make sure it contains all the parameters
