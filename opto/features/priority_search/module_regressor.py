@@ -251,10 +251,12 @@ class ModuleCandidateRegressor:
         elapsed_time = end_time - start_time
         print_color(f"Regressor update completed in {elapsed_time:.4f} seconds", "cyan")
     
-    def predict_scores(self):
+    def predict_scores(self,memory = None):
         """Predict scores for all candidates in the memory."""
         # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
-        batch = [candidate for _, candidate in self.memory]
+        if memory is None:
+            memory = self.memory
+        batch = [candidate for _, candidate in memory]
 
         # Separate candidates that need embeddings from those that already have them
         candidates_needing_embeddings = []
