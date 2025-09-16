@@ -551,7 +551,11 @@ class PrioritySearch(SearchTemplate):
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
         def _step(n):
             optimizer = optimizers[n]
-            update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
+            try:
+                update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
+            except Exception as e:
+                print(f"Error calling optimizer.step: {e}")
+                return None
                 
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
