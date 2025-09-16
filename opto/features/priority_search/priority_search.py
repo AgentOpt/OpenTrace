@@ -657,7 +657,7 @@ class PrioritySearch(SearchTemplate):
         info_dict = {
             'num_exploration_candidates': len(top_candidates),
             'exploration_candidates_mean_priority': np.mean(priorities),  # list of priorities of the exploration candidates
-            'exploration_candidates_mean_score': np.mean(mean_scores),  # list of mean scores of the exploration candidates
+            'exploration_candidates_mean_score': np.mean(mean_scores) if mean_scores else None,  # list of mean scores of the exploration candidates
             'exploration_candidates_average_num_rollouts': np.mean([c.num_rollouts for c in top_candidates]),
         }
 
