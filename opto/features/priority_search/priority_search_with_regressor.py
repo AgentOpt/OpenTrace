@@ -143,7 +143,11 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             'using_short_term_memory': self.memory is self.short_term_memory,  # whether the current memory is the short-term memory
             'using_long_term_memory': self.memory is self.long_term_memory,  # whether the current memory is the long-term memory
         }
-
+        # If using long-term memory, log the total number of samples in the long-term memory
+        if self.memory is self.long_term_memory:
+            total_samples = sum([candidate.num_rollouts for _, candidate in self.memory])
+            info_log.update({'total_samples': total_samples})
+            
         info_log.update(info_exploit)  # add the info from the exploit step
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
