@@ -14,7 +14,7 @@ import json
 # from black import format_str, FileMode
 import random
 # import mathX
-from opto.features.priority_search.utils import retry_with_exponential_backoff
+from opto.utils.auto_retry import retry_with_exponential_backoff
 import litellm
 import time
 

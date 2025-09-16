@@ -1,12 +1,8 @@
 import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
-from opto.trainer.utils import async_run
-from opto.trainer.algorithms.basic_algorithms import batchify
-from opto.features.priority_search.search_template import Samples, BatchRollout
-from opto.features.priority_search.utils import  remap_update_dict 
+from opto.features.priority_search.search_template import Samples
 from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
-from opto.utils.auto_retry import retry_with_exponential_backoff
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
 
