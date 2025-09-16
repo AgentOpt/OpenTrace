@@ -386,6 +386,10 @@ class PrioritySearch(SearchTemplate):
             'using_short_term_memory': self.memory is self.short_term_memory,  # whether the current memory is the short-term memory
             'using_long_term_memory': self.memory is self.long_term_memory,  # whether the current memory is the long-term memory
         }
+        # If using long-term memory, log the total number of samples processed
+        if self.memory is self.long_term_memory:
+            total_samples = sum([candidate.num_rollouts for _, candidate in self.memory])
+            info_log.update({'Total samples': total_samples})
 
         info_log.update(info_exploit)  # add the info from the exploit step
         info_log.update(info_explore)  # add the info from the explore step
@@ -617,7 +621,7 @@ class PrioritySearch(SearchTemplate):
                                               description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
 
-
+        
         matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates + candidates, validate_samples.samples)
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts

@@ -233,7 +233,7 @@ class SearchTemplate(Trainer):
                 self.log(info_update, prefix="Update/")
                 self.log(info_sample, prefix="Sample/")
                 self.n_samples += len(samples)  # update the number of samples processed
-                self.logger.log('Algo/Number of samples', self.n_samples, self.n_iters, color='blue')
+                self.logger.log('Algo/Number of training samples', self.n_samples, self.n_iters, color='blue')
                 # Log parameters
                 for p in self.agent.parameters():
                     self.logger.log(f"Parameter/{p.name}", p.data, self.n_iters, color='red')
