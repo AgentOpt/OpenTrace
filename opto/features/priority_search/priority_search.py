@@ -324,31 +324,19 @@ class PrioritySearch(SearchTemplate):
         """
 
 
-        # Create agents and optimizers for search
-        if num_candidates < len(self._optimizers):
-            print(f"Warning: num_candidates {num_candidates} is less than the number of optimizers {len(self._optimizers)}. Setting num_candidates to {len(self._optimizers)}.")
-            num_candidates = len(self._optimizers)
-        self.num_candidates = num_candidates  # number of candidates for exploration
-        self.num_proposals = num_proposals  # number of candidates to propose by each optimizer call
-
-        self.validate_exploration_candidates = validate_exploration_candidates  # whether to validate the proposed parameters
-        self.use_best_candidate_to_explore = use_best_candidate_to_explore
-        self.score_function = score_function  # function to compute the score for the candidates
-        if score_range is None:
-            score_range = (0, 1)
-        if score_function == 'ucb':  # this requires a bounded score range. By default, it is set to (0, 1)
-            assert score_range[1]-score_range[0] < float('inf'), \
-                "For UCB score function, score_range must be finite. Use 'mean' score function if you want to use unbounded scores."
-
-        self.ucb_exploration_constant = ucb_exploration_constant
-        self._exploration_candidates = None  # This stores the latest candidates used for exploration
-        self._exploration_candidates_priority = None  # This stores the latest candidates' priorities used for exploration
-        self._best_candidate = None  # This stores the latest best candidate used for exploitation
-        self._best_candidate_priority = None  # This stores the latest best candidate's priority used for exploitation
-
-        self.long_term_memory = HeapMemory(size=memory_size)  # Initialize the long-term memory with a size limit
-        self.short_term_memory = HeapMemory(size=short_term_memory_size)  # Initialize the short-term memory with a size limit
-        self.short_term_memory_duration = short_term_memory_duration  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory
+        # Initialize search parameters and memory
+        self._initialize_search_parameters(
+            num_candidates=num_candidates,
+            num_proposals=num_proposals,
+            validate_exploration_candidates=validate_exploration_candidates,
+            use_best_candidate_to_explore=use_best_candidate_to_explore,
+            score_function=score_function,
+            score_range=score_range,
+            ucb_exploration_constant=ucb_exploration_constant,
+            memory_size=memory_size,
+            short_term_memory_size=short_term_memory_size,
+            short_term_memory_duration=short_term_memory_duration
+        )
 
         super().train(guide=guide,
                       train_dataset=train_dataset,
@@ -403,16 +391,72 @@ class PrioritySearch(SearchTemplate):
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
 
+    def _initialize_search_parameters(self, 
+                                    num_candidates, 
+                                    num_proposals, 
+                                    validate_exploration_candidates, 
+                                    use_best_candidate_to_explore, 
+                                    score_function, 
+                                    score_range, 
+                                    ucb_exploration_constant, 
+                                    memory_size, 
+                                    short_term_memory_size, 
+                                    short_term_memory_duration):
+        """Initialize search parameters and memory structures.
+        
+        Args:
+            num_candidates (int): Number of candidates to propose for exploration
+            num_proposals (int): Number of proposals to generate per optimizer
+            validate_exploration_candidates (bool): Whether to validate the proposed parameters
+            use_best_candidate_to_explore (bool): Whether to use the best candidate as part of exploration
+            score_function (str): Function to compute the score for candidates ('mean' or 'ucb')
+            score_range (tuple): Range of scores for UCB computation
+            ucb_exploration_constant (float): Exploration constant for UCB score function
+            memory_size (int): Size of the long-term heap memory
+            short_term_memory_size (int): Size of the short-term memory
+            short_term_memory_duration (int): Duration to keep candidates in short-term memory
+        """
+        # Validate and adjust num_candidates based on number of optimizers
+        if num_candidates < len(self._optimizers):
+            print(f"Warning: num_candidates {num_candidates} is less than the number of optimizers {len(self._optimizers)}. Setting num_candidates to {len(self._optimizers)}.")
+            num_candidates = len(self._optimizers)
+        
+        # Set core parameters
+        self.num_candidates = num_candidates
+        self.num_proposals = num_proposals
+        self.validate_exploration_candidates = validate_exploration_candidates
+        self.use_best_candidate_to_explore = use_best_candidate_to_explore
+        self.score_function = score_function
+        
+        # Validate and set score range for UCB
+        if score_range is None:
+            score_range = (0, 1)
+        if score_function == 'ucb':
+            assert score_range[1] - score_range[0] < float('inf'), \
+                "For UCB score function, score_range must be finite. Use 'mean' score function if you want to use unbounded scores."
+        
+        self.ucb_exploration_constant = ucb_exploration_constant
+        
+        # Initialize candidate tracking variables
+        self._exploration_candidates = None
+        self._exploration_candidates_priority = None
+        self._best_candidate = None
+        self._best_candidate_priority = None
+        
+        # Initialize memory structures
+        self.long_term_memory = HeapMemory(size=memory_size)
+        self.short_term_memory = HeapMemory(size=short_term_memory_size)
+        self.short_term_memory_duration = short_term_memory_duration
+
     @property
     def memory(self):
-        if  self.short_term_memory_duration == 0:
+        if self.short_term_memory.size == 0 or self.short_term_memory_duration == 0:
             return self.long_term_memory
         # short_term_memory is finite and non-zero
         if self.n_iters % self.short_term_memory_duration == 0:
             # merge the the short-term memory into the long-term memory
             if len(self.short_term_memory) > 0:
                 self.long_term_memory.append(self.short_term_memory)
-                heapq.heapify(self.long_term_memory)
                 self.short_term_memory.reset()
                 print('Merging short-term memory into long-term memory of PrioritySearch.')
             return self.long_term_memory
