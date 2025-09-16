@@ -18,8 +18,34 @@ def model(cls):
     """
     name = f"{cls.__name__}Model"
     bases = (cls, Model)
+    # for export to work, we save the references to the original cls
+    __TRACE_RESERVED_cls_name = cls.__name__
+    temp_cls_members = inspect.getmembers(cls)
+    __TRACE_RESERVED_cls_members = []
+    __TRACE_RESERVED_cls_name_to_source = {}
+    for name, member in temp_cls_members:
+        if name.startswith('__TRACE_RESERVED_'):
+            continue
+        if not name.startswith('__'):
+            __TRACE_RESERVED_cls_members.append((name, member))
+        elif name.startswith('__'):
+            try:
+                if hasattr(member, '__qualname__') and cls.__name__ in member.__qualname__:
+                    inspect.getsource(member)  # additionally we see if this works
+                    __TRACE_RESERVED_cls_members.append((name, member))
+            except (AttributeError, TypeError):
+                continue
+
+    for name, member in __TRACE_RESERVED_cls_members:
+        __TRACE_RESERVED_cls_name_to_source[name] = inspect.getsource(member)
+
     new_class = type(name, bases, {})
     new_class.__module__ = cls.__module__
+    # for export
+    new_class.reserved_cls_name = __TRACE_RESERVED_cls_name
+    new_class.reserved_cls_members = __TRACE_RESERVED_cls_members
+    new_class.reserved_cls_name_to_source = __TRACE_RESERVED_cls_name_to_source
+
     mod = sys.modules[cls.__module__]
     setattr(mod, name, new_class)
     return new_class
@@ -221,9 +247,11 @@ class Model(Module):
         if projections is None:
             projections = [BlackCodeFormatter()]
         cls = self.__class__
-        trace_model_body = f"class {cls.__name__}:\n"
+        # trace_model_body = f"class {cls.__name__}:\n"
+        name = cls.reserved_cls_name
+        trace_model_body = f"class {name}:\n"
         all_members = inspect.getmembers(self)
-        cls_members = inspect.getmembers(cls)
+        cls_members = cls.reserved_cls_members # inspect.getmembers(cls)
         cls_member_names = [m[0] for m in cls_members]
         filtered_members = []
         for name, member in all_members:
@@ -239,6 +267,7 @@ class Model(Module):
                         filtered_members.append((name, member))
                 except (AttributeError, TypeError):
                     continue
+
         for i, (name, member) in enumerate(filtered_members):
             if 'FunModule' in str(member):
                 if member.parameter is not None:
@@ -249,7 +278,7 @@ class Model(Module):
                 indented = textwrap.indent(source, "    ")
                 trace_model_body += indented
             else:
-                source = inspect.getsource(member)
+                source = cls.reserved_cls_name_to_source[name] # inspect.getsource(member)
                 source = textwrap.dedent(source)
                 indented = textwrap.indent(source, "    ")
                 trace_model_body += indented
