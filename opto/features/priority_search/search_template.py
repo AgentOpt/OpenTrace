@@ -226,7 +226,7 @@ class SearchTemplate(Trainer):
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
             train_counters.append(info_sample['counter'])
             # sum over trains scores and counters
-            avg_train_score = np.sum(train_scores * train_counters) / np.sum(train_counters)
+            avg_train_score = np.sum(np.array(train_scores) * np.array(train_counters)) / np.sum(train_counters)
             
             if self.n_iters % log_frequency == 0:
                 self.logger.log('Algo/Average train score', avg_train_score, self.n_iters, color='blue')
