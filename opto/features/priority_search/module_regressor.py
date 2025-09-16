@@ -92,8 +92,8 @@ class ModuleCandidateRegressor:
                 continue
             candidate.embedding = self._get_embedding(candidate)
     
-    def _update_regression_model(self):
-        """Update the regression model using the current memory with logistic regression."""
+    def update(self):
+        """Update the regression model parameters using the current memory with logistic regression."""
         start_time = time.time()
         print_color("Updating regression model using the current memory with logistic regression...", "blue")
         self._update_memory_embeddings()
@@ -105,7 +105,7 @@ class ModuleCandidateRegressor:
             print_color("Warning: No training data available for regression model.", "yellow")
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print_color(f"_update_regression_model completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
+            print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
             return
             
         # Extract raw binary training data from each candidate
@@ -145,7 +145,7 @@ class ModuleCandidateRegressor:
             print_color("Warning: No binary training samples generated.", "yellow")
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print_color(f"_update_regression_model completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
+            print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
             return
             
         # Convert to numpy arrays
@@ -249,28 +249,18 @@ class ModuleCandidateRegressor:
         # Print timing information
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print_color(f"_update_regression_model completed in {elapsed_time:.4f} seconds", "cyan")
+        print_color(f"Regressor update completed in {elapsed_time:.4f} seconds", "cyan")
     
-    def _predict_single(self, candidate):
-        """Predict a single score for a ModuleCandidate using the logistic regression model. Using the entire memory as the training data."""
-        self._update_regression_model()
-            
-        embedding = self._get_embedding(candidate)
-        z = self.weights.dot(embedding) + self.bias
-        predicted_score = self._sigmoid(z)
-        return predicted_score
-    
-    def predict_scores_for_batch(self, batch):
-        """Predict scores for a batch of ModuleCandidates and update each with the predicted scores. Using the entire memory as the training data."""
-        # Get embeddings for all candidates in batch
-        embeddings = []
-        
+    def predict_scores(self):
+        """Predict scores for all candidates in the memory."""
+        # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
+        batch = [candidate for _, candidate in self.memory]
+
         # Separate candidates that need embeddings from those that already have them
         candidates_needing_embeddings = []
         for candidate in batch:
             if not hasattr(candidate, "embedding"):
                 candidates_needing_embeddings.append(candidate)
-            embeddings.append(None)  # Placeholder
         
         # Generate embeddings in parallel for candidates that need them
         if candidates_needing_embeddings:
@@ -297,8 +287,7 @@ class ModuleCandidateRegressor:
         for candidate in batch:
             embeddings.append(candidate.embedding)
         
-        self._update_regression_model()
-        
+
         # Batch prediction using vectorized operations
         X_batch = np.array(embeddings)
         z = X_batch.dot(self.weights) + self.bias
@@ -309,27 +298,4 @@ class ModuleCandidateRegressor:
             candidate.predicted_score = predicted_score
             
         return predicted_scores
-    
-    def predict_scores(self):
-        """Predict scores for all candidates in the memory. Using the entire memory as the training data."""
-        # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
-        memory_candidates = [candidate for neg_score, candidate in self.memory]
-        
-        batches = [memory_candidates[i:i+self.max_candidates_to_predict] for i in range(0, len(memory_candidates), self.max_candidates_to_predict)]
-        
-        if hasattr(self, 'num_threads') and self.num_threads and self.num_threads > 1:
-            # Parallelize batch processing
-            batch_functions = [lambda batch=b: self.predict_scores_for_batch(batch) for b in batches]
-            async_run(
-                batch_functions,
-                max_workers=self.num_threads,
-                description=f"Processing {len(batches)} candidate batches"
-            )
-        else:
-            # Sequential processing
-            for batch in batches:
-                self.predict_scores_for_batch(batch)
-        
-        # Return the predicted scores for the memory candidates
-        predicted_scores_for_the_memory = [candidate.predicted_score for candidate in memory_candidates]
-        return np.array(predicted_scores_for_the_memory)
+       
