@@ -193,7 +193,7 @@ class SearchTemplate(Trainer):
 
         samples = None
         train_scores = []  # to store the scores of the agent during training
-
+        train_counters = []
         while self.n_epochs < num_epochs :
 
             print(f"Epoch: {self.n_epochs}. Iteration: {self.n_iters}")
@@ -224,8 +224,12 @@ class SearchTemplate(Trainer):
             assert 'self.n_epochs' in info_sample, "info_sample must contain 'self.n_epochs'."
 
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
+            train_counters.append(info_sample['counter'])
+            # sum over trains scores and counters
+            avg_train_score = np.sum(train_scores * train_counters) / np.sum(train_counters)
+            
             if self.n_iters % log_frequency == 0:
-                self.logger.log('Algo/Average train score', np.mean(train_scores), self.n_iters, color='blue')
+                self.logger.log('Algo/Average train score', avg_train_score, self.n_iters, color='blue')
                 self.log(info_update, prefix="Update/")
                 self.log(info_sample, prefix="Sample/")
                 self.n_samples += len(samples)  # update the number of samples processed
@@ -263,6 +267,7 @@ class SearchTemplate(Trainer):
         scores = [item for sublist in scores for item in sublist if item is not None]  # flatten the list of scores
         log_info = {
             'mean_score': np.mean(scores),
+            'counter': len(scores),
             'self.n_epochs': self.train_sampler.n_epochs,
         }
         # check if the scores are within the score range
