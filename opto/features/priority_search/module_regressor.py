@@ -85,18 +85,40 @@ class ModuleCandidateRegressor:
             fallback_embedding = np.random.normal(0, 0.01, self.linear_dim)
             return fallback_embedding / np.linalg.norm(fallback_embedding)
     
-    def _update_memory_embeddings(self):
-        """Update the embeddings for all candidates in memory."""
-        for neg_score, candidate in self.memory:
-            if hasattr(candidate, "embedding"):
-                continue
-            candidate.embedding = self._get_embedding(candidate)
-    
+    def _update_memory_embeddings_for_batch(self, batch):
+        """Update the embeddings for a batch of candidates."""
+        # Separate candidates that need embeddings from those that already have them
+        candidates_needing_embeddings = []
+        for candidate in batch:
+            if not hasattr(candidate, "embedding"):
+                candidates_needing_embeddings.append(candidate)
+        
+        # Generate embeddings in parallel for candidates that need them
+        if candidates_needing_embeddings:
+            def get_embedding_for_candidate(candidate):
+                return self._get_embedding(candidate)
+            
+            # Create function list for async_run
+            embedding_functions = [lambda c=candidate: get_embedding_for_candidate(c) 
+                                 for candidate in candidates_needing_embeddings]
+            
+            # Run embedding generation in parallel
+            new_embeddings = async_run(
+                embedding_functions,
+                max_workers=1000,
+                description=f"Generating embeddings for {len(candidates_needing_embeddings)} candidates"
+            )
+            
+            # Assign embeddings back to candidates
+            for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
+                candidate.embedding = embedding
+
     def update(self):
         """Update the regression model parameters using the current memory with logistic regression."""
         start_time = time.time()
         print_color("Updating regression model using the current memory with logistic regression...", "blue")
-        self._update_memory_embeddings()
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(self.memory)
         
         # Get training data from memory (only candidates with rollout data)
         training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
@@ -258,31 +280,8 @@ class ModuleCandidateRegressor:
             memory = self.memory
         batch = [candidate for _, candidate in memory]
 
-        # Separate candidates that need embeddings from those that already have them
-        candidates_needing_embeddings = []
-        for candidate in batch:
-            if not hasattr(candidate, "embedding"):
-                candidates_needing_embeddings.append(candidate)
-        
-        # Generate embeddings in parallel for candidates that need them
-        if candidates_needing_embeddings:
-            def get_embedding_for_candidate(candidate):
-                return self._get_embedding(candidate)
-            
-            # Create function list for async_run
-            embedding_functions = [lambda c=candidate: get_embedding_for_candidate(c) 
-                                 for candidate in candidates_needing_embeddings]
-            
-            # Run embedding generation in parallel
-            new_embeddings = async_run(
-                embedding_functions,
-                max_workers=1000,
-                description=f"Generating embeddings for {len(candidates_needing_embeddings)} candidates"
-            )
-            
-            # Assign embeddings back to candidates
-            for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
-                candidate.embedding = embedding
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(batch)
         
         # Collect all embeddings in order
         embeddings = []
