@@ -73,10 +73,14 @@ def test_sample_with_single_agent():
     samples, batch = sampler.sample([Agent()])
 
     # check batch is equal to dataset's second batch_size elements
-    assert batch['inputs'] == dataset['inputs'][3:]
-    assert batch['infos'] == dataset['infos'][3:]
-    assert len(samples) == 1
+    assert batch['inputs'] == dataset['inputs'][3:] + dataset['inputs'][:1]
+    assert batch['infos'] == dataset['infos'][3:] + dataset['infos'][:1]
+
+    # a batch of 3 is split into 2 sub-batches of size 2 and 1
+    assert len(samples) == 2
     assert len(samples[0].rollouts) == 2
+    assert len(samples[1].rollouts) == 1
+
 
     for rollouts in samples:
         for rollout in rollouts:
@@ -124,13 +128,15 @@ def test_sample_with_multiple_agents():
 
     samples, batch = sampler.sample([Agent(), Agent()])
     # check batch is equal to dataset's second batch_size elements
-    assert batch['inputs'] == dataset['inputs'][3:]
-    assert batch['infos'] == dataset['infos'][3:]
+    assert batch['inputs'] == dataset['inputs'][3:] + dataset['inputs'][:1]
+    assert batch['infos'] == dataset['infos'][3:] + dataset['infos'][:1]
 
-    assert len(samples) == 2, f"Expected 2 samples, got {len(samples)}"
-
+    # a batch of 3 is split into 2 sub-batches of size 2 and 1
+    assert len(samples) == 4
     assert len(samples[0].rollouts) == 2
-    assert len(samples[1].rollouts) == 2
+    assert len(samples[1].rollouts) == 1
+    assert len(samples[2].rollouts) == 2
+    assert len(samples[3].rollouts) == 1
 
     for rollouts in samples:
         for rollout in rollouts:
