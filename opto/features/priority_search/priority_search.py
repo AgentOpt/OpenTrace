@@ -6,7 +6,7 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trace.nodes import ParameterNode
 from opto.optimizers.optimizer import Optimizer
-from opto.trainer.utils import async_run
+from opto.trainer.utils import async_run, safe_mean
 from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout, save_train_config
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
