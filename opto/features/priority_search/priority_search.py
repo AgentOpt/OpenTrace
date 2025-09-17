@@ -2,7 +2,7 @@ import numpy as np
 import copy
 import heapq
 import time
-from typing import Union, List, Tuple, Dict, Any, Optional
+from typing import Union, List, Tuple, Dict, Any, Optional, Callable
 from opto import trace
 from opto.trace.nodes import ParameterNode
 from opto.optimizers.optimizer import Optimizer
@@ -166,13 +166,15 @@ class HeapMemory:
     # Later on this will be replaced by a memory DB.
 
     # NOTE that the heap memory is a max-heap, so we store negative scores to use the default min-heap behavior of heapq.
-    def __init__(self, size=None):
+    def __init__(self, size=None, processing_fun: Callable = None):
         """ Initialize an empty heap memory. """
         self.memory = []
         self._size = size  # Optional size limit for the heap memory
+        self.processing_fun = processing_fun
 
     def push(self, score, data):
         """ Push an item to the heap memory. """
+        data = self.processing_fun(data) if self.processing_fun is not None else data
         heapq.heappush(self.memory, (-score, data))
         if len(self.memory) > self.size:
             # NOTE a heuristic for now
@@ -284,7 +286,7 @@ class PrioritySearch(SearchTemplate):
               use_best_candidate_to_explore: bool = True,  # whether to use the best candidate as part of the exploration candidates
               long_term_memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
               short_term_memory_size: Optional[int] = None,  # size of the short-term memory to store the most recent candidates; if None, no limit is set
-              short_term_memory_duration: Optional[int] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used.
+              memory_update_frequency: Optional[int | None] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used. None means only short-term memory is used.
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               # Additional keyword arguments
@@ -313,9 +315,9 @@ class PrioritySearch(SearchTemplate):
             num_proposals (int, optional): The number of proposals to generate per optimizer. Defaults to 1.
             validate_exploration_candidates (bool, optional): Whether to validate the proposed parameters for exploration. Defaults to True.
             use_best_candidate_to_explore (bool, optional): Whether to use the best candidate as part of the exploration candidates. Defaults to True.
-            memory_size (int, optional): The size of the heap memory to store the candidates. If None, no limit is set. Defaults to None.
-            short_term_memory_size (int, optional): The size of the short-term memory to store the most recent candidates. If None, no limit is set. Defaults to None.
-            short_term_memory_duration (int, optional): The number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. Defaults to 0.
+            long_term_memory_size (int, optional): The size of the heap memory to store the candidates. If None, no limit is set. Defaults to None. long-term memory stores only feedback and score.
+            short_term_memory_size (int, optional): The size of the short-term memory to store the most recent candidates. If None, no limit is set. Defaults to None. short-term memory stores full rollout information.
+            memory_update_frequency (int, optional): The number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. Defaults to 0, which means only long-term memory is used. None means only short-term memory is used.
             score_function (str, optional): The function to compute the score for the candidates; 'mean' or 'ucb'. Defaults to 'mean'.
             ucb_exploration_constant (float, optional): The exploration constant for UCB score function. Defaults to 1.0.
             **kwargs: Additional keyword arguments that may be used by the implementation.
@@ -332,7 +334,7 @@ class PrioritySearch(SearchTemplate):
             ucb_exploration_constant=ucb_exploration_constant,
             long_term_memory_size=long_term_memory_size,
             short_term_memory_size=short_term_memory_size,
-            short_term_memory_duration=short_term_memory_duration
+            memory_update_frequency=memory_update_frequency
         )
 
         super().train(guide=guide,
@@ -363,7 +365,7 @@ class PrioritySearch(SearchTemplate):
                                     ucb_exploration_constant,
                                     long_term_memory_size,
                                     short_term_memory_size,
-                                    short_term_memory_duration):
+                                    memory_update_frequency):
         """Initialize search parameters and memory structures.
 
         Args:
@@ -376,7 +378,7 @@ class PrioritySearch(SearchTemplate):
             ucb_exploration_constant (float): Exploration constant for UCB score function
             long_term_memory_size (int): Size of the long-term heap memory
             short_term_memory_size (int): Size of the short-term memory
-            short_term_memory_duration (int): Duration to keep candidates in short-term memory
+            memory_update_frequency (int): The candidates are merged into long-term memory after this many iterations.
         """
         # Validate and adjust num_candidates based on number of optimizers
         if num_candidates < len(self._optimizers):
@@ -406,10 +408,20 @@ class PrioritySearch(SearchTemplate):
         self._best_candidate_priority = None
 
         # Initialize memory structures
-        self.long_term_memory = HeapMemory(size=long_term_memory_size)
-        self.short_term_memory = HeapMemory(size=short_term_memory_size)
-        self.short_term_memory_duration = short_term_memory_duration
+        if memory_update_frequency is None:
+            print("PrioritySearch initialized with only short-term memory.")
+            assert short_term_memory_size is None or short_term_memory_size > 0, \
+                "short_term_memory_size must be None or greater than 0 when memory_update_frequency is None."
+        elif memory_update_frequency == 0:
+            print("PrioritySearch initialized with only long-term memory.")
+            assert long_term_memory_size is None or long_term_memory_size > 0, \
+                "long_term_memory_size must be None or greater than 0 when memory_update_frequency is 0."
+        else:
+            print(f"PrioritySearch initialized with both short-term and long-term memory. Candidates will be merged into long-term memory every {memory_update_frequency} iterations.")
 
+        self.long_term_memory = HeapMemory(size=long_term_memory_size, processing_fun=self.compress_candidate_memory)
+        self.short_term_memory = HeapMemory(size=short_term_memory_size)
+        self.memory_update_frequency = memory_update_frequency
 
     def update(self,
                samples: Union[Samples, None] = None,
@@ -453,15 +465,19 @@ class PrioritySearch(SearchTemplate):
 
     @property
     def memory(self):
-        if self.short_term_memory.size == 0 or self.short_term_memory_duration == 0:
+        """ Return the current memory (long-term or short-term) based on the memory update frequency. """
+        if self.memory_update_frequency is None:
+            return self.short_term_memory
+        # memory_update_frequency is finite
+        if self.memory_update_frequency == 0 or self.short_term_memory.size == 0:
             return self.long_term_memory
-        # short_term_memory is finite and non-zero
-        if self.n_iters % self.short_term_memory_duration == 0:
+        # short_term_memory is non-zero and memory_update_frequency is positive
+        if self.n_iters % self.memory_update_frequency == 0:
             # merge the the short-term memory into the long-term memory
             if len(self.short_term_memory) > 0:
+                print('Merging short-term memory into long-term memory of PrioritySearch.')
                 self.long_term_memory.append(self.short_term_memory)
                 self.short_term_memory.reset()
-                print('Merging short-term memory into long-term memory of PrioritySearch.')
             return self.long_term_memory
         else:
             return self.short_term_memory
@@ -730,8 +746,8 @@ class PrioritySearch(SearchTemplate):
         }
 
     # TODO refactor below to reuse scoring
+    # NOTE This function can be overridden by subclasses to compute a different score
     def compute_exploitation_priority(self, candidate) -> float:
-        # NOTE This function can be overridden by subclasses to compute a different score
         """ Compute the score for the candidate based on the rollouts during the validation phase.
         It can be overridden by subclasses to implement a different scoring strategy.
 
@@ -745,8 +761,8 @@ class PrioritySearch(SearchTemplate):
         # By default, we compute the mean score of the rollouts
         return candidate.mean_score()
 
+    # NOTE This function can be overridden by subclasses to compute a different score
     def compute_exploration_priority(self, candidate) -> float:
-        # NOTE This function can be overridden by subclasses to compute a different score
         """ Compute the score for the candidate based on the rollouts during the validation phase.
         It can be overridden by subclasses to implement a different scoring strategy.
 
@@ -775,3 +791,18 @@ class PrioritySearch(SearchTemplate):
             return ucb_score  # return the UCB score
         else:
             raise ValueError(f"Unknown score function: {self.score_function}")
+
+    # NOTE This function can be overridden by subclasses to compute a different score
+    def compress_candidate_memory(self, candidate: ModuleCandidate) -> ModuleCandidate:
+        """ Compress the memory of the candidate to save space. This is used to preprocess candidates before adding them to long-term memory.
+            By default, we save only the feedback and score of each rollout for long-term memory. """
+        def _process_rollout(rollout):
+            # rollout is a dict containing module, x, info, target, score, feedback
+            for k in rollout:
+                if k not in ['score', 'feedback']:
+                    rollout[k] = None
+        candidate = copy.copy(candidate)  # make a copy of the candidate to avoid modifying the original one
+        candidate.rollouts = copy.deepcopy(candidate.rollouts)  # deep copy the rollouts to avoid modifying the original one
+        for rollout in candidate.rollouts:
+            _process_rollout(rollout)
+        return candidate

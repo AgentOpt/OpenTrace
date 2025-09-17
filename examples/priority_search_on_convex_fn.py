@@ -255,7 +255,7 @@ trainer.train(
     guide=guide,
     num_candidates=4,
     num_proposals=2,
-    short_term_memory_duration=2,
+    memory_update_frequency=2,
     optimizer_kwargs={'objective':"You have a task of guessing two numbers. You should make sure your guess minimizes y.",
                      'memory_size': 10}
 )

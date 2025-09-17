@@ -7,10 +7,10 @@ from opto.features.priority_search.priority_search import PrioritySearch, Module
 import heapq
 
 class PrioritySearch_with_Regressor(PrioritySearch):
-    """ 
+    """
     A subclass of PrioritySearch that uses a regressor to predict the scores of the candidates.
     """
-    
+
     def train(self,
               guide, # guide to provide feedback
               train_dataset,  # dataset of (x, info) pairs to train the agent
@@ -40,7 +40,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               use_best_candidate_to_explore: bool = True,  # whether to use the best candidate as part of the exploration candidates
               memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
               short_term_memory_size: Optional[int] = None,  # size of the short-term memory to store the most recent candidates; if None, no limit is set
-              short_term_memory_duration: Optional[int] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used.
+              memory_update_frequency: Optional[int] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used.
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               # Regressor specific parameters
@@ -77,9 +77,9 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             ucb_exploration_constant=ucb_exploration_constant,
             memory_size=memory_size,
             short_term_memory_size=short_term_memory_size,
-            short_term_memory_duration=short_term_memory_duration
+            memory_update_frequency=memory_update_frequency
         )
-        
+
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
         self.regressor = ModuleCandidateRegressor(
             memory=self.long_term_memory,
@@ -129,7 +129,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
 
-        
+
         self.update_memory_with_regressor(verbose=verbose, **kwargs)
 
         # TODO Log information about the update
@@ -179,7 +179,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         """
         print("--- Updating memory with validation results...") if verbose else None
         for candidate, rollouts in validate_results.items():
-            candidate.add_rollouts(rollouts)  # add the rollouts to the 
+            candidate.add_rollouts(rollouts)  # add the rollouts to the
             placeholder_priority = self.max_score
             self.memory.push(placeholder_priority, candidate)
 
