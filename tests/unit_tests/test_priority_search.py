@@ -54,7 +54,7 @@ dataset = {'inputs': xs, 'infos': infos}
 
 num_proposals = 10
 num_candidates = 5
-memory_size = 3
+long_term_memory_size = 3
 suggested_value = 5
 
 
@@ -107,7 +107,7 @@ class PrioritySearch(_PrioritySearch):
         assert isinstance(info_dict, dict)
 
         if self.n_iters == 0:  # NOTE use +1 since we hacked exploit above using deepcopy, the returned object does not have the same reference
-            assert len(candidates) == min(memory_size, num_candidates) + 1, f"Expected {min(memory_size, num_candidates) + 1} candidates, got {len(candidates)}"
+            assert len(candidates) == min(long_term_memory_size, num_candidates) + 1, f"Expected {min(long_term_memory_size, num_candidates) + 1} candidates, got {len(candidates)}"
             # one from the init parameter and one from the hacked best candidate
         else:
             assert len(candidates) <= self.num_candidates, f"Expect no more than {self.num_candidates} candidates at iter {self.n_iters}, got {len(candidates)}"
@@ -162,7 +162,7 @@ def test_priority_search():
         num_threads=num_threads,
         num_candidates=num_candidates,
         num_proposals=num_proposals,
-        memory_size=memory_size,
+        long_term_memory_size=long_term_memory_size,
         num_epochs=num_epochs,
         verbose=False, #'output',
     )
@@ -202,7 +202,7 @@ def test_resume():
         num_threads=num_threads,
         num_candidates=num_candidates,
         num_proposals=num_proposals,
-        memory_size=memory_size,
+        long_term_memory_size=long_term_memory_size,
         verbose=False, #'output',
         save_path=save_path,
         save_frequency=1,
@@ -241,7 +241,7 @@ def test_trainer_train_and_resume():
         num_threads=num_threads,
         num_candidates=num_candidates,
         num_proposals=num_proposals,
-        memory_size=memory_size,
+        long_term_memory_size=long_term_memory_size,
         verbose=False, #'output',
         save_path="./test_priority_search_save_trainer",
         save_frequency=1,
