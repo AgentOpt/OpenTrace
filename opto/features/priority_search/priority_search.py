@@ -799,7 +799,7 @@ class PrioritySearch(SearchTemplate):
         def _process_rollout(rollout):
             # rollout is a dict containing module, x, info, target, score, feedback
             for k in rollout:
-                if k not in ['score', 'feedback']:
+                if k not in ['score']:
                     rollout[k] = None
         candidate = copy.copy(candidate)  # make a copy of the candidate to avoid modifying the original one
         candidate.rollouts = copy.deepcopy(candidate.rollouts)  # deep copy the rollouts to avoid modifying the original one
