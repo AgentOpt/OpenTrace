@@ -4,6 +4,7 @@ import time
 import json
 import os
 import warnings
+from .auto_retry import retry_with_exponential_backoff
 
 try:
     import autogen  # We import autogen here to avoid the need of installing autogen
@@ -162,7 +163,7 @@ class LiteLLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True) -> None:
+                 cache=True, max_retries=10, base_delay=1.0) -> None:
         if model is None:
             model = os.environ.get('TRACE_LITELLM_MODEL')
             if model is None:
@@ -171,20 +172,30 @@ class LiteLLM(AbstractModel):
 
         self.model_name = model
         self.cache = cache
-        factory = lambda: self._factory(self.model_name)  # an LLM instance uses a fixed model
+        factory = lambda: self._factory(self.model_name, max_retries=max_retries, base_delay=base_delay)  # an LLM instance uses a fixed model
         super().__init__(factory, reset_freq)
 
     @classmethod
-    def _factory(cls, model_name: str):
+    def _factory(cls, model_name: str, max_retries=10, base_delay=1.0):
         import litellm
         if model_name.startswith('azure/'):  # azure model
             azure_token_provider_scope = os.environ.get('AZURE_TOKEN_PROVIDER_SCOPE', None)
             if azure_token_provider_scope is not None:
                 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
                 credential = get_bearer_token_provider(DefaultAzureCredential(), azure_token_provider_scope)
-                return lambda *args, **kwargs: litellm.completion(model_name, *args,
-                                                                  azure_ad_token_provider=credential, **kwargs)
-        return lambda *args, **kwargs: litellm.completion(model_name, *args, **kwargs)
+                return lambda *args, **kwargs: retry_with_exponential_backoff(
+                    lambda: litellm.completion(model_name, *args,
+                                             azure_ad_token_provider=credential, **kwargs),
+                    max_retries=max_retries,
+                    base_delay=base_delay,
+                    operation_name="LiteLLM_completion"
+                )
+        return lambda *args, **kwargs: retry_with_exponential_backoff(
+            lambda: litellm.completion(model_name, *args, **kwargs),
+            max_retries=max_retries,
+            base_delay=base_delay,
+            operation_name="LiteLLM_completion"
+        )
 
     @property
     def model(self):

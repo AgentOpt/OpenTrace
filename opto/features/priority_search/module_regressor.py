@@ -14,7 +14,7 @@ import json
 # from black import format_str, FileMode
 import random
 # import mathX
-from opto.features.priority_search.utils import retry_with_exponential_backoff
+from opto.utils.auto_retry import retry_with_exponential_backoff
 import litellm
 import time
 
@@ -85,18 +85,42 @@ class ModuleCandidateRegressor:
             fallback_embedding = np.random.normal(0, 0.01, self.linear_dim)
             return fallback_embedding / np.linalg.norm(fallback_embedding)
     
-    def _update_memory_embeddings(self):
-        """Update the embeddings for all candidates in memory."""
-        for neg_score, candidate in self.memory:
-            if hasattr(candidate, "embedding"):
-                continue
-            candidate.embedding = self._get_embedding(candidate)
-    
-    def _update_regression_model(self):
-        """Update the regression model using the current memory with logistic regression."""
+    def _update_memory_embeddings_for_batch(self, batch):
+        """Update the embeddings for a batch of candidates."""
+        # Separate candidates that need embeddings from those that already have them
+        candidates_needing_embeddings = []
+        for candidate in batch:
+            if not hasattr(candidate, "embedding"):
+                candidates_needing_embeddings.append(candidate)
+        
+        # Generate embeddings in parallel for candidates that need them
+        if candidates_needing_embeddings:
+            def get_embedding_for_candidate(candidate):
+                return self._get_embedding(candidate)
+            
+            # Create function list for async_run
+            embedding_functions = [lambda c=candidate: get_embedding_for_candidate(c) 
+                                 for candidate in candidates_needing_embeddings]
+            
+            # Run embedding generation in parallel
+            new_embeddings = async_run(
+                embedding_functions,
+                max_workers=1000,
+                description=f"Generating embeddings for {len(candidates_needing_embeddings)} candidates"
+            )
+            
+            # Assign embeddings back to candidates
+            for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
+                candidate.embedding = embedding
+
+    def update(self):
+        """Update the regression model parameters using the current memory with logistic regression."""
         start_time = time.time()
         print_color("Updating regression model using the current memory with logistic regression...", "blue")
-        self._update_memory_embeddings()
+        # Extract candidates from memory (memory contains (neg_score, candidate) tuples)
+        batch = [candidate for _, candidate in self.memory]
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(batch)
         
         # Get training data from memory (only candidates with rollout data)
         training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
@@ -105,7 +129,7 @@ class ModuleCandidateRegressor:
             print_color("Warning: No training data available for regression model.", "yellow")
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print_color(f"_update_regression_model completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
+            print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
             return
             
         # Extract raw binary training data from each candidate
@@ -145,7 +169,7 @@ class ModuleCandidateRegressor:
             print_color("Warning: No binary training samples generated.", "yellow")
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print_color(f"_update_regression_model completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
+            print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
             return
             
         # Convert to numpy arrays
@@ -249,56 +273,24 @@ class ModuleCandidateRegressor:
         # Print timing information
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print_color(f"_update_regression_model completed in {elapsed_time:.4f} seconds", "cyan")
+        print_color(f"Regressor update completed in {elapsed_time:.4f} seconds", "cyan")
     
-    def _predict_single(self, candidate):
-        """Predict a single score for a ModuleCandidate using the logistic regression model. Using the entire memory as the training data."""
-        self._update_regression_model()
-            
-        embedding = self._get_embedding(candidate)
-        z = self.weights.dot(embedding) + self.bias
-        predicted_score = self._sigmoid(z)
-        return predicted_score
-    
-    def predict_scores_for_batch(self, batch):
-        """Predict scores for a batch of ModuleCandidates and update each with the predicted scores. Using the entire memory as the training data."""
-        # Get embeddings for all candidates in batch
-        embeddings = []
-        
-        # Separate candidates that need embeddings from those that already have them
-        candidates_needing_embeddings = []
-        for candidate in batch:
-            if not hasattr(candidate, "embedding"):
-                candidates_needing_embeddings.append(candidate)
-            embeddings.append(None)  # Placeholder
-        
-        # Generate embeddings in parallel for candidates that need them
-        if candidates_needing_embeddings:
-            def get_embedding_for_candidate(candidate):
-                return self._get_embedding(candidate)
-            
-            # Create function list for async_run
-            embedding_functions = [lambda c=candidate: get_embedding_for_candidate(c) 
-                                 for candidate in candidates_needing_embeddings]
-            
-            # Run embedding generation in parallel
-            new_embeddings = async_run(
-                embedding_functions,
-                max_workers=1000,
-                description=f"Generating embeddings for {len(candidates_needing_embeddings)} candidates"
-            )
-            
-            # Assign embeddings back to candidates
-            for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
-                candidate.embedding = embedding
+    def predict_scores(self,memory = None):
+        """Predict scores for all candidates in the memory."""
+        # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
+        if memory is None:
+            memory = self.memory
+        batch = [candidate for _, candidate in memory]
+
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(batch)
         
         # Collect all embeddings in order
         embeddings = []
         for candidate in batch:
             embeddings.append(candidate.embedding)
         
-        self._update_regression_model()
-        
+
         # Batch prediction using vectorized operations
         X_batch = np.array(embeddings)
         z = X_batch.dot(self.weights) + self.bias
@@ -309,27 +301,4 @@ class ModuleCandidateRegressor:
             candidate.predicted_score = predicted_score
             
         return predicted_scores
-    
-    def predict_scores(self):
-        """Predict scores for all candidates in the memory. Using the entire memory as the training data."""
-        # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
-        memory_candidates = [candidate for neg_score, candidate in self.memory]
-        
-        batches = [memory_candidates[i:i+self.max_candidates_to_predict] for i in range(0, len(memory_candidates), self.max_candidates_to_predict)]
-        
-        if hasattr(self, 'num_threads') and self.num_threads and self.num_threads > 1:
-            # Parallelize batch processing
-            batch_functions = [lambda batch=b: self.predict_scores_for_batch(batch) for b in batches]
-            async_run(
-                batch_functions,
-                max_workers=self.num_threads,
-                description=f"Processing {len(batches)} candidate batches"
-            )
-        else:
-            # Sequential processing
-            for batch in batches:
-                self.predict_scores_for_batch(batch)
-        
-        # Return the predicted scores for the memory candidates
-        predicted_scores_for_the_memory = [candidate.predicted_score for candidate in memory_candidates]
-        return np.array(predicted_scores_for_the_memory)
+       

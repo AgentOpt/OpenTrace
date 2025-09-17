@@ -504,12 +504,12 @@ class OptoPrime(Optimizer):
         user_prompt = self.replace_symbols(user_prompt, self.prompt_symbols)
 
         response = self.call_llm(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            verbose=verbose,
-            max_tokens=self.max_tokens,
-        )
-
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                verbose=verbose,
+                max_tokens=self.max_tokens,
+            )
+            
         if "TERMINATE" in response:
             return {}
 

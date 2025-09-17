@@ -7,6 +7,7 @@ from opto.trainer.algorithms.basic_algorithms import Trainer
 from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
+from opto.trainer.utils import safe_mean
 from dataclasses import dataclass
 import pickle, copy, os
 # TODO save and load SearchTemplate
@@ -193,7 +194,7 @@ class SearchTemplate(Trainer):
 
         samples = None
         train_scores = []  # to store the scores of the agent during training
-
+        train_num_samples = []  # to store the number of samples used to compute each score
         while self.n_epochs < num_epochs :
 
             print(f"Epoch: {self.n_epochs}. Iteration: {self.n_iters}")
@@ -224,12 +225,15 @@ class SearchTemplate(Trainer):
             assert 'self.n_epochs' in info_sample, "info_sample must contain 'self.n_epochs'."
 
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
+            train_num_samples.append(info_sample['num_samples'])
+
             if self.n_iters % log_frequency == 0:
-                self.logger.log('Algo/Average train score', np.mean(train_scores), self.n_iters, color='blue')
+                avg_train_score = np.sum(np.array(train_scores) * np.array(train_num_samples)) / np.sum(train_num_samples)
+                self.logger.log('Algo/Average train score', avg_train_score, self.n_iters, color='blue')
                 self.log(info_update, prefix="Update/")
                 self.log(info_sample, prefix="Sample/")
                 self.n_samples += len(samples)  # update the number of samples processed
-                self.logger.log('Algo/Number of samples', self.n_samples, self.n_iters, color='blue')
+                self.logger.log('Algo/Number of training samples', self.n_samples, self.n_iters, color='blue')
                 # Log parameters
                 for p in self.agent.parameters():
                     self.logger.log(f"Parameter/{p.name}", p.data, self.n_iters, color='red')
@@ -262,7 +266,8 @@ class SearchTemplate(Trainer):
         scores = [ g.get_scores() for g in samples.samples]  # list of list of scores for each BatchRollout
         scores = [item for sublist in scores for item in sublist if item is not None]  # flatten the list of scores
         log_info = {
-            'mean_score': np.mean(scores),
+            'mean_score': safe_mean(scores, 0),  # return 0, if num_samples == 0 so that the weighted mean can be computed
+            'num_samples': len(scores),
             'self.n_epochs': self.train_sampler.n_epochs,
         }
         # check if the scores are within the score range
@@ -296,7 +301,7 @@ class SearchTemplate(Trainer):
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
                                num_samples=num_samples, description=description)
-        return np.mean([s for s in test_scores if s is not None])
+        return safe_mean(test_scores)
 
     def save(self, save_path):
         print(f"Saving algorithm state to {save_path} at iteration {self.n_iters}.")
