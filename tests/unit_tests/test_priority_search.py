@@ -55,6 +55,7 @@ dataset = {'inputs': xs, 'infos': infos}
 num_proposals = 10
 num_candidates = 5
 long_term_memory_size = 3
+memory_update_frequency = 2
 suggested_value = 5
 
 
@@ -86,6 +87,14 @@ class PrioritySearch(_PrioritySearch):
 
     def exploit(self, **kwargs):
         print("[UnitTest] Exploit at iteration:", self.n_iters)
+        # if self.memory is self.long_term_memory and self.n_iters > 0:
+        #     for _, c in self.long_term_memory.memory:
+        #         for rollout in c.rollouts:
+        #             assert rollout['x'] is None
+        #             assert rollout['info'] is None
+        #             assert rollout['target'] is None
+        #             assert rollout['module'] is None
+
         candidate, priority, info_dict = super().exploit(**kwargs)
         assert isinstance(candidate, ModuleCandidate), "Expected candidate to be an instance of ModuleCandidate"
         assert isinstance(info_dict, dict), "Expected info_dict to be a dictionary"
@@ -163,6 +172,7 @@ def test_priority_search():
         num_candidates=num_candidates,
         num_proposals=num_proposals,
         long_term_memory_size=long_term_memory_size,
+        memory_update_frequency=memory_update_frequency,
         num_epochs=num_epochs,
         verbose=False, #'output',
     )
@@ -203,6 +213,7 @@ def test_resume():
         num_candidates=num_candidates,
         num_proposals=num_proposals,
         long_term_memory_size=long_term_memory_size,
+        memory_update_frequency=memory_update_frequency,
         verbose=False, #'output',
         save_path=save_path,
         save_frequency=1,
@@ -242,6 +253,7 @@ def test_trainer_train_and_resume():
         num_candidates=num_candidates,
         num_proposals=num_proposals,
         long_term_memory_size=long_term_memory_size,
+        memory_update_frequency=memory_update_frequency,
         verbose=False, #'output',
         save_path="./test_priority_search_save_trainer",
         save_frequency=1,
