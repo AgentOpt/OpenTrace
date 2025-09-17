@@ -10,7 +10,6 @@ from opto.trainer.utils import async_run
 from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout, save_train_config
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
-from opto.utils.auto_retry import retry_with_exponential_backoff
 
 
 class ModuleCandidate:
@@ -104,8 +103,7 @@ class ModuleCandidate:
         """ Compute the score of the candidate based on the rollouts. """
         if not self.rollouts:
             return None
-        scores = [r['score'] for r in self.rollouts if r['score'] is not None]
-        return np.mean(scores) if scores else None
+        return safe_mean([r['score'] for r in self.rollouts])
 
     def compute_score_confidence(self, min_score, max_score, scaling_constant=1.0, total_trials=1):
         """Compute the UCB, mean, LCB score for the candidate. After queried, the number of confidence queries is incremented.
@@ -284,7 +282,7 @@ class PrioritySearch(SearchTemplate):
               num_proposals: int = 1,  # number of proposals to generate per optimizer
               validate_exploration_candidates: bool = True,  # whether to validate the proposed parameters for exploration
               use_best_candidate_to_explore: bool = True,  # whether to use the best candidate as part of the exploration candidates
-              memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
+              long_term_memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
               short_term_memory_size: Optional[int] = None,  # size of the short-term memory to store the most recent candidates; if None, no limit is set
               short_term_memory_duration: Optional[int] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used.
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
@@ -323,7 +321,6 @@ class PrioritySearch(SearchTemplate):
             **kwargs: Additional keyword arguments that may be used by the implementation.
         """
 
-
         # Initialize search parameters and memory
         self._initialize_search_parameters(
             num_candidates=num_candidates,
@@ -333,7 +330,7 @@ class PrioritySearch(SearchTemplate):
             score_function=score_function,
             score_range=score_range,
             ucb_exploration_constant=ucb_exploration_constant,
-            memory_size=memory_size,
+            long_term_memory_size=long_term_memory_size,
             short_term_memory_size=short_term_memory_size,
             short_term_memory_duration=short_term_memory_duration
         )
@@ -356,6 +353,64 @@ class PrioritySearch(SearchTemplate):
                       save_path=save_path,
                       **kwargs)
 
+    def _initialize_search_parameters(self,
+                                    num_candidates,
+                                    num_proposals,
+                                    validate_exploration_candidates,
+                                    use_best_candidate_to_explore,
+                                    score_function,
+                                    score_range,
+                                    ucb_exploration_constant,
+                                    long_term_memory_size,
+                                    short_term_memory_size,
+                                    short_term_memory_duration):
+        """Initialize search parameters and memory structures.
+
+        Args:
+            num_candidates (int): Number of candidates to propose for exploration
+            num_proposals (int): Number of proposals to generate per optimizer
+            validate_exploration_candidates (bool): Whether to validate the proposed parameters
+            use_best_candidate_to_explore (bool): Whether to use the best candidate as part of exploration
+            score_function (str): Function to compute the score for candidates ('mean' or 'ucb')
+            score_range (tuple): Range of scores for UCB computation
+            ucb_exploration_constant (float): Exploration constant for UCB score function
+            long_term_memory_size (int): Size of the long-term heap memory
+            short_term_memory_size (int): Size of the short-term memory
+            short_term_memory_duration (int): Duration to keep candidates in short-term memory
+        """
+        # Validate and adjust num_candidates based on number of optimizers
+        if num_candidates < len(self._optimizers):
+            print(f"Warning: num_candidates {num_candidates} is less than the number of optimizers {len(self._optimizers)}. Setting num_candidates to {len(self._optimizers)}.")
+            num_candidates = len(self._optimizers)
+
+        # Set core parameters
+        self.num_candidates = num_candidates
+        self.num_proposals = num_proposals
+        self.validate_exploration_candidates = validate_exploration_candidates
+        self.use_best_candidate_to_explore = use_best_candidate_to_explore
+        self.score_function = score_function
+
+        # Validate and set score range for UCB
+        if score_range is None:
+            score_range = (0, 1)
+        if score_function == 'ucb':
+            assert score_range[1] - score_range[0] < float('inf'), \
+                "For UCB score function, score_range must be finite. Use 'mean' score function if you want to use unbounded scores."
+
+        self.ucb_exploration_constant = ucb_exploration_constant
+
+        # Initialize candidate tracking variables
+        self._exploration_candidates = None
+        self._exploration_candidates_priority = None
+        self._best_candidate = None
+        self._best_candidate_priority = None
+
+        # Initialize memory structures
+        self.long_term_memory = HeapMemory(size=long_term_memory_size)
+        self.short_term_memory = HeapMemory(size=short_term_memory_size)
+        self.short_term_memory_duration = short_term_memory_duration
+
+
     def update(self,
                samples: Union[Samples, None] = None,
                verbose: bool = False,
@@ -375,8 +430,8 @@ class PrioritySearch(SearchTemplate):
             max_mem_size = self.memory.size if self.memory.size is not None else float('inf')
             while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
-        
-        # TODO Log information about the update
+
+        # Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
             'short_term_memory_size': len(self.short_term_memory),  # size of the short-term memory
@@ -384,75 +439,17 @@ class PrioritySearch(SearchTemplate):
             'using_short_term_memory': self.memory is self.short_term_memory,  # whether the current memory is the short-term memory
             'using_long_term_memory': self.memory is self.long_term_memory,  # whether the current memory is the long-term memory
         }
-        # If using long-term memory, log the total number of samples in the long-term memory
-        if self.memory is self.long_term_memory:
-            # Now all the candidates are in the long-term memory. This logging is got before popping out the exploration candidates.
-            total_samples = sum([candidate.num_rollouts for _, candidate in self.memory])
-            info_log.update({'total_samples': total_samples})
+        total_samples = sum([candidate.num_rollouts for _, candidate in self.short_term_memory]) + \
+                        sum([candidate.num_rollouts for _, candidate in self.long_term_memory])
+        info_log.update({'total_samples': total_samples})
 
         # 4. Explore and exploit the priority queue
         self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
         self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
+
         info_log.update(info_exploit)  # add the info from the exploit step
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
-
-    def _initialize_search_parameters(self, 
-                                    num_candidates, 
-                                    num_proposals, 
-                                    validate_exploration_candidates, 
-                                    use_best_candidate_to_explore, 
-                                    score_function, 
-                                    score_range, 
-                                    ucb_exploration_constant, 
-                                    memory_size, 
-                                    short_term_memory_size, 
-                                    short_term_memory_duration):
-        """Initialize search parameters and memory structures.
-        
-        Args:
-            num_candidates (int): Number of candidates to propose for exploration
-            num_proposals (int): Number of proposals to generate per optimizer
-            validate_exploration_candidates (bool): Whether to validate the proposed parameters
-            use_best_candidate_to_explore (bool): Whether to use the best candidate as part of exploration
-            score_function (str): Function to compute the score for candidates ('mean' or 'ucb')
-            score_range (tuple): Range of scores for UCB computation
-            ucb_exploration_constant (float): Exploration constant for UCB score function
-            memory_size (int): Size of the long-term heap memory
-            short_term_memory_size (int): Size of the short-term memory
-            short_term_memory_duration (int): Duration to keep candidates in short-term memory
-        """
-        # Validate and adjust num_candidates based on number of optimizers
-        if num_candidates < len(self._optimizers):
-            print(f"Warning: num_candidates {num_candidates} is less than the number of optimizers {len(self._optimizers)}. Setting num_candidates to {len(self._optimizers)}.")
-            num_candidates = len(self._optimizers)
-        
-        # Set core parameters
-        self.num_candidates = num_candidates
-        self.num_proposals = num_proposals
-        self.validate_exploration_candidates = validate_exploration_candidates
-        self.use_best_candidate_to_explore = use_best_candidate_to_explore
-        self.score_function = score_function
-        
-        # Validate and set score range for UCB
-        if score_range is None:
-            score_range = (0, 1)
-        if score_function == 'ucb':
-            assert score_range[1] - score_range[0] < float('inf'), \
-                "For UCB score function, score_range must be finite. Use 'mean' score function if you want to use unbounded scores."
-        
-        self.ucb_exploration_constant = ucb_exploration_constant
-        
-        # Initialize candidate tracking variables
-        self._exploration_candidates = None
-        self._exploration_candidates_priority = None
-        self._best_candidate = None
-        self._best_candidate_priority = None
-        
-        # Initialize memory structures
-        self.long_term_memory = HeapMemory(size=memory_size)
-        self.short_term_memory = HeapMemory(size=short_term_memory_size)
-        self.short_term_memory_duration = short_term_memory_duration
 
     @property
     def memory(self):
@@ -561,8 +558,8 @@ class PrioritySearch(SearchTemplate):
                 update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
             except Exception as e:
                 print(f"Error calling optimizer.step: {e}")
-                return None
-                
+                update_dict = None
+
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
             # update_dict may only contain some of the parameters of the agent, we need to make sure it contains all the parameters
@@ -623,7 +620,7 @@ class PrioritySearch(SearchTemplate):
                                               description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
 
-        
+
         matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates + candidates, validate_samples.samples)
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
@@ -706,9 +703,9 @@ class PrioritySearch(SearchTemplate):
         mean_scores = [s for s in mean_scores if s is not None]  # filter out None scores
         info_dict = {
             'num_exploration_candidates': len(top_candidates),
-            'exploration_candidates_mean_priority': np.mean(priorities),  # list of priorities of the exploration candidates
-            'exploration_candidates_mean_score': np.mean(mean_scores) if mean_scores else None,  # list of mean scores of the exploration candidates
-            'exploration_candidates_average_num_rollouts': np.mean([c.num_rollouts for c in top_candidates]),
+            'exploration_candidates_mean_priority': safe_mean(priorities),  # list of priorities of the exploration candidates
+            'exploration_candidates_mean_score': safe_mean(mean_scores),  # list of mean scores of the exploration candidates
+            'exploration_candidates_average_num_rollouts': safe_mean([c.num_rollouts for c in top_candidates]),
         }
 
         return top_candidates, priorities, info_dict

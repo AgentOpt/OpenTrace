@@ -1,11 +1,28 @@
+from typing import List, Optional
 import asyncio
 import functools
 import warnings
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm_asyncio
 from opto.trace.bundle import ALLOW_EXTERNAL_DEPENDENCIES
 from opto.trace.modules import Module
 from opto.trainer.guide import Guide
+
+def safe_mean(x: List[float | None], missing_value=None) -> float | None:
+    """Compute the mean of a nested list or nd.array of floats or None, returning missing_value (default None) for an empty list.
+
+    Args:
+        x (List[float | None]): List of floats or None
+        missing_value (float | None, optional): Value to return if the list is empty or contains only None. Defaults to None.
+    Returns:
+        float | None: Mean of the list, or missing_value if the list is empty or contains only None
+    """
+    x = np.array(x)  # nd.array
+    x = x[x != None] # filter out None values
+    if x.size == 0:
+        return missing_value
+    return float(np.mean(x))
 
 def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, description = None, allow_sequential_run=True):
     """Run multiple functions in asynchronously.

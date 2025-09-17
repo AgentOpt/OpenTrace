@@ -163,7 +163,7 @@ class LiteLLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True) -> None:
+                 cache=True, max_retries=10, base_delay=1.0) -> None:
         if model is None:
             model = os.environ.get('TRACE_LITELLM_MODEL')
             if model is None:
@@ -172,11 +172,11 @@ class LiteLLM(AbstractModel):
 
         self.model_name = model
         self.cache = cache
-        factory = lambda: self._factory(self.model_name)  # an LLM instance uses a fixed model
+        factory = lambda: self._factory(self.model_name, max_retries=max_retries, base_delay=base_delay)  # an LLM instance uses a fixed model
         super().__init__(factory, reset_freq)
 
     @classmethod
-    def _factory(cls, model_name: str):
+    def _factory(cls, model_name: str, max_retries=10, base_delay=1.0):
         import litellm
         if model_name.startswith('azure/'):  # azure model
             azure_token_provider_scope = os.environ.get('AZURE_TOKEN_PROVIDER_SCOPE', None)
@@ -186,14 +186,14 @@ class LiteLLM(AbstractModel):
                 return lambda *args, **kwargs: retry_with_exponential_backoff(
                     lambda: litellm.completion(model_name, *args,
                                              azure_ad_token_provider=credential, **kwargs),
-                    max_retries=10,
-                    base_delay=1.0,
+                    max_retries=max_retries,
+                    base_delay=base_delay,
                     operation_name="LiteLLM_completion"
                 )
         return lambda *args, **kwargs: retry_with_exponential_backoff(
             lambda: litellm.completion(model_name, *args, **kwargs),
-            max_retries=10,
-            base_delay=1.0,
+            max_retries=max_retries,
+            base_delay=base_delay,
             operation_name="LiteLLM_completion"
         )
 
