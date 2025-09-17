@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
-from opto.features.priority_search.search_template import Samples, SearchTemplate
+from opto.features.priority_search.search_template import Samples, SearchTemplate, BatchRollout
 from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
@@ -132,9 +132,6 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         
         self.update_memory_with_regressor(verbose=verbose, **kwargs)
 
-        # 4. Explore and exploit the priority queue
-        self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
-        self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -147,7 +144,9 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         if self.memory is self.long_term_memory:
             total_samples = sum([candidate.num_rollouts for _, candidate in self.memory])
             info_log.update({'total_samples': total_samples})
-            
+        # 4. Explore and exploit the priority queue
+        self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
+        self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
         info_log.update(info_exploit)  # add the info from the exploit step
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
@@ -167,6 +166,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         # The current batch of samples can be used to validate the exploration candidates
         validate_samples = copy.copy(samples)
         matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates, validate_samples.samples)
+        # Append new candidates with out rollouts to matched_candidates_and_samples
+        matched_candidates_and_samples.update({c: [] for c in candidates })
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
             results[c] = [ r for rr in rollouts for r in rr.to_list()]  # we only need the list of dicts

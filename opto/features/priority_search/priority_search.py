@@ -375,9 +375,7 @@ class PrioritySearch(SearchTemplate):
             max_mem_size = self.memory.size if self.memory.size is not None else float('inf')
             while len(self.memory) < min(max_mem_size, self.num_candidates):
                 self.memory.push(self.max_score, ModuleCandidate(self.agent, optimizer=self.optimizer))  # Push the base agent as the first candidate (This gives the initialization of the priority queue)
-        # 4. Explore and exploit the priority queue
-        self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
-        self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
+        
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -388,9 +386,13 @@ class PrioritySearch(SearchTemplate):
         }
         # If using long-term memory, log the total number of samples in the long-term memory
         if self.memory is self.long_term_memory:
+            # Now all the candidates are in the long-term memory. This logging is got before popping out the exploration candidates.
             total_samples = sum([candidate.num_rollouts for _, candidate in self.memory])
             info_log.update({'total_samples': total_samples})
 
+        # 4. Explore and exploit the priority queue
+        self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
+        self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
         info_log.update(info_exploit)  # add the info from the exploit step
         info_log.update(info_explore)  # add the info from the explore step
         return self._best_candidate.update_dict, [c.get_module() for c in self._exploration_candidates], info_log
@@ -545,7 +547,7 @@ class PrioritySearch(SearchTemplate):
         optimizers = async_run([_backward]*n_batches,  # run the optimizer step for each agent in parallel
                                  args_list=args_list,
                                  max_workers=self.num_threads,  # use the number of threads specified in the class
-                                 description=None)
+                                 description='Backward')
         assert len(optimizers) == n_batches, "Number of optimizers must match number of batch rollouts."
         # need to copy optimizer for the n_proposals
         # NOTE when optimizer is deepcopied, its parameters are not copied.
