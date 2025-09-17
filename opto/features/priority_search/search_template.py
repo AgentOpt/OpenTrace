@@ -301,7 +301,11 @@ class SearchTemplate(Trainer):
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
                                num_samples=num_samples, description=description)
-        return np.mean([s for s in test_scores if s is not None])
+        # Filter out None values and convert to list to ensure proper filtering
+        valid_scores = [s for s in test_scores.flatten() if s is not None]
+        if len(valid_scores) == 0:
+            raise ValueError("All scores are None.")
+        return np.mean(valid_scores)
 
     def save(self, save_path):
         print(f"Saving algorithm state to {save_path} at iteration {self.n_iters}.")
