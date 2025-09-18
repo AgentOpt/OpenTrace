@@ -57,11 +57,10 @@ class ParameterContainer(NodeContainer):
                     method = attr.func
                     cls_method = False
                 if trainable_method(method):
-                    if not cls_method:
-                        raise ValueError(
-                            "A trainable method cannot be a wrapped by functools.partial."
-                        )
-                    parameters[name] = method.parameter
+                    raise ValueError(
+                        "A trainable method cannot be a wrapped by functools.partial."
+                    )
+
             elif isinstance(attr, FunModule):
                 # when a bundle method is not trainable
                 # it shows up as a FunModule attribute
@@ -100,13 +99,9 @@ class ParameterContainer(NodeContainer):
                     method = attr.func
 
                 if trainable_method(method):
-                    new_attr = getattr(new_container, name)
-                    if cls_method:
-                        setattr(new_attr.func.__self__, 'parameter', method.parameter)
-                    else:
-                        raise ValueError(
-                            "A trainable method cannot be a wrapped by functools.partial."
-                        )
+                    raise ValueError(
+                        "A trainable method cannot be a wrapped by functools.partial."
+                    )
             elif trainable_method(attr):  # method attribute
                 new_attr = getattr(new_container, name)
                 new_attr.parameter = attr.parameter
