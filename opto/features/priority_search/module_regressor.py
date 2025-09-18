@@ -1,22 +1,11 @@
 import numpy as np
-import copy
-from typing import Union
-from opto.trainer.loader import DataLoader
-from opto.trainer.utils import batch_run, async_run
+from opto.trainer.utils import  async_run
 from opto.optimizers.utils import print_color
-# from opto.trainer.evaluators import evaluate
 from typing import Union, List, Tuple, Dict, Any, Optional
-from collections import deque
-from opto.utils.llm import LLM # For the selector LLM
-# from opto.trace.nodes import ParameterNode
-import json
-# import warnings
-# from black import format_str, FileMode
-import random
-# import mathX
 from opto.utils.auto_retry import retry_with_exponential_backoff
 import litellm
 import time
+from opto.features.priority_search.priority_search import ModuleCandidate
 
 class ModuleCandidateRegressor:
     """
@@ -105,7 +94,7 @@ class ModuleCandidateRegressor:
             # Run embedding generation in parallel
             new_embeddings = async_run(
                 embedding_functions,
-                max_workers=1000,
+                max_workers=50,
                 description=f"Generating embeddings for {len(candidates_needing_embeddings)} candidates"
             )
             
@@ -113,17 +102,19 @@ class ModuleCandidateRegressor:
             for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
                 candidate.embedding = embedding
 
-    def update(self):
-        """Update the regression model parameters using the current memory with logistic regression."""
+    def update(self, memory: List[Tuple[float, ModuleCandidate]]):
+        """This function update the regression model parameters using the input batch of candidates.
+        Input:
+            batch: a list of candidates.
+        """
         start_time = time.time()
-        print_color("Updating regression model using the current memory with logistic regression...", "blue")
-        # Extract candidates from memory (memory contains (neg_score, candidate) tuples)
-        batch = [candidate for _, candidate in self.memory]
+        batch = [candidate for _, candidate in memory]
+        print_color("Updating regression model using the memory with logistic regression...", "blue")
         # Ensure all candidates have embeddings
         self._update_memory_embeddings_for_batch(batch)
         
         # Get training data from memory (only candidates with rollout data)
-        training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
+        training_candidates = [candidate for candidate in batch if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
         
         if len(training_candidates) == 0:
             print_color("Warning: No training data available for regression model.", "yellow")
@@ -131,7 +122,6 @@ class ModuleCandidateRegressor:
             elapsed_time = end_time - start_time
             print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
             return
-            
         # Extract raw binary training data from each candidate
         X_list = []
         y_list = []
@@ -171,7 +161,7 @@ class ModuleCandidateRegressor:
             elapsed_time = end_time - start_time
             print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
             return
-            
+        print_color(f"Updating regression model with {len(training_candidates)} candidates ({len(X_list)} binary samples)...", "blue")
         # Convert to numpy arrays
         X = np.array(X_list)
         y = np.array(y_list)
@@ -188,15 +178,6 @@ class ModuleCandidateRegressor:
         # print_color(f"Using L2 regularization strength: {self.regularization_strength}, learning rate: {self.learning_rate}", "blue")
         # print_color(f"Max iterations: {self.max_iterations}, tolerance: {self.tolerance}", "blue")
         
-        # Debug: Print initial weight statistics
-        initial_weight_norm = np.linalg.norm(self.weights)
-        # print_color(f"Initial weight norm: {initial_weight_norm:.6f}", "yellow")
-        
-        # Debug: Print embedding statistics
-        embedding_mean = np.mean(X)
-        embedding_std = np.std(X)
-        embedding_norm_mean = np.mean([np.linalg.norm(row) for row in X])
-        # print_color(f"Embedding stats - mean: {embedding_mean:.6f}, std: {embedding_std:.6f}, avg norm: {embedding_norm_mean:.6f}", "yellow")
         
         # Training loop until convergence with adaptive learning rate and early stopping
         prev_cost = float('inf')
@@ -253,15 +234,6 @@ class ModuleCandidateRegressor:
             self.weights -= self.learning_rate * dw
             self.bias -= self.learning_rate * db
             
-            # Print progress periodically
-            # if iteration == 0 or (iteration + 1) % max(1, min(50, self.max_iterations // 20)) == 0:
-            #     z_mean, z_std = np.mean(z), np.std(z)
-            #     weight_norm = np.linalg.norm(self.weights)
-                # print_color(f"Iteration {iteration + 1}: Cost: {total_cost:.6f} (change: {cost_change:.8f}), LR: {self.learning_rate:.6f}, Weight norm: {weight_norm:.6f}, Gradient norm: {gradient_norm:.8f}", "cyan")
-                # print_color(f"  Logits - mean: {z_mean:.6f}, std: {z_std:.6f}, range: [{np.min(z):.6f}, {np.max(z):.6f}]", "cyan")
-                # print_color(f"  Predictions - range: [{np.min(predictions):.6f}, {np.max(predictions):.6f}], mean: {np.mean(predictions):.6f}", "cyan")
-                # print_color(f"  Patience: {patience_counter}/{self.patience}", "cyan")
-            
             prev_cost = total_cost
         
         # Final status
@@ -275,11 +247,11 @@ class ModuleCandidateRegressor:
         elapsed_time = end_time - start_time
         print_color(f"Regressor update completed in {elapsed_time:.4f} seconds", "cyan")
     
-    def predict_scores(self,memory = None):
+    def predict_scores(self,memory):
         """Predict scores for all candidates in the memory."""
         # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
-        if memory is None:
-            memory = self.memory
+        if len(memory) == 0:
+            return
         batch = [candidate for _, candidate in memory]
 
         # Ensure all candidates have embeddings

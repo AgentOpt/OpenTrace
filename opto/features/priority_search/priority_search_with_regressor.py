@@ -39,7 +39,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               num_proposals: int = 1,  # number of proposals to generate per optimizer
               validate_exploration_candidates: bool = True,  # whether to validate the proposed parameters for exploration
               use_best_candidate_to_explore: bool = True,  # whether to use the best candidate as part of the exploration candidates
-              memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
+              long_term_memory_size: Optional[int] = None,  # size of the long-term heap memory to store the candidates; if None, no limit is set
               short_term_memory_size: Optional[int] = None,  # size of the short-term memory to store the most recent candidates; if None, no limit is set
               memory_update_frequency: Optional[int] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used.
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
@@ -76,7 +76,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             score_function=score_function,
             score_range=score_range,
             ucb_exploration_constant=ucb_exploration_constant,
-            memory_size=memory_size,
+            long_term_memory_size=long_term_memory_size,
             short_term_memory_size=short_term_memory_size,
             memory_update_frequency=memory_update_frequency
         )
@@ -133,7 +133,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
 
         self.update_memory_with_regressor(verbose=verbose, **kwargs)
-
+        self.print_memory_stats()
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -142,10 +142,9 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             'using_short_term_memory': self.memory is self.short_term_memory,  # whether the current memory is the short-term memory
             'using_long_term_memory': self.memory is self.long_term_memory,  # whether the current memory is the long-term memory
         }
-        # If using long-term memory, log the total number of samples in the long-term memory
-        if self.memory is self.long_term_memory:
-            total_samples = sum([candidate.num_rollouts for _, candidate in self.memory])
-            info_log.update({'total_samples': total_samples})
+        total_samples = sum([candidate.num_rollouts for _, candidate in self.short_term_memory]) + \
+                        sum([candidate.num_rollouts for _, candidate in self.long_term_memory])
+        info_log.update({'total_samples': total_samples})
         # 4. Explore and exploit the priority queue
         self._best_candidate, self._best_candidate_priority, info_exploit = self.exploit(verbose=verbose, **kwargs)  # get the best candidate (ModuleCandidate) from the priority queue
         self._exploration_candidates, self._exploration_candidates_priority, info_explore = self.explore(verbose=verbose, **kwargs)  # List of ModuleCandidates
@@ -189,18 +188,30 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         """ Update the priority queue with the regressor results.
         """
         print("--- Updating memory with regressor results...") if verbose else None
-        if self.memory is self.long_term_memory:    # Only update the regressor if we are using the long-term memory
-            self.regressor.update()
-        self.regressor.predict_scores(self.memory) # The only difference from the parent class
-        # Reorder the memory according to the predicted scores
-        # Extract candidates from memory tuples and reorder by predicted scores
-        candidates_with_scores = [(-candidate.predicted_score, candidate) for _, candidate in self.memory]
-        self.memory.memory = candidates_with_scores  # Update the internal list of HeapMemory
-        heapq.heapify(self.memory.memory)  # Heapify the internal list
+        # Use all data to update the regressor
+        self.regressor.update(self.long_term_memory.memory+self.short_term_memory.memory)
+        # Predict the scores for the long-term memory and the short-term memory
+        self.regressor.predict_scores(self.long_term_memory.memory)
+        self.regressor.predict_scores(self.short_term_memory.memory)
+        # Reorder both long_term_memory and short_term_memory according to the predicted scores
+        # Extract candidates from long_term_memory tuples and reorder by predicted scores
+        long_term_candidates_with_scores = [(-candidate.predicted_score, candidate) for _, candidate in self.long_term_memory.memory]
+        self.long_term_memory.memory = long_term_candidates_with_scores  # Update the internal list of HeapMemory
+        heapq.heapify(self.long_term_memory.memory)  # Heapify based on -score (first element of tuple)
+        
+        # Extract candidates from short_term_memory tuples and reorder by predicted scores
+        short_term_candidates_with_scores = [(-candidate.predicted_score, candidate) for _, candidate in self.short_term_memory.memory]
+        self.short_term_memory.memory = short_term_candidates_with_scores  # Update the internal list of HeapMemory
+        heapq.heapify(self.short_term_memory.memory)  # Heapify based on -score (first element of tuple)
 
     def print_memory_stats(self):
         # For debugging, print all candidates: number, mean_score(), num_rollouts, predicted_score. It is better to see an increasing trend in the predicted scores.
-        for i, (neg_predicted_score, candidate) in enumerate(self.memory):
+        print("--- Printing memory stats...")
+        print("Long-term memory:")
+        for i, (neg_predicted_score, candidate) in enumerate(self.long_term_memory.memory):
+            print(f"Candidate {i}, Mean Score: {candidate.mean_score()}, Num Rollouts: {candidate.num_rollouts}, Predicted Score: {-neg_predicted_score}")
+        print("Short-term memory:")
+        for i, (neg_predicted_score, candidate) in enumerate(self.short_term_memory.memory):
             print(f"Candidate {i}, Mean Score: {candidate.mean_score()}, Num Rollouts: {candidate.num_rollouts}, Predicted Score: {-neg_predicted_score}")
 
     # TODO refactor below to reuse scoring
