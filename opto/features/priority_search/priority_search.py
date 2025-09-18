@@ -52,26 +52,34 @@ class ModuleCandidate:
         """ Apply update to the base_module in place. """
         set_module_parameters(base_module or self.base_module, self.update_dict)
 
-    def __getstate__(self):
-        """ Get the state of the candidate for serialization. """
-        state = copy.deepcopy(self.__dict__)  # this will detach the nodes from the computation graph
-        return state
+    # def __getstate__(self):
+    #     """ Get the state of the candidate for serialization. """
+    #     state = copy.deepcopy(self.__dict__)  # this will detach the nodes from the computation graph
+    #     state['base_module'] = self.base_module
+    #     state = self.__dict__.copy()
+    #     return state
 
-    def __setstate__(self, state):
-        """ Set the state of the candidate from serialization. """
-        self.__dict__.update(state)
+    # def __setstate__(self, state):
+    #     """ Set the state of the candidate from serialization. """
+    #     self.__dict__.update(state)
 
-    def __deepcopy__(self, memo):
-        """ Create a deep copy, except for the base_module which is not copied, it is the original module. """
-        cls = self.__class__
-        result = cls.__new__(cls)
-        memo[id(self)] = result
-        for k, v in self.__dict__.items():
-            if k != 'base_module':
-                setattr(result, k, copy.deepcopy(v, memo))
-            else:
-                setattr(result, k, v)  # base_module is not copied, it is the original module
-        return result
+    # def __deepcopy__(self, memo):
+    #     """ Create a deep copy, except for the base_module which is not copied, it is the original module. """
+    #     cls = self.__class__
+    #     result = cls.__new__(cls)
+    #     memo[id(self)] = result
+    #     for k, v in self.__dict__.items():
+    #         if k != 'base_module':
+    #             setattr(result, k, copy.deepcopy(v, memo))
+    #         else:
+    #             setattr(result, k, v)  # base_module is not copied, it is the original module
+    #     return result
+
+    # def copy(self):
+    #     """ Create a shallow copy, except for the base_module which is not copied, it is the original module. """
+    #     new_obj = self.__class__.__new__(self.__class__)  # create a new instance of the same class
+    #     new_obj.__dict__.update(self.__dict__)
+    #     return new_obj
 
     def __eq__(self, other):
         """ Check if two candidates are equal based on their base_module and update_dict. """
@@ -802,13 +810,7 @@ class PrioritySearch(SearchTemplate):
             for k in rollout:
                 if k not in ['score']:
                     rollout[k] = None
-        def _copy(obj):
-            # We manually implement a shallow copy, since __getstate__ is overridden in ModuleCandidate.
-            new_obj = obj.__class__.__new__(obj.__class__)  # create a new instance of the same class
-            new_obj.__dict__.update(obj.__dict__)
-            return new_obj
-
-        candidate = _copy(candidate)  # make a copy of the candidate to avoid modifying the original one
+        candidate = copy.copy(candidate)  # make a copy of the candidate to avoid modifying the original one
         candidate.rollouts = copy.deepcopy(candidate.rollouts)  # deep copy the rollouts to avoid modifying the original one
         for rollout in candidate.rollouts:
             _process_rollout(rollout)
