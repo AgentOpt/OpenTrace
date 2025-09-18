@@ -44,20 +44,20 @@ def _llm_callable(messages, **kwargs):
     """
     problem = messages[1]['content']
 
-        # extract name from <variable name= name ... >
-        name = re.findall(r"<variable name=\"\s*(.*?)\" type=.*>", problem)
-        if name:
-            name = name[0]
-        else:
-            name = "unknown"
+    # extract name from <variable name= name ... >
+    name = re.findall(r"<variable name=\"\s*(.*?)\" type=.*>", problem)
+    if name:
+        name = name[0]
+    else:
+        name = "unknown"
 
-        return f"""
-        <reasoning> Dummy reasoning based on the input messages. </reasoning>
-        <variable>
-        <name> {name} </name>
-        <value> {suggested_value} </value>
-        </variable>
-        """
+    return f"""
+    <reasoning> Dummy reasoning based on the input messages. </reasoning>
+    <variable>
+    <name> {name} </name>
+    <value> {suggested_value} </value>
+    </variable>
+    """
 
      # Create a dummy LLM and an agent
     dummy_llm = DummyLLM(_llm_callable)
