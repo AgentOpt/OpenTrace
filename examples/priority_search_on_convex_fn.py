@@ -248,7 +248,7 @@ trainer.train(
     logger=logger,
     score_range=[-10, 10],
     # trainer kwargs
-    num_epochs=5,
+    num_epochs=3*4,
     batch_size=2,  # this is just for testing. effectively, this is the same batch_size=1 and num_proposals=4
     num_batches=2,
     verbose=False, #'output',

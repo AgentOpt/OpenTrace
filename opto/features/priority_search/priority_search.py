@@ -570,12 +570,7 @@ class PrioritySearch(SearchTemplate):
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
         def _step(n):
             optimizer = optimizers[n]
-            try:
-                update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
-            except Exception as e:
-                print(f"Error calling optimizer.step: {e}")
-                update_dict = None
-
+            update_dict = optimizer.step(verbose=verbose, num_threads=self.num_threads, bypassing=True, **kwargs)
             if not update_dict:  # if the optimizer did not propose any updates
                 return None # return None to indicate no updates were proposed
             # update_dict may only contain some of the parameters of the agent, we need to make sure it contains all the parameters
@@ -801,7 +796,13 @@ class PrioritySearch(SearchTemplate):
             for k in rollout:
                 if k not in ['score']:
                     rollout[k] = None
-        candidate = copy.copy(candidate)  # make a copy of the candidate to avoid modifying the original one
+        def _copy(obj):
+            # We manually implement a shallow copy, since __getstate__ is overridden in ModuleCandidate.
+            new_obj = obj.__class__.__new__(obj.__class__)  # create a new instance of the same class
+            new_obj.__dict__.update(obj.__dict__)
+            return new_obj
+
+        candidate = _copy(candidate)  # make a copy of the candidate to avoid modifying the original one
         candidate.rollouts = copy.deepcopy(candidate.rollouts)  # deep copy the rollouts to avoid modifying the original one
         for rollout in candidate.rollouts:
             _process_rollout(rollout)

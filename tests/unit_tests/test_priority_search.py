@@ -87,13 +87,13 @@ class PrioritySearch(_PrioritySearch):
 
     def exploit(self, **kwargs):
         print("[UnitTest] Exploit at iteration:", self.n_iters)
-        # if self.memory is self.long_term_memory and self.n_iters > 0:
-        #     for _, c in self.long_term_memory.memory:
-        #         for rollout in c.rollouts:
-        #             assert rollout['x'] is None
-        #             assert rollout['info'] is None
-        #             assert rollout['target'] is None
-        #             assert rollout['module'] is None
+        if self.n_iters == 0:
+            memory = self.memory.memory
+            _candidates = [c for _, c in memory]
+            # assert all candidates have the same hash, since they are all the same in this unit test
+            hashes = [hash(c) for c in _candidates]
+            assert len(hashes) > 1, "Expected more than one candidate in memory"
+            assert 1 == len(set(hashes)), "All candidates in memory should have the same hash"
 
         candidate, priority, info_dict = super().exploit(**kwargs)
         assert isinstance(candidate, ModuleCandidate), "Expected candidate to be an instance of ModuleCandidate"
