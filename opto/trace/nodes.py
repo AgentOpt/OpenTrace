@@ -68,6 +68,7 @@ class Graph:
     """
 
     TRACE = True  # When True, we trace the graph when creating MessageNode. When False, we don't trace the graph.
+    LEGACY_GRAPH_BEHAVIOR = False  # When True, we use the legacy graph behavior where nodes are not copied when used in multiple places.
 
     def __init__(self):
         """Initialize the Graph object.
@@ -111,7 +112,12 @@ class Graph:
         name, _ = node.name.split(":")
         if len(NAME_SCOPES) > 0:
             name = NAME_SCOPES[-1] + "/" + name
-        self._nodes[name].append(node)
+
+        if self.LEGACY_GRAPH_BEHAVIOR:
+            self._nodes[name].append(node)
+        else:
+            self._nodes[name].append(id(node))  # Store the id of the node to avoid memory issues
+
         node._name = (
             name + ":" + str(len(self._nodes[name]) - 1)
         )  # NOTE assume elements in self._nodes never get removed.
@@ -131,6 +137,9 @@ class Graph:
             The function assumes that the '_nodes' attribute is a dictionary where each key is a node name and the corresponding value is a list of nodes.
             The 'id' should be a valid index within the list of nodes for the given 'name'.
         """
+        if not self.LEGACY_GRAPH_BEHAVIOR:
+            raise ValueError("Graph.get is not supported when LEGACY_GRAPH_BEHAVIOR is False.")
+
         name, id = name.split(":")
         return self._nodes[name][int(id)]
 
@@ -141,6 +150,8 @@ class Graph:
         Returns:
             list: A list of all root nodes in the graph. A root node is identified by its `is_root` attribute.
         """
+        if not self.LEGACY_GRAPH_BEHAVIOR:
+            raise ValueError("Graph.roots is not supported when LEGACY_GRAPH_BEHAVIOR is False.")
         return [v for vv in self._nodes.values() for v in vv if v.is_root]
 
     def __str__(self):
