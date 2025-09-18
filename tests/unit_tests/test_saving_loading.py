@@ -128,7 +128,7 @@ def test_trainer_saving_loading():
     )
     agent.param._data = 10 # to simulate a change in the agent's parameters
 
-    algo.save('test_algo.pkl')
+    algo.save('./test_algo')
 
 
     # Load the algorithm and check if it works
@@ -141,12 +141,12 @@ def test_trainer_saving_loading():
         agent,
         optimizer,
     )
-    algo2.load('test_algo.pkl')
+    algo2.load('./test_algo')
 
     assert algo2.agent.param.data == 10, "Loaded agent's parameter does not match the saved one."
     assert algo2.optimizer.objective == 'fake objective', "Loaded optimizer's objective does not match the saved one."
 
-    os.remove('test_algo.pkl')
-    os.remove('test_algo.pkl_agent.module')
-    os.remove('test_algo.pkl_optimizer.optimizer')
-    os.remove('test_algo.pkl_validate_guide.guide')
+    os.remove('./test_algo')
+    os.remove('./test_algo_agent.module')
+    os.remove('./test_algo_optimizer.optimizer')
+    os.remove('./test_algo_validate_guide.guide')
