@@ -292,7 +292,7 @@ class Model(Module):
         parameters_dict = state['parameters_dict']
         non_parameters_dict = state['non_parameters_dict']
         self._set(parameters_dict)
-        # self.__dict__.update(non_parameters_dict)
+        self.__dict__.update(non_parameters_dict)
 
     def save(self, file_name: str):
         directory = os.path.dirname(file_name)
