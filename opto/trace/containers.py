@@ -50,8 +50,17 @@ class ParameterContainer(NodeContainer):
                 continue
 
             if isinstance(attr, functools.partial):  # this is a class method
-                method = attr.func.__self__
+                if hasattr(attr.func, '__self__'):
+                    method = attr.func.__self__
+                    cls_method = True
+                else:
+                    method = attr.func
+                    cls_method = False
                 if trainable_method(method):
+                    if not cls_method:
+                        raise ValueError(
+                            "A trainable method cannot be a wrapped by functools.partial."
+                        )
                     parameters[name] = method.parameter
             elif isinstance(attr, FunModule):
                 # when a bundle method is not trainable
@@ -82,11 +91,22 @@ class ParameterContainer(NodeContainer):
 
         # Set the parameters to the original ones
         for name, attr in inspect.getmembers(self):
-            if isinstance(attr, functools.partial):  # this is a class method
-                method = attr.func.__self__
+            if isinstance(attr, functools.partial):  # this may be a class method
+                if hasattr(attr.func, '__self__'):
+                    cls_method = True
+                    method = attr.func.__self__
+                else:
+                    cls_method = False
+                    method = attr.func
+
                 if trainable_method(method):
                     new_attr = getattr(new_container, name)
-                    setattr(new_attr.func.__self__, 'parameter', method.parameter)
+                    if cls_method:
+                        setattr(new_attr.func.__self__, 'parameter', method.parameter)
+                    else:
+                        raise ValueError(
+                            "A trainable method cannot be a wrapped by functools.partial."
+                        )
             elif trainable_method(attr):  # method attribute
                 new_attr = getattr(new_container, name)
                 new_attr.parameter = attr.parameter
