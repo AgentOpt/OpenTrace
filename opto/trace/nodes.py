@@ -2088,6 +2088,9 @@ class MessageNode(Node[T]):
         # Add parents if we are tracing
         for k, v in self._inputs.items():
             assert isinstance(v, Node), f"Input {k} is not a Node."
+        unique_inputs = set(self._inputs.values())
+        # NOTE this handles the case where the same node is passed multiple times as input
+        for v in unique_inputs:
             self._add_parent(v)
             self._add_dependencies(
                 v
