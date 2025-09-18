@@ -337,6 +337,10 @@ class PrioritySearch(SearchTemplate):
             memory_update_frequency=memory_update_frequency
         )
 
+        self._enforce_using_data_collecting_candidates = True
+        # enforce only data collecting candidates are used in in calling match_candidates_and_samples
+        # this attribute is purposefully designed to be only modified by subclasses, not through input arguments.
+
         super().train(guide=guide,
                       train_dataset=train_dataset,
                       validate_dataset=validate_dataset,
@@ -670,9 +674,11 @@ class PrioritySearch(SearchTemplate):
                 raise ValueError(f"ModuleCandidate with id {key} not found in results. Samples are not collected by known candidates.")
             # Append the rollouts to the list of rollouts for the key
             _results[ids[key]].append(rollouts)
-        # assert all candidates have at least one rollout
-        for c in candidates:
-            assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
+
+        if self._enforce_using_data_collecting_candidates:
+            # assert all candidates have at least one rollout
+            for c in candidates:
+                assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
 
         return _results
 
