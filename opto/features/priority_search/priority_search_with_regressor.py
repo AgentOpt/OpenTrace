@@ -166,9 +166,10 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
         # The current batch of samples can be used to validate the exploration candidates
         validate_samples = copy.copy(samples)
-        matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates, validate_samples.samples)
-        # Append new candidates with out rollouts to matched_candidates_and_samples
-        matched_candidates_and_samples.update({c: [] for c in candidates })
+        # Here we should set self._enforce_using_data_collecting_candidates to False
+        matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates+candidates, validate_samples.samples)
+        # # Append new candidates with out rollouts to matched_candidates_and_samples
+        # matched_candidates_and_samples.update({c: [] for c in candidates })
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
             results[c] = [ r for rr in rollouts for r in rr.to_list()]  # we only need the list of dicts
