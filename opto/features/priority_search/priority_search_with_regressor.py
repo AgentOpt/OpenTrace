@@ -83,7 +83,6 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         self._enforce_using_data_collecting_candidates = False
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
         self.regressor = ModuleCandidateRegressor(
-            memory=self.long_term_memory,
             embedding_model=regressor_embedding_model,
             num_threads=num_threads,
             learning_rate=regressor_learning_rate,

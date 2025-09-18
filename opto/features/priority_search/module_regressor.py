@@ -14,10 +14,9 @@ class ModuleCandidateRegressor:
     predict_scores has no parameters, it could return predicted scores for all candidates in the memory. 
     predict_scores_for_batch has one parameter, a batch of candidates, it could return predicted scores for the batch of candidates."""
     
-    def __init__(self, memory=None, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
         # In the regressor, no need for calling LLM to make the prediction. So we could predict the entire memory at once.
         self.max_candidates_to_predict = 500
-        self.memory = memory
         self.embedding_model = embedding_model
         self.num_threads = num_threads
         self.learning_rate = learning_rate
