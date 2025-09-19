@@ -141,13 +141,17 @@ class Graph:
     """
 
     TRACE = True  # When True, we trace the graph when creating MessageNode. When False, we don't trace the graph.
+    LEGACY_GRAPH_BEHAVIOR = False  # When True, we use the legacy graph behavior where nodes are stored in lists. When False, we only store the count of nodes to save memory.
 
     def __init__(self):
         """Initialize the Graph object.
 
         The initialization sets up the `_nodes` attribute as a defaultdict of lists to store nodes by their names.
         """
-        self._nodes = defaultdict(list)  # a lookup table to find nodes by name
+        if self.LEGACY_GRAPH_BEHAVIOR:
+            self._nodes = defaultdict(list)  # a lookup table to find nodes by name
+        else:
+            self._nodes = defaultdict(lambda: 0)  # a lookup table to find nodes by name
 
     def clear(self):
         """Remove all nodes from the graph.
@@ -161,10 +165,12 @@ class Graph:
             The function is called in unit tests to reset the state of the graph between test cases,
             ensuring that each test runs with a clean slate and is not affected by the state left by previous tests.
         """
-        for node in self._nodes.values():
-            del node
-        self._nodes = defaultdict(list)
-        # self._levels = defaultdict(list)
+        if self.LEGACY_GRAPH_BEHAVIOR:
+            for node in self._nodes.values():
+                del node
+            self._nodes = defaultdict(list)
+        else:
+            self._nodes = defaultdict(lambda: 0)
 
     def register(self, node):
         """Add a node to the graph.
@@ -184,11 +190,36 @@ class Graph:
         name, _ = node.name.split(":")
         if len(NAME_SCOPES) > 0:
             name = NAME_SCOPES[-1] + "/" + name
-        self._nodes[name].append(node)
+
+        if self.LEGACY_GRAPH_BEHAVIOR:
+            self._nodes[name].append(node)
+        else:
+            self._nodes[name] += 1  # Store the id of the node to avoid memory issues
+
         node._name = (
-            name + ":" + str(len(self._nodes[name]) - 1)
+            name + ":" + str(self.count(name) - 1)
         )  # NOTE assume elements in self._nodes never get removed.
         # self._levels[node._level].append(node)
+
+    def count(self, name):
+        """Count the number of nodes with a given name in the graph.
+
+        Args:
+            name (str): The name of the nodes to count.
+
+        Returns:
+            int: The number of nodes with the given name.
+
+        Notes:
+            The count function checks if the input name is a string.
+            If it is, it returns the length of the list of nodes associated with that name in the `_nodes` dictionary.
+            If the input name is not a string, it raises a ValueError indicating that the name must be a string.
+        """
+        assert name in self._nodes, f"Name {name} not found in graph."
+        if self.LEGACY_GRAPH_BEHAVIOR:
+            return len(self._nodes[name])
+        else:
+            return self._nodes[name]
 
     def get(self, name):
         """Retrieve a node from the graph by its name.
@@ -204,6 +235,8 @@ class Graph:
             The function assumes that the '_nodes' attribute is a dictionary where each key is a node name and the corresponding value is a list of nodes.
             The 'id' should be a valid index within the list of nodes for the given 'name'.
         """
+        if not self.LEGACY_GRAPH_BEHAVIOR:
+            raise ValueError("Graph.get is not supported when LEGACY_GRAPH_BEHAVIOR is False.")
         name, id = name.split(":")
         return self._nodes[name][int(id)]
 
@@ -214,6 +247,8 @@ class Graph:
         Returns:
             list: A list of all root nodes in the graph. A root node is identified by its `is_root` attribute.
         """
+        if not self.LEGACY_GRAPH_BEHAVIOR:
+            raise ValueError("Graph.roots is not supported when LEGACY_GRAPH_BEHAVIOR is False.")
         return [v for vv in self._nodes.values() for v in vv if v.is_root]
 
     def __str__(self):
@@ -231,7 +266,10 @@ class Graph:
             int: The total number of nodes in the graph by summing the lengths of all lists in the `_nodes` dictionary.
         """
         # This is the number of nodes in the graph
-        return sum([len(v) for v in self._nodes.values()])
+        if self.LEGACY_GRAPH_BEHAVIOR:
+            return sum([len(v) for v in self._nodes.values()])
+        else:
+            return sum(self._nodes.values())
 
 
 GRAPH = Graph()  # This is a global registry of all the nodes.
