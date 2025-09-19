@@ -800,6 +800,18 @@ class FunModule(Module):
     def detach(self):
         return copy.deepcopy(self)
 
+    def __deepcopy__(self, memo):
+        # deepcopy everything except for _ldict
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if k == "_ldict":
+                setattr(result, k, v.copy())  # reset _ldict
+            else:
+                setattr(result, k, copy.deepcopy(v, memo))
+        return result
+
     def generate_comment(
         self,
         code: str,
