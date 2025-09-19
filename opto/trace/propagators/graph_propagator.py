@@ -15,7 +15,37 @@ from opto.trace.utils import sum_feedback, contain
 
 @dataclass
 class TraceGraph(AbstractFeedback):
-    """Feedback container used by GraphPropagator."""
+    """Container for subgraph feedback used by GraphPropagator.
+
+    Represents a subgraph of the computation graph along with associated
+    user feedback. Used to propagate structured feedback through the graph.
+
+    Attributes
+    ----------
+    graph : list[tuple[int, Node]]
+        Priority queue of nodes ordered by level from roots to leaves.
+        Each tuple contains (level, node).
+    user_feedback : Any
+        User-provided feedback associated with this subgraph.
+
+    Methods
+    -------
+    empty()
+        Check if the graph is empty.
+    expand(node)
+        Extract and return the subgraph within a MessageNode.
+    visualize(simple_visualization, reverse_plot, print_limit)
+        Generate a Graphviz visualization of the subgraph.
+
+    Notes
+    -----
+    TraceGraph implements feedback aggregation through the __add__ method,
+    allowing multiple subgraphs to be combined while maintaining topological
+    order and preserving user feedback.
+
+    The expand() class method enables recursive exploration of nested
+    computation graphs within traceable MessageNodes.
+    """
 
     graph: List[
         Tuple[int, Node]
@@ -23,6 +53,13 @@ class TraceGraph(AbstractFeedback):
     user_feedback: Any
 
     def empty(self):
+        """Check if the trace graph is empty.
+
+        Returns
+        -------
+        bool
+            True if both graph and user_feedback are empty.
+        """
         return len(self.graph) == 0 and self.user_feedback is None
 
     def __add__(self, other):
@@ -53,7 +90,28 @@ class TraceGraph(AbstractFeedback):
 
     @classmethod
     def expand(cls, node: MessageNode):
-        """Return the subgraph within a MessageNode."""
+        """Extract the subgraph within a traceable MessageNode.
+
+        Parameters
+        ----------
+        node : MessageNode
+            The node to expand, must have traceable code.
+
+        Returns
+        -------
+        TraceGraph
+            The extracted subgraph if node contains traceable code,
+            otherwise an empty TraceGraph.
+
+        Notes
+        -----
+        This method:
+        1. Identifies dependencies within the node
+        2. Temporarily clears existing feedback
+        3. Runs backward pass to collect internal structure
+        4. Restores original feedback
+        5. Returns the collected subgraph
+        """
         assert isinstance(node, MessageNode)
         if isinstance(node.info["output"], MessageNode):
             # these are the nodes where we will collect the feedback
@@ -86,6 +144,22 @@ class TraceGraph(AbstractFeedback):
         return (node.level, node)
 
     def visualize(self, simple_visualization=True, reverse_plot=False, print_limit=100):
+        """Generate a Graphviz visualization of the trace graph.
+
+        Parameters
+        ----------
+        simple_visualization : bool, default=True
+            If True, skip identity operators in visualization.
+        reverse_plot : bool, default=False
+            If True, plot edges from child to parent.
+        print_limit : int, default=100
+            Maximum characters to display for node content.
+
+        Returns
+        -------
+        Digraph
+            Graphviz Digraph object for rendering.
+        """
         from graphviz import Digraph
 
         nvsg = NodeVizStyleGuideColorful(print_limit=print_limit)

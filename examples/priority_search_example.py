@@ -1,53 +1,12 @@
 import datasets
 import numpy as np
 from opto import trace
-from opto.utils.llm import LLM, LiteLLM
+from opto.utils.llm import LLM
+from opto.features.predefined_agents import BasicLearner
 from opto.optimizers import OptoPrimeV2 as OptoPrime
 from opto.features.priority_search import PrioritySearch as SearchAlgorithm
 from opto.trainer.loggers import TensorboardLogger
 from opto.trainer.guide import LLMJudge
-from typing import Any
-
-
-@trace.model
-class Learner:
-    """ A basic LLM agent. """
-
-    def __init__(self, system_prompt: str = "You're a helpful agent",
-                 user_prompt_template: str = "Query: {message}",
-                 llm: LLM = None):
-        self.system_prompt = trace.node(system_prompt, trainable=True)
-        self.user_prompt_template = trace.node(user_prompt_template)
-        self.llm = llm or LLM()
-
-    @trace.bundle()
-    def model(self, system_prompt: str, user_prompt_template: str, message: str) -> str:
-        """Call the LLM model.
-
-        Args:
-            system_prompt: the system prompt to the agent. By tuning this prompt, we can control the behavior of the agent. For example, it can be used to provide instructions to the agent (such as how to reason about the problem, how to answer the question), or provide in-context examples of how to solve the problem.
-            user_prompt_template: the user prompt template to the agent. It is used as formatting the input to the agent as user_prompt_template.format(message=message).
-            message: the input to the agent. It can be a query, a task, a code, etc.
-        Returns:
-            The response from the agent.
-        """
-
-        if '{message}' not in user_prompt_template:
-            raise ValueError("user_prompt_template must contain '{message}'")
-
-        response = self.llm(
-            messages=[{"role": "system", "content": system_prompt},
-                      {"role": "user", "content": user_prompt_template.format(message=message)}]
-        )
-        return response.choices[0].message.content
-
-    def forward(self, message: Any) -> Any:
-        """ Forward pass of the agent. """
-        return self.model(self.system_prompt, self.user_prompt_template, message)
-
-
-Guide = LLMJudge
-Logger = TensorboardLogger
 
 
 def main():
@@ -66,44 +25,40 @@ def main():
     num_threads = 10
     datasize = 5
     verbose = True
-    teacher_model = None  # use default model
-    student_model = None  # use default model
-    optimizer_model = None  # use default model
-
 
     np.random.seed(seed)
 
-    # In this example, we use the GSM8K dataset, which is a dataset of math word problems.
-    # We will look the training error of the agent on a small portion of this dataset.
+    # In this example, we use the BBEH dataset
     train_dataset = datasets.load_dataset('BBEH/bbeh')['train'][:datasize]
     train_dataset = dict(inputs=train_dataset['input'], infos=train_dataset['target'])
-    test_dataset = train_dataset
 
-    agent = Learner(llm=LLM(student_model))
-    guide = Guide(llm=LLM(teacher_model))
-    optimizer = OptoPrime(agent.parameters(), llm=LLM(optimizer_model))
-    logger = Logger(verbose=verbose)
-             # set use_json_object_format=False if LLM does not support JSON object format
+    agent = BasicLearner(llm=LLM())
+    guide = LLMJudge(llm=LLM())
+    optimizer = OptoPrime(agent.parameters(), llm=LLM())
+    logger = TensorboardLogger(verbose=verbose)
 
     alg = SearchAlgorithm(
-            agent=agent,
-            optimizer=optimizer,
-            logger=logger)
+        agent=agent,
+        optimizer=optimizer,
+        logger=logger
+    )
 
-    alg.train(guide,
-              train_dataset,
-              num_epochs=num_epochs,
-              batch_size=batch_size,
-              eval_frequency=eval_frequency,
-              test_dataset=test_dataset,
-              num_threads=num_threads,
-              sub_batch_size=sub_batch_size,
-              num_proposals=num_proposals,
-              num_candidates=num_candidates,
-              score_range=score_range,
-              num_eval_samples=num_eval_samples,
-              score_function=score_function,
-              verbose='output' if verbose else False)
+    alg.train(
+        guide,
+        train_dataset,
+        num_epochs=num_epochs,
+        batch_size=batch_size,
+        eval_frequency=eval_frequency,
+        test_dataset=train_dataset,
+        num_threads=num_threads,
+        sub_batch_size=sub_batch_size,
+        num_proposals=num_proposals,
+        num_candidates=num_candidates,
+        score_range=score_range,
+        num_eval_samples=num_eval_samples,
+        score_function=score_function,
+        verbose='output' if verbose else False
+    )
 
 
 if __name__ == "__main__":

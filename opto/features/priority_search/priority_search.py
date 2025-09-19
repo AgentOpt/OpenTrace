@@ -12,17 +12,60 @@ from opto.features.priority_search.utils import set_module_parameters, remap_upd
 
 
 class ModuleCandidate:
-    """ A container used by PrioritySearch to store a candidate module as (its base module and update dictionary) and its statistics. """
+    """Container for storing candidate modules with their parameters and performance statistics.
+    
+    This class represents a candidate agent configuration consisting of a base module
+    and an update dictionary that modifies its parameters. It tracks performance
+    statistics through rollouts and provides confidence interval calculations.
+
+    Parameters
+    ----------
+    base_module : trace.Module
+        The base module to use as a template for the candidate.
+    update_dict : dict[ParameterNode, Any], optional
+        Dictionary of parameter updates to apply to the base module, by default None.
+
+    Attributes
+    ----------
+    base_module : trace.Module
+        The original module template.
+    update_dict : dict[ParameterNode, Any]
+        Parameter updates mapped to the base module's parameters.
+    rollouts : list[dict]
+        Performance statistics from agent evaluations.
+    created_time : float
+        Timestamp when the candidate was created.
+
+    Notes
+    -----
+    The update dictionary is automatically remapped to ensure compatibility with
+    the base module's parameter structure. Rollouts store detailed execution
+    information including modules, inputs, targets, scores, and feedback.
+    """
 
     def __init__(self,
                  base_module: Optional[trace.Module],
                  update_dict: Optional[Dict[ParameterNode, Any]] = None,
                  ):
-        """ A candidate module with its base module and update dictionary.
-        Args:
-            base_module (trace.Module): The base module to use as a template for the candidate.
-            update_dict (dict): A dictionary of ParameterNode: value pairs to update the base module; the key can be a deep copy of the base module's parameters.
-            stats (dict): A dictionary of statistics about the candidate.
+        """Initialize a module candidate with base module and parameter updates.
+
+        Parameters
+        ----------
+        base_module : trace.Module
+            The base module to use as a template for the candidate.
+        update_dict : dict[ParameterNode, Any], optional
+            Dictionary of parameter updates to apply, by default None.
+
+        Raises
+        ------
+        AssertionError
+            If base_module is not a trace.Module instance.
+
+        Notes
+        -----
+        The update dictionary is automatically remapped to ensure parameter
+        compatibility with the base module. Internal tracking variables for
+        confidence calculations are initialized.
         """
         assert isinstance(base_module, trace.Module), "base_module must be a trace.Module."
         self.base_module = base_module
@@ -35,15 +78,36 @@ class ModuleCandidate:
         self._confidence_interval = None
 
     def get_module(self):
-        """ Apply the update_dict to the base_module and return the updated module.
-        A new module is always created so the base_module is not modified.
-        The new module has a new attribute _module_candidate which is this candidate."""
+        """Create and return an updated module with applied parameter changes.
+
+        Returns
+        -------
+        trace.Module
+            New module instance with parameters updated according to update_dict.
+
+        Notes
+        -----
+        A new module is always created to avoid modifying the base module.
+        The returned module includes a special attribute marking its candidate ID
+        for tracking purposes in the priority search algorithm.
+        """
         module = create_module_from_update_dict(self.base_module, self.update_dict) if self.update_dict else copy.deepcopy(self.base_module)  #
         setattr(module, '__TRACE_RESERVED_module_candidate_id', id(self))
         return module  # return the updated module
 
     def apply_update(self, base_module=None):
-        """ Apply update to the base_module in place. """
+        """Apply parameter updates to a module in place.
+
+        Parameters
+        ----------
+        base_module : trace.Module, optional
+            Module to update, uses self.base_module if None, by default None.
+
+        Notes
+        -----
+        This method modifies the target module's parameters directly using
+        the stored update dictionary.
+        """
         set_module_parameters(base_module or self.base_module, self.update_dict)
 
     def __deepcopy__(self, memo):
@@ -76,7 +140,26 @@ class ModuleCandidate:
         return hash(frozenset(self.update_dict.items()))
 
     def add_rollouts(self, rollouts: List[Dict[str, Any]]):
-        """ Add rollouts to the candidate. """
+        """Add performance rollouts to the candidate for statistics tracking.
+
+        Parameters
+        ----------
+        rollouts : list[dict[str, Any]]
+            List of rollout dictionaries containing execution results.
+
+        Raises
+        ------
+        AssertionError
+            If rollouts is not a list or contains non-dict elements.
+            If rollout dicts missing required keys: 'module', 'x', 'info', 
+            'target', 'score', 'feedback'.
+
+        Notes
+        -----
+        Each rollout dictionary must contain complete execution information.
+        Adding rollouts resets the confidence interval cache and increments
+        the update counter.
+        """
         assert isinstance(rollouts, list), "rollouts must be a list of dicts."
         assert all(isinstance(r, dict) for r in rollouts), "All rollouts must be dicts."
         # Each rollout is a dict with keys: 'module', 'x', 'info', 'target', 'score', 'feedback'
@@ -88,25 +171,51 @@ class ModuleCandidate:
         self._n_updates += 1  # increment the number of updates
 
     def mean_score(self):
-        """ Compute the score of the candidate based on the rollouts. """
+        """Calculate the mean performance score from rollout statistics.
+
+        Returns
+        -------
+        float or None
+            Average score across all rollouts, or None if no rollouts exist.
+
+        Notes
+        -----
+        This is the primary performance metric used for ranking candidates
+        in the priority queue.
+        """
         if not self.rollouts:
             return None
         scores = [r['score'] for r in self.rollouts]
         return np.mean(scores) if scores else None
 
     def compute_score_confidence(self, min_score, max_score, scaling_constant=1.0):
-        """Compute the UCB, mean, LCB score for the candidate. After queried, the number of confidence queries is incremented.
+        """Compute Upper and Lower Confidence Bounds for multi-armed bandit selection.
 
-        UCB = mean_score + scaling_constant * sqrt(ln(total_trials) / candidate_trials) * (max_score - min_score)
-        UCB = clip(UCB, min_score, max_score)
+        Calculates confidence intervals using Hoeffding's inequality to balance
+        exploration and exploitation in candidate selection.
 
-        LCB = mean_score - scaling_constant * sqrt(ln(total_trials) / candidate_trials) * (max_score - min_score)
-        LCB = clip(LCB, min_score, max_score)
+        Parameters
+        ----------
+        min_score : float
+            Minimum possible score value for clipping.
+        max_score : float
+            Maximum possible score value for clipping.
+        scaling_constant : float, optional
+            Exploration constant controlling confidence width, by default 1.0.
 
-        Args:
-            candidate (ModuleCandidate): The candidate for which to compute the UCB score.
-        Returns:
-            float: The computed UCB score for the candidate.
+        Returns
+        -------
+        tuple[float, float, float]
+            Lower confidence bound, mean score, upper confidence bound.
+
+        Notes
+        -----
+        Uses the formula:
+        - UCB = mean + scaling * sqrt(ln(total_queries) / trials) * (max - min)
+        - LCB = mean - scaling * sqrt(ln(total_queries) / trials) * (max - min)
+        
+        Both bounds are clipped to [min_score, max_score]. The confidence query
+        counter is incremented after each call for proper union bound calculation.
         """
         # Get scores from rollouts
         scores = [r['score'] for r in self.rollouts]
@@ -157,24 +266,74 @@ class ModuleCandidate:
         return self._n_updates
 
 class HeapMemory:
-    # This is a basic implementation of a heap memory that uses a priority queue to store candidates.
-    # Later on this will be replaced by a memory DB.
+    """Priority queue implementation for storing and retrieving module candidates.
+    
+    This class provides a max-heap interface using Python's min-heap heapq module
+    by storing negative scores. It maintains the best-performing candidates with
+    optional size limits for memory efficiency.
 
-    # NOTE that the heap memory is a max-heap, so we store negative scores to use the default min-heap behavior of heapq.
+    Parameters
+    ----------
+    size : int, optional
+        Maximum number of items to store in the heap, by default None (unlimited).
+
+    Attributes
+    ----------
+    memory : list
+        Internal heap storage containing (negative_score, candidate) tuples.
+    size : int or None
+        Maximum heap size limit.
+
+    Notes
+    -----
+    Since heapq implements a min-heap, scores are stored as negative values to
+    achieve max-heap behavior. This ensures the highest-scoring candidates are
+    prioritized for selection.
+    """
     def __init__(self, size=None):
-        """ Initialize an empty heap memory. """
+        """Initialize an empty heap memory with optional size limit.
+
+        Parameters
+        ----------
+        size : int, optional
+            Maximum number of items to store, by default None (unlimited).
+        """
         self.memory = []
         self.size = size  # Optional size limit for the heap memory
 
     def push(self, score, data):
-        """ Push an item to the heap memory. """
+        """Add an item to the heap memory with the given score.
+
+        Parameters
+        ----------
+        score : float
+            Priority score for the item (higher scores have higher priority).
+        data : Any
+            The item to store in the heap.
+
+        Notes
+        -----
+        The score is negated before storage to achieve max-heap behavior.
+        If the heap exceeds the size limit, it's truncated to maintain the limit.
+        """
         heapq.heappush(self.memory, (-score, data))
         if self.size is not None and len(self.memory) > self.size:
             # NOTE a heuristic for now
             self.memory = self.memory[:self.size]  # Keep only the top `size` items
 
     def pop(self):
-        """ Pop the top item from the heap memory. """
+        """Remove and return the highest priority item from the heap.
+
+        Returns
+        -------
+        tuple[float, Any]
+            The (negative_score, data) tuple of the highest priority item.
+
+        Raises
+        ------
+        IndexError
+            If the heap is empty.
+        """
         if not self.memory:
             raise IndexError("pop from an empty heap memory")
         return heapq.heappop(self.memory)
@@ -192,29 +351,64 @@ class HeapMemory:
         return iter(self.memory)
 
     def best(self):
-        """ Return the best item in the heap memory without removing it. """
+        """Return the highest priority item without removing it from the heap.
+
+        Returns
+        -------
+        tuple[float, Any]
+            The (negative_score, data) tuple of the highest priority item.
+
+        Raises
+        ------
+        IndexError
+            If the heap is empty.
+        """
         if not self.memory:
             raise IndexError("best from an empty heap memory")
         return self.memory[0]
 
 
 class PrioritySearch(SearchTemplate):
-    """ A search algorithm that uses a priority queue to explore the parameter space and propose new candidates.
+    """Priority-based search algorithm for exploring parameter space and optimizing agents.
+    
+    This algorithm uses a priority queue to systematically explore the parameter space
+    through a cycle of proposal generation, validation, and candidate ranking. It balances
+    exploration of new parameter configurations with exploitation of high-performing ones.
 
-        It provides a scalable template for implementing search algorithms based on asynchronous generation, validation, and testing.
-        In each iteration,
-            1. It proposes a best agent and a set of `num_candidates` exploration agents that have the highest scores in the priority queue.
-            2. The best agent is tested for performance if eval_frequency is met.
-            3. A minibatch of `batch_size` samples are drawn from the training dataset, and the exploration agents are run on the samples. This creates a set of agent rollouts, where each rollout contains the agent module, input, info, target, score, and feedback. For each agent, rollouts of size `sub_batch_size` are grouped together as a connected subgraph (represented as the RolloutsGraph object). In total, this step creates `num_subgraphs = num_candidates * ceil(batch_size / sub_batch_size)` subgraphs.
-            4. Optimizer is run on each subgraph to propose new parameters for the agents. `num_proposals` proposals are generated for each subgraph. This results in `num_subgraphs * num_proposals` total proposals.
-            5. The proposed parameters are validated by running the agents on the validation dataset, which can be the current batch or a separate validation dataset when provided. When validate_proposals is set to True, the exploration candidates are also validated.
-            6. The validation results are used to update the priority queue, which stores the candidates and their scores. The candidates are stored as ModuleCandidate objects, which contain the base module, update dictionary, and rollouts (i.e. raw statistics of the candidate).
+    The algorithm operates in iterative cycles:
+    
+    1. **Exploitation**: Select the best-performing candidate from the priority queue
+    2. **Exploration**: Choose top candidates for parameter space exploration
+    3. **Proposal Generation**: Use optimizers on collected samples to propose new parameters
+    4. **Validation**: Evaluate proposed parameters on validation data
+    5. **Memory Update**: Update priority queue with validation results
+    
+    Each iteration processes minibatches of training data, creating rollout graphs that
+    capture agent execution statistics. These rollouts inform the optimization process
+    and candidate evaluation.
 
-        This algorithm template can be subclassed to implement specific search algorithms by overriding the `exploit`, `explore`, and `compute_priority` methods.
-        The `exploit` method is used to select the best candidate from the priority queue, the `explore` method is used to generate new candidates from the priority queue, and
-        the `compute_priority` method is used to compute the score for ranking in the priority queue.
+    Attributes
+    ----------
+    memory : HeapMemory
+        Priority queue storing module candidates with their performance scores.
+    num_candidates : int
+        Number of exploration candidates to select per iteration.
+    num_proposals : int
+        Number of parameter proposals per optimizer call.
+    score_function : str
+        Scoring method for candidate ranking ('mean' or 'ucb').
+    ucb_exploration_constant : float
+        Exploration parameter for Upper Confidence Bound scoring.
 
-        By default, `compute_priority` computes the mean score of the rollouts. `exploit` simply returns the best candidate from the priority queue, and `explore` generates the top `num_candidates` candidates from the priority queue.
+    Notes
+    -----
+    The algorithm can be customized by overriding key methods:
+    - `exploit`: Strategy for selecting the best candidate
+    - `explore`: Strategy for selecting exploration candidates  
+    - `compute_priority`: Scoring function for candidate ranking
+    
+    Default implementations use mean rollout scores for ranking, simple best-candidate
+    exploitation, and top-k candidate exploration.
     """
 
     def train(self,
@@ -250,6 +444,67 @@ class PrioritySearch(SearchTemplate):
               # Additional keyword arguments
               **kwargs
               ):
+        """Train the agent using priority-based parameter space search.
+
+        This method orchestrates the complete training process using a priority queue
+        to guide parameter exploration and optimization.
+
+        Parameters
+        ----------
+        guide : Guide
+            Guide function to provide feedback during training.
+        train_dataset : dict
+            Training dataset containing 'inputs' and 'infos' keys.
+        validate_dataset : dict, optional
+            Validation dataset, uses current batch if None, by default None.
+        validate_guide : Guide, optional
+            Guide for validation scoring, uses train guide if None, by default None.
+        batch_size : int, optional
+            Batch size for agent updates, by default 1.
+        sub_batch_size : int, optional
+            Sub-batch size for optimizer attention, by default None.
+        score_range : tuple[float, float], optional
+            Score range for UCB calculations, by default None.
+        num_epochs : int, optional
+            Number of training epochs, by default 1.
+        num_threads : int, optional
+            Maximum threads for parallel processing, by default None.
+        verbose : bool, optional
+            Enable verbose output, by default False.
+        test_dataset : dict, optional
+            Test dataset for evaluation, by default None.
+        test_frequency : int, optional
+            Frequency of test evaluation, by default 1.
+        num_eval_samples : int, optional
+            Samples per input for evaluation, by default 1.
+        log_frequency : int, optional
+            Logging frequency, by default None.
+        save_frequency : int, optional
+            Model saving frequency, by default None.
+        save_path : str, optional
+            Path for saving checkpoints, by default "checkpoints/agent.pkl".
+        num_candidates : int, optional
+            Number of exploration candidates per iteration, by default 10.
+        num_proposals : int, optional
+            Number of proposals per optimizer call, by default 1.
+        validate_proposals : bool, optional
+            Whether to validate exploration candidates, by default True.
+        use_best_candidate_to_explore : bool, optional
+            Include best candidate in exploration set, by default True.
+        memory_size : int, optional
+            Maximum memory size for candidate storage, by default None.
+        score_function : str, optional
+            Scoring function ('mean' or 'ucb'), by default 'mean'.
+        ucb_exploration_constant : float, optional
+            UCB exploration parameter, by default 1.0.
+        **kwargs
+            Additional arguments passed to parent class.
+
+        Notes
+        -----
+        The UCB score function requires a finite score_range for proper calculation.
+        If score_range is None and UCB is selected, it defaults to (0, 1).
+        """
 
         # Create agents and optimizers for search
         self.num_candidates = num_candidates  # number of candidates to propose by each optimizer call

@@ -14,8 +14,47 @@ from opto.utils.llm import LLM, AbstractModel
 
 
 class AggregatedUpdate(Minibatch):
-    """ The algorithm applies the optimizer to propose updates for each instance in the minibatch independently.
-        The updates are then aggregated using an LLM and applied to the agent.
+    """Algorithm that applies optimizer to propose updates independently for minibatch instances.
+    
+    The updates are then aggregated using an LLM and applied to the agent. This approach
+    allows for intelligent consolidation of multiple parameter suggestions based on
+    confidence scores and common patterns.
+
+    Parameters
+    ----------
+    agent : trace.Module
+        The agent module to be trained and optimized.
+    optimizer : Optimizer
+        The optimizer instance used to generate parameter updates.
+    use_asyncio : bool, optional
+        Whether to use asyncio for parallel agent evaluation, by default True.
+    logger : Logger, optional
+        Logger instance for tracking training metrics, by default None.
+    llm : AbstractModel, optional
+        Language model instance for aggregating updates, by default None.
+    max_tokens : int, optional
+        Maximum tokens for aggregator LLM responses, by default 4096.
+    *args
+        Additional positional arguments passed to parent class.
+    **kwargs
+        Additional keyword arguments passed to parent class.
+
+    Attributes
+    ----------
+    llm : AbstractModel
+        Language model used for parameter update aggregation.
+    max_tokens : int
+        Token limit for aggregator responses.
+    stepsize : float
+        Step size for parameter updates, set during training.
+    aggregator_system_prompt : str
+        System prompt template for the aggregator LLM.
+
+    Notes
+    -----
+    The aggregation process uses confidence scores to weight suggestions, with the
+    current parameter values receiving a confidence of (1 - stepsize) and new
+    suggestions receiving a confidence of stepsize.
     """
 
     aggregator_system_prompt = f"""You are an expert in aggregating suggestions. You will see a list of suggestions of parameters from different people (denoted as #SuggestedValue_i). A parameter is represented as a dict, where the key is the name of a parameter component, and the value is the component value.
@@ -54,6 +93,27 @@ class AggregatedUpdate(Minibatch):
                 *args,
                 **kwargs,
                 ):
+        """Initialize the AggregatedUpdate algorithm.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The agent module to be trained.
+        optimizer : Optimizer
+            The optimizer for generating parameter updates.
+        use_asyncio : bool, optional
+            Whether to use asyncio for agent evaluation, by default True.
+        logger : Logger, optional
+            Logger for tracking metrics, by default None.
+        llm : AbstractModel, optional
+            Language model for aggregation, by default None (uses LLM()).
+        max_tokens : int, optional
+            Maximum tokens for aggregator responses, by default 4096.
+        *args
+            Additional positional arguments.
+        **kwargs
+            Additional keyword arguments.
+        """
         super().__init__(agent, optimizer, logger=logger, use_asyncio=use_asyncio, *args, **kwargs)
         self.llm = llm or LLM()  # for the aggregator
         self.max_tokens = max_tokens  # for the aggregator
@@ -73,6 +133,43 @@ class AggregatedUpdate(Minibatch):
               verbose: Union[bool, str] = False,  # whether to print the output of the agent
               **kwargs
               ):
+        """Train the agent using aggregated parameter updates.
+
+        Parameters
+        ----------
+        guide : Guide
+            Guide function to provide feedback for training.
+        train_dataset : dict
+            Training dataset containing 'inputs' and 'infos' keys.
+        stepsize : float, optional
+            Step size for parameter updates (0-1), by default 0.5.
+        num_epochs : int, optional
+            Number of training epochs, by default 1.
+        batch_size : int, optional
+            Batch size for parameter updates, by default 1.
+        test_dataset : dict, optional
+            Test dataset for evaluation, by default None.
+        eval_frequency : int, optional
+            Frequency of evaluation, by default 1.
+        log_frequency : int, optional
+            Frequency of logging, by default None.
+        min_score : int, optional
+            Minimum score threshold for updates, by default None.
+        verbose : bool or str, optional
+            Verbosity level for output, by default False.
+        **kwargs
+            Additional training arguments.
+
+        Raises
+        ------
+        AssertionError
+            If stepsize is not between 0 and 1.
+
+        Notes
+        -----
+        The stepsize parameter controls the balance between current parameters
+        (confidence 1-stepsize) and new suggestions (confidence stepsize).
+        """
 
         assert stepsize >= 0 and stepsize <= 1
         self.stepsize = stepsize  # used in self.aggregate
@@ -84,7 +181,31 @@ class AggregatedUpdate(Minibatch):
 
 
     def forward(self, agent, x, guide, info, verbose=False):
-        """ Run the agent, compute feedback and return the new parameters for an instance in the minibatch. """
+        """Run agent forward pass and generate parameter updates for minibatch instance.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The agent module to run forward pass on.
+        x : Any
+            Input data for the agent.
+        guide : Guide
+            Guide function for generating feedback.
+        info : Any
+            Additional information for the guide.
+        verbose : bool, optional
+            Whether to print verbose output, by default False.
+
+        Returns
+        -------
+        tuple[dict, float]
+            Parameter update dictionary and score for the instance.
+
+        Notes
+        -----
+        This method runs a standard optimization step and generates parameter
+        updates using the optimizer's backward and step methods.
+        """
         target, score, feedback = standard_optimization_step(self.agent, x, guide, info, min_score=None)
         self.optimizer.zero_feedback()
         self.optimizer.backward(target, feedback)
@@ -92,11 +213,41 @@ class AggregatedUpdate(Minibatch):
         return self.to_param_dict(update_dict), score
 
     def to_param_dict(self, update_dict):
-        """ Convert the update the dict {ParameterNode:Any} to a dict {str:Any}. """
+        """Convert parameter update dictionary from ParameterNode keys to string keys.
+
+        Parameters
+        ----------
+        update_dict : dict[ParameterNode, Any]
+            Update dictionary with ParameterNode keys.
+
+        Returns
+        -------
+        dict[str, Any]
+            Update dictionary with string keys (py_name of ParameterNode).
+        """
         return {k.py_name: v for k, v in update_dict.items()}
 
     def update(self, outputs, verbose=False):
-        """ Ask LLM to aggregate the new parameter suggestions. """
+        """Aggregate parameter update suggestions using LLM and apply to agent.
+
+        Parameters
+        ----------
+        outputs : list[tuple[dict, float]]
+            List of (parameter_updates, score) tuples from minibatch forward passes.
+        verbose : bool, optional
+            Whether to print verbose aggregation output, by default False.
+
+        Returns
+        -------
+        float or None
+            Average score across the minibatch instances, or None if no valid scores.
+
+        Notes
+        -----
+        This method constructs a prompt with current parameters and suggested updates,
+        asks the LLM aggregator to consolidate them, and applies the aggregated update
+        to the agent parameters.
+        """
 
         # Prepare the new parameters and scores
         new_parameters = []
@@ -147,7 +298,35 @@ class AggregatedUpdate(Minibatch):
 def construct_update_dict(
         parameters: List[ParameterNode], suggestion: Dict[str, Any], ignore_extraction_error: bool = True
     ) -> Dict[ParameterNode, Any]:
-    """Convert the suggestion in text into the right data type."""
+    """Convert LLM suggestion dictionary into typed parameter update dictionary.
+
+    Parameters
+    ----------
+    parameters : List[ParameterNode]
+        List of trainable parameter nodes in the agent.
+    suggestion : Dict[str, Any]
+        Dictionary of suggested parameter values from LLM.
+    ignore_extraction_error : bool, optional
+        Whether to ignore type conversion errors, by default True.
+
+    Returns
+    -------
+    Dict[ParameterNode, Any]
+        Dictionary mapping parameter nodes to their suggested values.
+
+    Raises
+    ------
+    ValueError
+        If type conversion fails and ignore_extraction_error is False.
+    KeyError
+        If parameter key is missing and ignore_extraction_error is False.
+
+    Notes
+    -----
+    This function attempts to convert string suggestions to the appropriate
+    data types based on the current parameter values. Type conversion errors
+    are either ignored (with warning) or raised based on the flag.
+    """
     # TODO: might need some automatic type conversion
     update_dict = {}
     for node in parameters:
@@ -166,7 +345,30 @@ def construct_update_dict(
 
 
 def extract_llm_suggestion(response: str, ignore_extraction_error: bool = True) -> Dict[str, Any]:
-    """Extract the suggestion from the response."""
+    """Extract parameter suggestions from LLM response text.
+
+    Parameters
+    ----------
+    response : str
+        Raw response text from the LLM aggregator.
+    ignore_extraction_error : bool, optional
+        Whether to ignore JSON parsing and extraction errors, by default True.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary of extracted parameter suggestions.
+
+    Notes
+    -----
+    This function attempts multiple parsing strategies:
+    1. JSON parsing of the full response
+    2. Regex extraction of JSON content within braces
+    3. Manual key-value pair extraction using regex patterns
+    
+    Empty code suggestions (parameters ending with "__code") are automatically
+    removed from the final result.
+    """
     suggestion = {}
     attempt_n = 0
     while attempt_n < 2:

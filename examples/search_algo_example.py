@@ -19,60 +19,13 @@ from opto.trainer.algorithms.UCBsearch import UCBSearchAlgorithm
 from opto.trainer.guide import Guide
 from opto.trainer.loggers import DefaultLogger
 from opto.utils.llm import LLM
+from opto.features.predefined_agents import BasicLearner
 
 # Set default model
 # os.environ["TRACE_LITELLM_MODEL"] = "vertex_ai/gemini-2.0-flash"
 
-@trace.model
-class Learner(Module):
-    """A basic LLM Agent for solving math problems."""
-
-    def __init__(self,
-                system_prompt: str = "You're a helpful agent answering math problems.",
-                user_prompt_template: str = "Solve the following math problem step-by-step: {message}",
-                llm: LLM = None):
-        """Initialize the learner agent.
-
-        Args:
-            system_prompt: System prompt to guide LLM behavior
-            user_prompt_template: Template for formatting user messages
-            llm: LLM instance to use for generation (defaults to gpt-3.5-turbo)
-        """
-        super().__init__()
-        self.system_prompt = trace.node(system_prompt, trainable=True)
-        self.user_prompt_template = trace.node(user_prompt_template, trainable=True)
-        self.llm = llm or LLM(model="gpt-3.5-turbo")
-
-    @trace.bundle()
-    def call_llm(self, system_prompt: str, user_prompt: str) -> str:
-        """Call LLM model with the given prompts.
-
-        Args:
-            system_prompt: The system prompt
-            user_prompt: The user prompt
-
-        Returns:
-            The LLM response content
-        """
-        response = self.llm(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        return response.choices[0].message.content
-
-    def forward(self, message: Any) -> str:
-        """Agent's forward pass to process a message.
-
-        Args:
-            message: The input message to process
-
-        Returns:
-            The generated response
-        """
-        user_prompt = self.user_prompt_template.format(message=message)
-        return self.call_llm(self.system_prompt, user_prompt)
+# Use the predefined BasicLearner instead of defining our own
+Learner = BasicLearner
 
 
 class TeacherGuide(Guide):

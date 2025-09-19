@@ -8,23 +8,92 @@ import os
 import pickle
 
 class AbstractAlgorithm:
-    """ Abstract base class for all algorithms. """
+    """Abstract base class for all training algorithms.
+
+    This class provides a common interface for all algorithms that train agents.
+    Subclasses should implement the train method with their specific training logic.
+
+    Parameters
+    ----------
+    agent : Any
+        The agent to be trained by the algorithm.
+    *args
+        Additional positional arguments.
+    **kwargs
+        Additional keyword arguments.
+
+    Attributes
+    ----------
+    agent : Any
+        The agent instance being trained.
+    """
 
     def __init__(self, agent, *args, **kwargs):
+        """Initialize the abstract algorithm.
+
+        Parameters
+        ----------
+        agent : Any
+            The agent to be trained.
+        *args
+            Additional positional arguments.
+        **kwargs
+            Additional keyword arguments.
+        """
         self.agent = agent
 
     def train(self, *args, **kwargs):
-        """ Train the agent. """
+        """Train the agent using the algorithm's specific strategy.
+
+        Parameters
+        ----------
+        *args
+            Training arguments specific to the algorithm.
+        **kwargs
+            Training keyword arguments specific to the algorithm.
+
+        Notes
+        -----
+        This method should be overridden by subclasses to implement
+        their specific training logic.
+        """
         pass
 
 
 class Trainer(AbstractAlgorithm):
-    """
-        We define the API of algorithms to train an agent from a dataset of (x, info) pairs.
+    """Base trainer class that defines the API for training agents from datasets.
 
-        agent: trace.Module (e.g. constructed by @trace.model)
-        teacher: (question, student_answer, info) -> score, feedback (e.g. info can contain the true answer)
-        train_dataset: dataset of (x, info) pairs
+    This class provides infrastructure for training trace.Module agents using datasets
+    of (input, info) pairs and teacher/guide functions for feedback generation.
+
+    Parameters
+    ----------
+    agent : trace.Module
+        The trace module to be trained (e.g. constructed with @trace.model).
+    num_threads : int, optional
+        Maximum number of threads for parallel execution, by default None.
+    logger : Logger, optional
+        Logger instance for tracking training metrics, by default None.
+    *args
+        Additional positional arguments.
+    **kwargs
+        Additional keyword arguments.
+
+    Attributes
+    ----------
+    agent : trace.Module
+        The agent being trained.
+    num_threads : int or None
+        Maximum number of threads for parallel operations.
+    logger : Logger
+        Logger instance for metric tracking.
+
+    Notes
+    -----
+    The training paradigm involves:
+    - agent: trace.Module (constructed via @trace.model decorator)
+    - guide/teacher: function (question, student_answer, info) -> score, feedback
+    - train_dataset: dataset of (x, info) pairs for training
     """
 
     def __init__(self,
@@ -33,6 +102,26 @@ class Trainer(AbstractAlgorithm):
                  logger=None,  # logger for tracking metrics
                  *args,
                  **kwargs):
+        """Initialize the Trainer with an agent and configuration.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The trace module agent to be trained.
+        num_threads : int, optional
+            Maximum number of threads for parallel execution, by default None.
+        logger : Logger, optional
+            Logger for tracking training metrics, by default None (uses DefaultLogger).
+        *args
+            Additional positional arguments passed to parent class.
+        **kwargs
+            Additional keyword arguments passed to parent class.
+
+        Raises
+        ------
+        AssertionError
+            If agent is not a trace.Module instance.
+        """
         assert isinstance(agent, Module), "Agent must be a trace Module. Getting {}".format(type(agent))
         super().__init__(agent, *args, **kwargs)
         self.num_threads = num_threads
@@ -42,24 +131,44 @@ class Trainer(AbstractAlgorithm):
     def _use_asyncio(self, threads=None):
         """Determine whether to use asyncio based on the number of threads.
 
-        Args:
-            threads: Number of threads to use. If None, uses self.num_threads.
+        Parameters
+        ----------
+        threads : int, optional
+            Number of threads to use. If None, uses self.num_threads.
 
-        Returns:
-            bool: True if parallel execution should be used, False otherwise.
+        Returns
+        -------
+        bool
+            True if parallel execution should be used, False otherwise.
+
+        Notes
+        -----
+        Parallel execution is enabled when the effective thread count is
+        greater than 1. This helps optimize performance for batch operations.
         """
         effective_threads = threads or self.num_threads
         return effective_threads is not None and effective_threads > 1
 
     def save_agent(self, save_path, iteration=None):
-        """Save the agent to the specified path.
+        """Save the agent to the specified path with optional iteration numbering.
 
-        Args:
-            save_path: Path to save the agent to.
-            iteration: Current iteration number (for logging purposes).
+        Parameters
+        ----------
+        save_path : str
+            Base path to save the agent to.
+        iteration : int, optional
+            Current iteration number for checkpoint naming, by default None.
 
-        Returns:
-            str: The path where the agent was saved.
+        Returns
+        -------
+        str
+            The actual path where the agent was saved.
+
+        Notes
+        -----
+        If iteration is provided, it's appended to the filename. Final iterations
+        (matching self.n_iters) get a "_final" suffix for easy identification.
+        The directory structure is created automatically if it doesn't exist.
         """
         # Create directory if it doesn't exist
         directory = os.path.dirname(save_path)
@@ -90,11 +199,47 @@ class Trainer(AbstractAlgorithm):
               num_threads: int = None,  # maximum number of threads to use (overrides self.num_threads)
               **kwargs
               ):
+        """Train the agent using the provided guide and dataset.
+
+        Parameters
+        ----------
+        guide : Guide
+            Guide function to provide feedback during training.
+        train_dataset : dict
+            Training dataset containing 'inputs' and 'infos' keys.
+        num_threads : int, optional
+            Maximum number of threads to use, overrides self.num_threads.
+        **kwargs
+            Additional training arguments specific to the algorithm.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses.
+
+        Notes
+        -----
+        Subclasses must implement this method with their specific training logic.
+        The method should use the guide to evaluate agent outputs and update
+        the agent parameters accordingly.
+        """
         raise NotImplementedError
 
 
     def save(self, path: str):
-        """ Save the guide to a file. """
+        """Save the trainer and its components to a file.
+
+        Parameters
+        ----------
+        path : str
+            Base path to save the trainer state to.
+
+        Notes
+        -----
+        This method serializes the trainer's state, saving different component
+        types (Module, Guide, DataLoader, Optimizer) to separate files with
+        appropriate extensions. The main trainer state is saved as a pickle file.
+        """
         with open(path, 'wb') as f:
             d = {}
             for key, value in self.__dict__.items():
@@ -119,7 +264,20 @@ class Trainer(AbstractAlgorithm):
             pickle.dump(d, f)
 
     def load(self, path: str):
-        """ Load the guide from a file. """
+        """Load the trainer and its components from a file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the saved trainer state file.
+
+        Notes
+        -----
+        This method deserializes the trainer's state and loads component files.
+        It validates that the loaded attributes match the expected types and
+        warns if attributes from the saved state are not found in the current
+        trainer instance.
+        """
         with open(path, 'rb') as f:
             data = pickle.load(f)
             for key, value in data.items():
