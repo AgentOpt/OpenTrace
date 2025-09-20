@@ -50,6 +50,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               regressor_regularization_strength: float = 1e-4,  # L2 regularization strength for the regressor
               regressor_max_iterations: int = 20000,  # maximum iterations for regressor training
               regressor_tolerance: float = 5e-3,  # convergence tolerance for the regressor
+              use_validation = False, # whether to validate new proposals with the validation set
               # Additional keyword arguments
               **kwargs
               ):
@@ -65,6 +66,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             regressor_regularization_strength (float, optional): L2 regularization strength for the regressor. Defaults to 1e-4.
             regressor_max_iterations (int, optional): Maximum iterations for regressor training. Defaults to 20000.
             regressor_tolerance (float, optional): Convergence tolerance for the regressor. Defaults to 5e-3.
+            use_validation (bool, optional): Whether to validate new proposals with the validation set. Defaults to False.
         """
 
         # Initialize the search parameters and memory
@@ -81,6 +83,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             memory_update_frequency=memory_update_frequency
         )
         self._enforce_using_data_collecting_candidates = False
+        self.use_validation = use_validation
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
         self.regressor = ModuleCandidateRegressor(
             embedding_model=regressor_embedding_model,
@@ -132,7 +135,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
 
         self.update_memory_with_regressor(verbose=verbose, **kwargs)
-        self.print_memory_stats()
+        # self.print_memory_stats()
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
@@ -156,7 +159,10 @@ class PrioritySearch_with_Regressor(PrioritySearch):
                  samples: Samples,
                  verbose: bool = False,
                  **kwargs):
-        """ Override the validate method. In this version we only use training data to update arm statistics. No validation is performed.
+        """ 
+        Override the validate method. 
+        In this version, if use_validation is False, we can only use training data to update arm statistics. No validation is performed.
+        If use_validation is True, we use the validation set to update arm statistics. The same as the parent class.
         """
         print("--- Validating candidates...") if verbose else None
         assert isinstance(samples, Samples), "samples must be an instance of Samples."
@@ -165,6 +171,21 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
         # The current batch of samples can be used to validate the exploration candidates
         validate_samples = copy.copy(samples)
+        if self.use_validation:
+        # Validate newly proposed candidates
+            use_prev_batch = self.use_prev_batch  # when True, self.validate_sampler == self.train_sampler, and the current batch is used for validation
+            candidate_agents = [c.get_module() for c in candidates]  # get the modules from the candidates
+            validate_samples.add_samples(Samples(*self.validate_sampler.sample(candidate_agents,
+                                                                                                use_prev_batch=use_prev_batch,
+                                                                                                description_prefix='Validating newly proposed candidates: ')))  # list of BatchRollout objects
+
+            if self.validate_exploration_candidates:
+                if not use_prev_batch:   # validate the exploration candidates that collected the samples as well
+                    # validate the agents in the validate_dataset
+                    exploration_agents = [c.get_module() for c in exploration_candidates]  # get the modules from the exploration candidates
+                    exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
+                                                description_prefix='Validating exploration candidates: '))  # sample the exploration agents
+                    validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples 
         # Here we should set self._enforce_using_data_collecting_candidates to False
         matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates+candidates, validate_samples.samples)
         # # Append new candidates with out rollouts to matched_candidates_and_samples
