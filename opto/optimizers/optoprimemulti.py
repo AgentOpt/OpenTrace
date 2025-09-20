@@ -9,6 +9,100 @@ from opto.utils.llm import LLMFactory
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class OptoPrimeMulti(OptoPrime):
+    """Multi-response variant of OptoPrime optimizer with advanced candidate generation and selection.
+
+    Extends OptoPrime to generate multiple candidate solutions using various techniques,
+    then select the best one through sophisticated selection methods. Supports multiple
+    LLM profiles, diverse generation strategies, and parallel processing for improved
+    optimization performance.
+
+    Parameters
+    ----------
+    *args
+        Arguments passed to parent OptoPrime constructor.
+    num_responses : int, default=3
+        Number of candidate responses to generate per optimization step.
+    temperature_min_max : List[float], optional
+        [min, max] temperature range for response generation. Defaults to [0.0, 1.0].
+    selector : callable, optional
+        Custom function for selecting the best candidate from generated responses.
+        If None, uses built-in selection techniques.
+    generation_technique : str, default="temperature_variation"
+        Technique for generating diverse candidates:
+        - "temperature_variation": Use varying temperatures across responses
+        - "self_refinement": Each solution refines the previous one iteratively
+        - "iterative_alternatives": Generate alternatives informed by previous solutions
+        - "multi_experts": Use different expert personas for diverse perspectives
+        - "multi_llm": Use different LLM profiles for generation diversity
+    selection_technique : str, default="best_of_n"
+        Method for selecting the best candidate:
+        - "best_of_n": Choose most promising candidate via LLM evaluation
+        - "moa"/"mixture_of_agents": Synthesize best elements from all candidates
+        - "majority": Find consensus solution using clustering
+        - "last_of_n": Simply return the last generated candidate
+    experts_list : List[str], optional
+        List of expert personas for multi_experts generation technique.
+        If None, experts are automatically generated based on the problem.
+    llm_profiles : List[str], optional
+        List of LLM profile names to use for diverse generation.
+        Enables multi-model optimization approaches.
+    llm_weights : List[float], optional
+        Weights for each LLM profile when using weighted selection.
+        Defaults to equal weights if not specified.
+    **kwargs
+        Additional keyword arguments passed to parent OptoPrime constructor.
+
+    Attributes
+    ----------
+    candidates : List[str]
+        All candidate solutions generated in the current optimization step.
+    selected_candidate : str or Dict
+        The candidate solution selected for the current step.
+    num_responses : int
+        Number of responses to generate per step.
+    temperature_min_max : List[float]
+        Temperature range for generation diversity.
+    generation_technique : str
+        Current technique used for candidate generation.
+    selection_technique : str
+        Current technique used for candidate selection.
+
+    Methods
+    -------
+    generate_candidates(summary, system_prompt, user_prompt, **kwargs)
+        Generate multiple candidate solutions using the specified technique.
+    select_candidate(candidates, selection_technique, problem_summary)
+        Select the best candidate from generated responses.
+    _step(verbose, mask, **kwargs)
+        Perform one optimization step with multi-candidate approach.
+
+    Notes
+    -----
+    OptoPrimeMulti enhances optimization through several mechanisms:
+
+    1. **Diverse Generation**: Multiple techniques ensure candidate diversity,
+       preventing local optima and exploring the solution space more thoroughly.
+
+    2. **Parallel Processing**: Concurrent LLM calls reduce optimization time
+       while maintaining result quality and deterministic ordering.
+
+    3. **Advanced Selection**: Sophisticated selection methods choose optimal
+       solutions by analyzing candidate strengths and synthesizing improvements.
+
+    4. **Multi-Model Support**: Different LLM profiles provide diverse
+       perspectives and capabilities for complex optimization problems.
+
+    The optimizer is particularly effective for:
+    - Complex optimization problems requiring creative solutions
+    - Scenarios where single-shot optimization may get stuck in local optima
+    - Applications benefiting from ensemble approaches and diverse perspectives
+
+    See Also
+    --------
+    OptoPrime : Base single-response optimizer
+    OptoPrimeV2 : Enhanced version with XML-based memory representation
+    """
+
     def __init__(
         self,
         *args,

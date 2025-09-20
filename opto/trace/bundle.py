@@ -27,7 +27,19 @@ from opto.trace.utils import contain
 # This is a global flag to allow external dependencies to be used in the operator.
 ALLOW_EXTERNAL_DEPENDENCIES = None
 def disable_external_dependencies_check(allow_external_dependencies: bool):
-    """Set the global flag for allowing external dependencies."""
+    """Set the global flag for allowing external dependencies in operators.
+
+    Parameters
+    ----------
+    allow_external_dependencies : bool
+        If True, operators can use nodes that are not explicitly passed as inputs.
+        If False, all node dependencies must be explicit inputs.
+
+    Notes
+    -----
+    This global setting affects all subsequently created bundle decorators.
+    Use with caution as it can make dependency tracking less explicit.
+    """
     global ALLOW_EXTERNAL_DEPENDENCIES
     ALLOW_EXTERNAL_DEPENDENCIES = allow_external_dependencies
 
@@ -41,23 +53,87 @@ def bundle(
     overwrite_python_recursion=False,
     projections=None,
 ):
-    """Wrap a function as a FunModule which returns node objects.
+    """Decorator to wrap functions for integration with the Trace computation graph.
 
-    The input signature to the wrapped function stays the same. bundle can be used with other decorators
-    so long as they are not named 'bundle'.
+    The bundle decorator transforms regular Python functions into traced operators that
+    automatically create MessageNodes when called with Node inputs. This enables automatic
+    differentiation and optimization of the wrapped code.
 
-    Args:
-        description (str, optional): Description of the operator. Defaults to None.
-        traceable_code (bool, optional): Whether the operator's code is traceable by Trace. Defaults to False.
-        _process_inputs (bool, optional): Whether to extract input from container of nodes. Defaults to True.
-        trainable (bool, optional): Whether block of code is treated as variable in optimization. Defaults to False.
-        catch_execution_error (bool, optional): Whether to catch exceptions during operator execution. Defaults to True.
-        allow_external_dependencies (bool, optional): Whether to allow external dependencies. Defaults to False.
-        overwrite_python_recursion (bool, optional): Whether to overwrite Python recursion behavior. Defaults to False.
-        projections (List[Projection], optional): List of projections to be used in updating trainable parameter. Defaults to None.
+    Parameters
+    ----------
+    description : str, optional
+        Description of the operator in format "[op_name] details". If not provided,
+        generated from function name and docstring.
+    traceable_code : bool, default=False
+        If True, the function's internal operations are also traced, creating a nested
+        graph structure. Enables fine-grained optimization but increases overhead.
+    _process_inputs : bool, default=True
+        If True, automatically extracts data from Node inputs before passing to function.
+        If False, passes Node objects directly to the function.
+    trainable : bool, default=False
+        If True, treats the function's source code as a trainable parameter that can
+        be modified during optimization. Enables code synthesis and modification.
+    catch_execution_error : bool, default=True
+        If True, exceptions are caught and converted to ExceptionNodes in the graph.
+        If False, exceptions propagate normally.
+    allow_external_dependencies : bool, default=False
+        If True, permits the function to use nodes not passed as explicit inputs.
+        These hidden dependencies are tracked separately.
+    overwrite_python_recursion : bool, default=False
+        If True, recursive calls within the function call the original function directly.
+        If False, recursive calls go through the wrapped version.
+    projections : list[Projection], optional
+        Constraints to apply when updating trainable code parameters.
 
-    Returns:
-        FunModule: The wrapped function that returns node objects.
+    Returns
+    -------
+    FunModule
+        A wrapped version of the function that:
+        - Creates MessageNodes when called with Node inputs
+        - Preserves the original function signature
+        - Can be used with other decorators
+
+    Notes
+    -----
+    The bundle decorator enables several key features:
+
+    1. **Automatic Tracing**: Functions automatically participate in the computation
+       graph when called with Node arguments.
+
+    2. **Error Handling**: Exceptions can be captured as part of the graph, enabling
+       error-aware optimization.
+
+    3. **Code as Data**: With trainable=True, function source code becomes data that
+       can be optimized, enabling program synthesis.
+
+    4. **Nested Tracing**: With traceable_code=True, operations inside the function
+       are individually traced, enabling fine-grained optimization.
+
+    5. **Compatibility**: The wrapped function maintains its original signature and
+       can be used normally with non-Node inputs when tracing is disabled.
+
+    See Also
+    --------
+    FunModule : The class that implements bundled functions
+    MessageNode : Nodes created by bundled functions
+    ParameterNode : Created when trainable=True
+
+    Examples
+    --------
+    >>> # Simple bundled function
+    >>> @bundle()
+    >>> def add(a, b):
+    ...     return a + b
+    >>> 
+    >>> # Bundled function with trainable code
+    >>> @bundle(trainable=True, description="[optimizer] Optimization step")
+    >>> def optimize_step(gradient, parameter):
+    ...     return parameter - 0.01 * gradient
+    >>> 
+    >>> # Using bundled functions
+    >>> x = node(5)
+    >>> y = node(3)
+    >>> z = add(x, y)  # Creates MessageNode with value 8
     """
     prev_f_locals = inspect.stack()[1].frame.f_locals
 
@@ -80,7 +156,27 @@ def bundle(
 
 
 class trace_nodes:
-    """This is a context manager for keeping track which nodes are read/used in an operator."""
+    """Context manager for tracking node usage within operators.
+
+    Maintains a thread-local stack of sets that record which nodes are accessed
+    during operator execution. This enables detection of implicit dependencies
+    and proper graph construction.
+
+    Notes
+    -----
+    This context manager is used internally by FunModule to track node dependencies.
+    It uses contextvars for thread-safety and async compatibility.
+
+    The tracking works by:
+    1. Creating a new set for nodes on __enter__
+    2. Nodes add themselves to this set when their data is accessed
+    3. The set is removed from the stack on __exit__
+
+    See Also
+    --------
+    USED_NODES : Global context variable maintaining the stack
+    Node.data : Property that registers access in USED_NODES
+    """
 
     def __init__(self):
         self.token = None
@@ -102,19 +198,76 @@ class trace_nodes:
             USED_NODES.reset(self.token)
 
 class FunModule(Module):
-    """This is a decorator to trace a function. The wrapped function returns a MessageNode.
+    """Wrapper class that traces function execution in the computation graph.
 
-    Args:
-        fun (callable): the operator to be traced.
-        description (str): a description of the operator; see the MessageNode for syntax.
-        _process_inputs (bool): if True, the input is extracted from the container of nodes; if False, the inputs are passed directly to the underlying function.
-        trainable (bool): if True, the block of code is treated as a variable in the optimization
-        traceable_code (bool): if True, the operator's code is traceable by Trace
-        catch_execution_error (bool): if True, the operator catches the exception raised during the execution of the operator and return ExecutionError.
-        allow_external_dependencies (bool): if True, the operator allows external dependencies to be used in the operator. Namely, not all nodes used to create the output are in the inputs. In this case, the extra dependencies are stored in the info dictionary with key 'extra_dependencies'.
-        overwrite_python_recursion (bool): if True, the operator allows the python recursion behavior of calling the decorated function to be overwritten. When true, applying bundle on a recursive function, would be the same as calling the function directly. When False, the Python's oriignal recursion behavior of decorated functions is preserved.
-        _ldict (dict): the local dictionary to execute the code block.
+    FunModule implements the bundle decorator's functionality, transforming regular
+    Python functions into graph-aware operators that create MessageNodes. It handles
+    input processing, error catching, dependency tracking, and code trainability.
 
+    Parameters
+    ----------
+    fun : callable
+        The function to be wrapped and traced.
+    description : str, optional
+        Operator description in format "[op_name] details". Auto-generated if not provided.
+    traceable_code : bool, default=False
+        Whether to trace operations inside the function.
+    _process_inputs : bool, default=True
+        Whether to extract data from Node inputs before passing to function.
+    trainable : bool, default=False
+        Whether the function's source code is a trainable parameter.
+    catch_execution_error : bool, default=True
+        Whether to catch and wrap exceptions as ExceptionNodes.
+    allow_external_dependencies : bool, default=False
+        Whether to permit hidden node dependencies.
+    overwrite_python_recursion : bool, default=False
+        Whether recursive calls bypass the wrapper.
+    projections : list[Projection], optional
+        Constraints for trainable code updates.
+    _ldict : dict, optional
+        Local namespace for code execution.
+
+    Attributes
+    ----------
+    info : dict
+        Metadata about the wrapped function including source, signature, and execution details.
+    parameter : ParameterNode or None
+        The trainable code parameter when trainable=True.
+    trainable : bool
+        Whether the code is trainable.
+
+    Methods
+    -------
+    forward(*args, **kwargs)
+        Execute the wrapped function with tracing.
+    get_source(fun)
+        Extract source code from a function.
+
+    Notes
+    -----
+    FunModule implements sophisticated function wrapping:
+
+    1. **Input Processing**: Automatically converts Node inputs to data values
+       for the wrapped function, unless _process_inputs=False.
+
+    2. **Dependency Tracking**: Uses trace_nodes context to detect all nodes
+       accessed during execution, even indirect ones.
+
+    3. **Error Handling**: Can catch exceptions and convert them to ExceptionNodes,
+       preserving error information in the graph.
+
+    4. **Code Trainability**: When trainable=True, the function's source code
+       becomes a ParameterNode that optimizers can modify.
+
+    5. **Traceable Execution**: When traceable_code=True, creates detailed graphs
+       of internal operations for fine-grained optimization.
+
+    See Also
+    --------
+    bundle : Decorator that creates FunModule instances
+    Module : Base class for Trace modules
+    MessageNode : Nodes created by FunModule execution
+    ParameterNode : Code parameters when trainable=True
     """
 
     def __init__(
@@ -768,22 +921,100 @@ class FunModule(Module):
 
 
 def to_data(obj):
-    """Extract the data from a node or a container of nodes."""
+    """Extract data from nodes in nested structures.
+
+    Parameters
+    ----------
+    obj : Any
+        A node, container of nodes, or nested structure containing nodes.
+
+    Returns
+    -------
+    Any
+        The same structure with Node objects replaced by their data values.
+
+    Notes
+    -----
+    Recursively traverses nested structures (lists, dicts, tuples, sets,
+    NodeContainers) and extracts the data from all Node objects while
+    preserving the structure. Non-Node objects are returned unchanged.
+
+    Examples
+    --------
+    >>> x = node(5)
+    >>> y = node(10)
+    >>> to_data([x, y, 15])  # Returns [5, 10, 15]
+    """
     return recursive_conversion(lambda x: x.data, lambda x: x)(obj)
 
 
 def wrap_node(obj):
-    """Wrap a node on top of the original object"""
+    """Wrap non-Node objects in nodes throughout nested structures.
+
+    Parameters
+    ----------
+    obj : Any
+        Any object or nested structure potentially containing non-Node values.
+
+    Returns
+    -------
+    Any
+        The same structure with non-Node objects wrapped in Node instances.
+
+    Notes
+    -----
+    Recursively traverses nested structures and wraps any non-Node objects
+    in Node instances. Existing Node objects are left unchanged. Useful for
+    ensuring all values in a structure are nodes before processing.
+    """
     return recursive_conversion(lambda x: x, lambda x: node(x))(obj)
 
 
 def detach_inputs(obj):
-    """Detach a node or a container of nodes."""
+    """Detach nodes from the computation graph in nested structures.
+
+    Parameters
+    ----------
+    obj : Any
+        A node, container of nodes, or nested structure containing nodes.
+
+    Returns
+    -------
+    Any
+        The same structure with all nodes detached from the graph.
+
+    Notes
+    -----
+    Recursively traverses nested structures and calls detach() on all
+    Node objects, removing them from gradient computation. Non-Node
+    objects are returned unchanged. Useful for creating non-differentiable
+    copies of values.
+    """
     return recursive_conversion(lambda x: x.detach(), lambda x: x)(obj)
 
 
 def update_local(frame, name, value):
-    """Update the value of a local variable in a frame."""
+    """Update a local variable in a Python frame.
+
+    Parameters
+    ----------
+    frame : frame
+        The Python frame object to modify.
+    name : str
+        Name of the local variable to update.
+    value : Any
+        New value for the variable.
+
+    Notes
+    -----
+    This low-level function modifies Python frame locals directly using
+    ctypes. It's used internally for trainable code execution where
+    local variables need to be dynamically updated. The PyFrame_LocalsToFast
+    call ensures the change is reflected in the actual frame.
+
+    Warning: This is an advanced internal function that modifies Python
+    internals and should be used with caution.
+    """
     frame.f_locals[name] = value
     ctypes.pythonapi.PyFrame_LocalsToFast(ctypes.py_object(frame), ctypes.c_int(0))
 

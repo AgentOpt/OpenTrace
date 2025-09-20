@@ -64,11 +64,94 @@ def train(
     # The rest is treated as trainer config
     **trainer_kwargs,
 ) -> Any:
-    """ A high-level helper function to train the model using trainer.
+    """High-level training function for Trace models using optimization algorithms.
 
-    A trainer algorithm applies an optimizer to train a model under a guide on a train_dataset.
+    Provides a unified interface for training Trace models by combining an optimizer,
+    training algorithm, evaluation guide, and logging. Automatically configures
+    components based on the model type and provided parameters.
 
+    Parameters
+    ----------
+    model : Union[trace.Module, ParameterNode]
+        The model to train. Can be a Trace Module with multiple parameters
+        or a single ParameterNode for direct optimization.
+    train_dataset : dict
+        Training dataset with required keys:
+        - 'inputs': List of input samples
+        - 'infos': List of corresponding target/reference information
+        Both lists must have the same length.
+    algorithm : Union[Trainer, str], default='MinibatchAlgorithm'
+        Training algorithm to use. Can be a Trainer instance or string name.
+        Common algorithms: 'MinibatchAlgorithm', 'BeamSearchAlgorithm'.
+    optimizer : Union[Optimizer, str], optional
+        Optimizer for parameter updates. If None, automatically selected:
+        - 'OPROv2' for ParameterNode models
+        - 'OptoPrimeV2' for Module models
+        Can be optimizer instance or string name.
+    guide : Union[Guide, str], default='LLMJudge'
+        Evaluation guide that provides feedback on model outputs.
+        Common guides: 'LLMJudge', 'ExactMatchGuide'.
+    logger : Union[BaseLogger, str], default='ConsoleLogger'
+        Logger for tracking training progress and metrics.
+    optimizer_kwargs : dict, optional
+        Additional keyword arguments passed to optimizer constructor.
+        Useful for specifying LLM instances, learning rates, etc.
+    guide_kwargs : dict, optional
+        Additional keyword arguments passed to guide constructor.
+    logger_kwargs : dict, optional
+        Additional keyword arguments passed to logger constructor.
+    **trainer_kwargs
+        Additional configuration passed to the training algorithm,
+        such as batch size, number of epochs, early stopping criteria.
+
+    Raises
+    ------
+    AssertionError
+        If dataset format is invalid (missing keys, mismatched lengths).
+
+    Notes
+    -----
+    The training process follows these steps:
+    1. **Dataset Validation**: Ensures dataset has correct format and structure
+    2. **Component Setup**: Instantiates optimizer, guide, and logger from strings/configs
+    3. **Model Preparation**: Converts ParameterNode to Module if needed
+    4. **Algorithm Execution**: Runs the specified training algorithm
+
+    Training algorithms coordinate the optimization process:
+    - Generate batches from the dataset
+    - Apply the model to inputs
+    - Use the guide to evaluate outputs and provide feedback
+    - Update model parameters through the optimizer
+    - Log progress and metrics
+
+    Examples
+    --------
+    >>> # Train a simple text model
+    >>> model = MyTextModel()
+    >>> dataset = {
+    ...     'inputs': ['What is AI?', 'Explain ML'],
+    ...     'infos': ['Artificial Intelligence...', 'Machine Learning...']
+    ... }
+    >>> train(model=model, train_dataset=dataset, algorithm='MinibatchAlgorithm')
+
+    >>> # Train with custom configuration
+    >>> train(
+    ...     model=model,
+    ...     train_dataset=dataset,
+    ...     optimizer='OptoPrimeV2',
+    ...     guide='LLMJudge',
+    ...     optimizer_kwargs={'max_tokens': 1000},
+    ...     batch_size=8,
+    ...     num_epochs=10
+    ... )
+
+    See Also
+    --------
+    Trainer : Base class for training algorithms
+    Optimizer : Parameter optimization interface
+    Guide : Evaluation and feedback interface
     """
+
     optimizer_kwargs = optimizer_kwargs or {}  # this can be used to pass extra optimizer configs, like llm object explictly
     guide_kwargs = guide_kwargs or {}
     logger_kwargs = logger_kwargs or {}

@@ -5,14 +5,45 @@ from opto.trace.nodes import Node
 
 
 def recursive_conversion(true_func, false_func):
-    """Recursively apply true_func to the nodes and false_func to the rest of
-    the objects in a container of nodes. Container of nodes are tuple, list,
-    dict, set, and NodeContainer.
+    """Recursively apply functions to nodes and non-nodes in nested structures.
 
-    Args:
-        true_func (callable): the function to be applied to the nodes.
-        false_func (callable): the function to be applied to the rest of the objects.
+    Creates a function that traverses nested data structures, applying
+    different functions to Node objects versus other objects.
 
+    Parameters
+    ----------
+    true_func : callable
+        Function to apply to Node objects.
+    false_func : callable
+        Function to apply to non-Node objects.
+
+    Returns
+    -------
+    callable
+        A function that recursively processes nested structures.
+
+    Notes
+    -----
+    Supported container types:
+    - tuple, list, dict, set: Recursively processed
+    - NodeContainer: Attributes recursively processed
+    - Node: true_func applied
+    - Other: false_func applied
+
+    The returned function preserves the structure while transforming
+    the contents. Commonly used for:
+    - Extracting data from nested nodes
+    - Converting between node and non-node representations
+    - Applying transformations while maintaining structure
+
+    Examples
+    --------
+    >>> # Extract data from nested nodes
+    >>> extract = recursive_conversion(
+    ...     true_func=lambda n: n.data,
+    ...     false_func=lambda x: x
+    ... )
+    >>> result = extract(nested_structure)
     """
 
     def func(obj):
@@ -39,13 +70,49 @@ def recursive_conversion(true_func, false_func):
 
 # TODO to test it and clean up the code
 def apply_op(op, output, *args, **kwargs):
-    """A broadcasting operation that applies an op to container of Nodes.
+    """Apply an operator to containers of nodes with broadcasting.
 
-    Args:
-        op (callable): the operator to be applied.
-        output (Any): the container to be updated.
-        *args (Any): the positional inputs of the operator.
-        **kwargs (Any): the keyword inputs of the operator.
+    Enables element-wise operations on mixed containers of nodes and
+    regular values, similar to NumPy broadcasting but for Node objects.
+
+    Parameters
+    ----------
+    op : callable
+        The operator to apply element-wise.
+    output : Any
+        Container template determining output structure.
+        Can be list, tuple, dict, or NodeContainer.
+    *args : Any
+        Positional arguments for the operator.
+        Each can be a Node or container matching output type.
+    **kwargs : Any
+        Keyword arguments for the operator.
+        Each can be a Node or container matching output type.
+
+    Returns
+    -------
+    Any
+        Result with same structure as output, containing results
+        of applying op element-wise.
+
+    Raises
+    ------
+    AssertionError
+        If container types don't match or lengths differ.
+
+    Notes
+    -----
+    Broadcasting rules:
+    1. If all inputs are Nodes, applies op directly
+    2. For containers, applies op element-wise:
+       - Lists/tuples: By index
+       - Dicts: By key
+       - NodeContainers: By attribute
+    3. Node inputs are broadcast to all elements
+    4. Container inputs must match output structure
+
+    The function modifies output in-place for most containers
+    but returns a new tuple for tuple inputs.
     """
 
     inputs = list(args) + list(kwargs.values())

@@ -12,29 +12,81 @@ global_functions_list = [
 
 
 def sum_feedback(nodes):
-    """Aggregate the feedback of a list of nodes."""
+    """Aggregate feedback from a list of nodes.
+    
+    Sums all feedback values across all feedback channels for the given nodes.
+    
+    Parameters
+    ----------
+    nodes : list
+        List of nodes containing feedback to aggregate.
+    
+    Returns
+    -------
+    Any
+        Aggregated feedback value, typically the sum of all feedback.
+    
+    Notes
+    -----
+    Each node may have multiple feedback channels (stored in feedback.values()).
+    This function sums across all channels and all nodes.
+    """
     return sum([sum(gg) for p in nodes for gg in p.feedback.values()])
 
 
 def contain(container_of_nodes, node):
+    """Check if a node is contained in a collection by identity.
+    
+    Parameters
+    ----------
+    container_of_nodes : iterable
+        Collection of nodes to search in.
+    node : Node
+        Node to search for.
+    
+    Returns
+    -------
+    bool
+        True if node is found in container (by identity, not value).
+    
+    Notes
+    -----
+    Uses identity comparison (is) rather than value comparison (==)
+    to ensure exact object matching.
+    """
     # check for identity instead of value
     return any([node is n for n in container_of_nodes])
 
 
 def parse_eqs_to_dict(text):
-    """
-    Parse the text of equations into a dictionary
+    """Parse text containing variable assignments into a dictionary.
 
-    Example:
+    Parameters
+    ----------
+    text : str
+        Text containing variable assignments in the format 'key = value'.
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary mapping variable names to their values.
+
+    Notes
+    -----
+    Handles multi-line values by concatenating lines without '=' to
+    the previous key's value. Removes backticks from values.
+
+    Examples
+    --------
+    Input:
         x0 = 1
         x1=2
         x2=`2`
         x3= def fun():\\n    print('hello')\\n
         abc_test1=test
 
-    would be parsed into
-
-    {'x0': '1', 'x1': '2', 'x2': '2', 'x3': "def fun():\\nprint('hello')", 'abc_test1': 'test'}
+    Output:
+        {'x0': '1', 'x1': '2', 'x2': '2', 'x3': "def fun():\\nprint('hello')", 'abc_test1': 'test'}
     """
     lines = text.split("\n")
     result_dict = {}
@@ -52,7 +104,35 @@ def parse_eqs_to_dict(text):
 
 
 def for_all_methods(decorator):
-    """Applying a decorator to all methods of a class."""
+    """Apply a decorator to all methods of a class.
+    
+    Class decorator that applies the given decorator to all non-dunder
+    methods of the decorated class.
+    
+    Parameters
+    ----------
+    decorator : callable
+        Decorator function to apply to class methods.
+    
+    Returns
+    -------
+    callable
+        Class decorator function.
+    
+    Examples
+    --------
+    >>> @for_all_methods(my_decorator)
+    ... class MyClass:
+    ...     def method1(self):
+    ...         pass
+    ...     def method2(self):
+    ...         pass
+    
+    Notes
+    -----
+    Only applies to callable attributes that don't start with '__'.
+    Useful for applying logging, timing, or validation to all methods.
+    """
 
     def decorate(cls):
         for name, attr in cls.__dict__.items():
@@ -64,6 +144,35 @@ def for_all_methods(decorator):
 
 
 def render_opt_step(step_idx, optimizer, no_trace_graph=False, no_improvement=False):
+    """Render an optimization step as HTML for Jupyter notebook display.
+    
+    Creates a visual representation of an optimization step showing the
+    trace graph, feedback, reasoning, and suggested improvements.
+    
+    Parameters
+    ----------
+    step_idx : int
+        Index of the optimization step to render.
+    optimizer : Optimizer
+        Optimizer instance containing logs and summaries.
+    no_trace_graph : bool, default=False
+        If True, omits the trace graph from the display.
+    no_improvement : bool, default=False
+        If True, omits the improvement section from the display.
+    
+    Returns
+    -------
+    None
+        Displays HTML output directly in Jupyter notebook.
+    
+    Notes
+    -----
+    Requires IPython display capabilities. Creates color-coded boxes for:
+    - Gray: Trace graph showing computation flow
+    - Red: Feedback indicating issues or goals
+    - Green: Reasoning about improvements
+    - Blue: Suggested parameter updates
+    """
     from IPython.display import display, HTML
 
     idx = step_idx
@@ -237,8 +346,28 @@ def escape_json_nested_quotes(json_str):
 
 
 def remove_non_ascii(json_txt):
-    """
-    Example usage can be found in optimizers/textgrad.py
+    """Remove non-ASCII and non-printable characters from JSON text.
+    
+    Cleans JSON strings by removing control characters and non-printable
+    characters while preserving valid escape sequences.
+    
+    Parameters
+    ----------
+    json_txt : str
+        JSON text that may contain non-ASCII or control characters.
+    
+    Returns
+    -------
+    str
+        Cleaned JSON text with only printable ASCII characters.
+    
+    Notes
+    -----
+    First applies escape_json_nested_quotes, then removes:
+    - Newlines, tabs, backspaces, carriage returns, form feeds
+    - Any other non-printable characters
+    
+    Example usage can be found in optimizers/textgrad.py.
     """
     cleaned = ""
     for c in escape_json_nested_quotes(json_txt):
@@ -249,25 +378,58 @@ def remove_non_ascii(json_txt):
 
 
 def dedent(text: str):
-    """
-    A better dedent than dedent from textwrap module.
-    Remove leading and trailing whitespace for each line
-    For example:
-        ```
-        Line 1 has no leading space
-            Line 2 has two leading spaces
-        ```
-        The output will be :
-        ```
-        Line 1 has no leading space
-        Line 2 has two leading spaces
-        ```
-    This allows writing cleaner multiline prompts in the code.
+    """Remove leading and trailing whitespace from each line.
+    
+    A simpler alternative to textwrap.dedent that strips whitespace
+    from the beginning and end of each line individually, rather than
+    removing common leading whitespace.
+    
+    Parameters
+    ----------
+    text : str
+        Multi-line text to dedent.
+    
+    Returns
+    -------
+    str
+        Text with each line stripped of leading/trailing whitespace.
+    
+    Examples
+    --------
+    >>> text = '''\n        Line 1 has leading space\n            Line 2 has more\n        '''
+    >>> dedent(text)
+    'Line 1 has leading space\nLine 2 has more'
+    
+    Notes
+    -----
+    Unlike textwrap.dedent, this function:
+    - Strips each line independently
+    - Removes ALL leading/trailing whitespace per line
+    - Useful for cleaning up multi-line prompts in code
     """
     return "\n".join([line.strip() for line in text.split("\n")])
 
 
 def test_json_quote_escaper():
+    """Test suite for escape_json_nested_quotes function.
+    
+    Verifies that the JSON quote escaper correctly handles various
+    edge cases including nested quotes, already-escaped quotes, and
+    special characters.
+    
+    Raises
+    ------
+    AssertionError
+        If any test case fails to produce expected output.
+    
+    Notes
+    -----
+    Tests cover:
+    - Multiple quotes within string values
+    - Quotes at various positions
+    - Already escaped quotes
+    - LaTeX-style escape sequences
+    """
     test_cases = [
         (
             '{"name": "Multiple "quotes" in "one" string", "value": "Multiple "quotes" in "the second" string"}',

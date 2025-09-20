@@ -7,7 +7,66 @@ from opto.trace.utils import sum_feedback
 
 
 class AbstractOptimizer:
-    """An optimizer is responsible for updating the parameters based on the feedback."""
+    """Abstract base class for all optimizers in the Trace framework.
+
+    Defines the interface that all optimizers must implement for parameter
+    optimization based on feedback from the computation graph.
+
+    Parameters
+    ----------
+    parameters : list[ParameterNode]
+        List of trainable parameters to optimize. Must be non-empty and contain
+        only ParameterNode instances.
+    *args
+        Additional positional arguments for optimizer configuration.
+    **kwargs
+        Additional keyword arguments for optimizer configuration.
+
+    Attributes
+    ----------
+    parameters : list[ParameterNode]
+        The parameters being optimized.
+
+    Methods
+    -------
+    step()
+        Perform one optimization step.
+    zero_feedback()
+        Clear accumulated feedback from parameters.
+    propagator
+        Property returning the feedback propagator.
+
+    Raises
+    ------
+    AssertionError
+        If parameters is not a list, contains non-ParameterNode objects,
+        or is empty.
+
+    Notes
+    -----
+    This abstract class establishes the optimizer protocol:
+
+    1. **Parameter Management**: Optimizers maintain a list of parameters
+       they are responsible for updating.
+
+    2. **Feedback Processing**: Optimizers process feedback accumulated
+       in parameters during backward passes.
+
+    3. **Update Steps**: The step() method applies optimization logic
+       to update parameter values.
+
+    4. **Feedback Clearing**: zero_feedback() resets accumulated feedback
+       for the next iteration.
+
+    Subclasses must implement all abstract methods to create functional
+    optimizers.
+
+    See Also
+    --------
+    Optimizer : Concrete base class with graph-based optimization
+    ParameterNode : Trainable parameters that optimizers update
+    Propagator : Handles feedback propagation through the graph
+    """
 
     def __init__(self, parameters: List[ParameterNode], *args, **kwargs):
         assert type(parameters) is list
@@ -30,7 +89,103 @@ class AbstractOptimizer:
 
 
 class Optimizer(AbstractOptimizer):
-    """Optimizer based on Trace graph."""
+    """Base class for graph-based optimizers in the Trace framework.
+
+    Extends AbstractOptimizer with concrete implementations for graph-based
+    optimization, including feedback propagation, parameter projection, and
+    update mechanisms.
+
+    Parameters
+    ----------
+    parameters : list[ParameterNode]
+        List of trainable parameters to optimize.
+    propagator : Propagator, optional
+        Custom propagator for feedback processing. If None, uses default
+        GraphPropagator.
+    *args
+        Additional positional arguments.
+    **kwargs
+        Additional keyword arguments.
+
+    Attributes
+    ----------
+    parameters : list[ParameterNode]
+        The parameters being optimized.
+    propagator : Propagator
+        The feedback propagator used during backward passes.
+    trace_graph : Any
+        Aggregated computation graph from all parameters.
+
+    Methods
+    -------
+    step(bypassing=False, *args, **kwargs)
+        Perform one optimization step with optional update bypassing.
+    propose(*args, **kwargs)
+        Generate proposed parameter updates based on feedback.
+    project(update_dict)
+        Apply constraints/projections to proposed updates.
+    update(update_dict)
+        Apply updates to trainable parameters.
+    backward(node, *args, **kwargs)
+        Propagate feedback through the graph.
+    zero_feedback()
+        Clear accumulated feedback from all parameters.
+    save(path)
+        Save optimizer state (placeholder).
+    load(path)
+        Load optimizer state (placeholder).
+    _step(*args, **kwargs)
+        Abstract method for computing parameter updates.
+    default_propagator()
+        Return the default propagator instance.
+
+    Notes
+    -----
+    The Optimizer class implements a three-stage update process:
+
+    1. **Propose**: Generate candidate updates based on feedback
+       (implemented in _step by subclasses).
+
+    2. **Project**: Apply constraints and projections to ensure
+       updates remain in valid parameter space.
+
+    3. **Update**: Apply the projected updates to parameters
+       (can be bypassed for analysis).
+
+    Key features:
+
+    - **Feedback Aggregation**: Automatically collects and aggregates
+      feedback from the computation graph.
+
+    - **Projection Support**: Integrates with parameter projections
+      for constrained optimization.
+
+    - **Flexible Propagation**: Supports custom propagators for
+      different feedback processing strategies.
+
+    - **State Management**: Provides hooks for saving/loading
+      optimizer state (implementation-specific).
+
+    Subclasses must implement _step() to define the optimization
+    algorithm.
+
+    See Also
+    --------
+    AbstractOptimizer : Abstract base class
+    GraphPropagator : Default feedback propagator
+    ParameterNode : Parameters being optimized
+    Projection : Constraints applied during optimization
+
+    Examples
+    --------
+    >>> class MyOptimizer(Optimizer):
+    ...     def _step(self):
+    ...         updates = {}
+    ...         for p in self.parameters:
+    ...             feedback = sum_feedback(p.feedback)
+    ...             updates[p] = p.data - 0.01 * feedback
+    ...         return updates
+    """
 
     def __init__(
         self,
@@ -54,14 +209,50 @@ class Optimizer(AbstractOptimizer):
         return sum_feedback(self.parameters)
 
     def step(self, bypassing=False, *args, **kwargs):
+        """Perform one optimization step.
+
+        Parameters
+        ----------
+        bypassing : bool, default=False
+            If True, computes updates but doesn't apply them to parameters.
+            Useful for analysis or debugging.
+        *args
+            Additional arguments passed to propose().
+        **kwargs
+            Additional keyword arguments passed to propose().
+
+        Returns
+        -------
+        dict[ParameterNode, Any]
+            Dictionary mapping parameters to their (projected) updates.
+
+        Notes
+        -----
+        The step executes in three phases:
+        1. Propose updates via _step()
+        2. Apply projections to maintain constraints
+        3. Update parameters (unless bypassing=True)
+        """
         update_dict = self.propose(*args, **kwargs)
         self.project(update_dict)
         if not bypassing:
             self.update(update_dict)
-        return update_dict  # TODO add reasoning
+        return update_dict
 
     def project(self, update_dict: Dict[ParameterNode, Any]):
-        """Project the update dictionary onto the feasible set."""
+        """Apply projections to constrain parameter updates.
+
+        Parameters
+        ----------
+        update_dict : dict[ParameterNode, Any]
+            Proposed updates for each parameter.
+
+        Notes
+        -----
+        Modifies update_dict in-place by applying each parameter's
+        projection operators sequentially. Only applies to trainable
+        parameters with defined projections.
+        """
         for p, d in update_dict.items():
             if p.trainable:
                 for projection in p.projections:
@@ -69,30 +260,112 @@ class Optimizer(AbstractOptimizer):
             update_dict[p] = d
 
     def propose(self, *args, **kwargs):
-        """Propose the new data of the parameters based on the feedback."""
+        """Generate proposed parameter updates based on feedback.
+
+        Parameters
+        ----------
+        *args
+            Arguments passed to _step().
+        **kwargs
+            Keyword arguments passed to _step().
+
+        Returns
+        -------
+        dict[ParameterNode, Any]
+            Proposed new values for each parameter.
+
+        Notes
+        -----
+        Delegates to _step() which must be implemented by subclasses.
+        """
         return self._step(*args, **kwargs)
 
     def update(self, update_dict: Dict[ParameterNode, Any]):
-        """Update the trainable parameters given a dictionary of new data."""
+        """Apply updates to trainable parameters.
+
+        Parameters
+        ----------
+        update_dict : dict[ParameterNode, Any]
+            New values for each parameter.
+
+        Notes
+        -----
+        Only updates parameters marked as trainable. Updates are
+        applied by directly modifying the parameter's _data attribute.
+        """
         for p, d in update_dict.items():
             if p.trainable:
                 p._data = d
 
     def zero_feedback(self):
+        """Clear accumulated feedback from all parameters.
+
+        Notes
+        -----
+        Should be called after each optimization step to prepare
+        for the next iteration's feedback accumulation.
+        """
         for p in self.parameters:
             p.zero_feedback()
 
     # Subclass should implement the methods below.
     def _step(self, *args, **kwargs) -> Dict[ParameterNode, Any]:
-        """Return the new data of parameter nodes based on the feedback."""
+        """Compute parameter updates based on accumulated feedback.
+
+        Parameters
+        ----------
+        *args
+            Optimizer-specific arguments.
+        **kwargs
+            Optimizer-specific keyword arguments.
+
+        Returns
+        -------
+        dict[ParameterNode, Any]
+            Proposed new values for each parameter.
+
+        Notes
+        -----
+        Must be implemented by subclasses to define the optimization
+        algorithm. Has access to self.parameters and their feedback.
+        """
         raise NotImplementedError
 
     def default_propagator(self):
-        """Return the default Propagator object of the optimizer."""
+        """Return the default feedback propagator.
+
+        Returns
+        -------
+        GraphPropagator
+            Default propagator for feedback processing.
+
+        Notes
+        -----
+        Subclasses can override to provide custom default propagators.
+        """
         return GraphPropagator()
 
     def backward(self, node: Node, *args, **kwargs):
-        """Propagate the feedback backward."""
+        """Propagate feedback backward through the computation graph.
+
+        Parameters
+        ----------
+        node : Node
+            Starting node for backward propagation.
+        *args
+            Additional arguments passed to node.backward().
+        **kwargs
+            Additional keyword arguments passed to node.backward().
+
+        Returns
+        -------
+        Any
+            Result from node.backward(), typically a visualization graph.
+
+        Notes
+        -----
+        Uses the optimizer's propagator for feedback processing.
+        """
         return node.backward(*args, propagator=self.propagator, **kwargs)
 
     def save(self, path: str):

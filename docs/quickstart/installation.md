@@ -9,6 +9,20 @@ any external dependencies.
 However, if you want to use optimizer `opto.optimizers`, 
 then we require `LiteLLM` package to make LLM API calls.
 
+If you want to use the graph visualization features (e.g., `node.backward(visualize=True)`), 
+you need to install the system graphviz package:
+
+```bash
+# On Ubuntu/Debian
+sudo apt install graphviz
+
+# On macOS
+brew install graphviz
+
+# On Windows
+# Download from https://graphviz.org/download/
+```
+
 To install Trace, run: 
 
 ```{admonition} Installation Command

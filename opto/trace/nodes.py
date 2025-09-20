@@ -11,23 +11,67 @@ import contextvars
 def node(data, name=None, trainable=False, description=None):
     """Create a Node object from data.
 
-    Args:
-        data: The data to create the Node from.
-        name (str, optional): The name of the Node.
-        trainable (bool, optional): Whether the Node is trainable. Defaults to False.
-        description (str, optional): A string describing the data.
+    This is the primary factory function for creating nodes in the Trace computation graph.
+    Nodes are the fundamental data structures that form vertices in the directed acyclic graph (DAG)
+    used for automatic differentiation and feedback propagation.
 
-    Returns:
-        Node: A Node object containing the data.
+    Parameters
+    ----------
+    data : Any
+        The data to wrap in a Node. Can be any Python object including primitives,
+        collections, or custom objects. If already a Node, its data will be extracted.
+    name : str, optional
+        A human-readable name for the node. Used for identification in graph visualizations
+        and debugging. If not provided, a default name based on the data type will be generated.
+    trainable : bool, default=False
+        Whether this node's value can be modified by an optimizer during training.
+        If True, creates a ParameterNode instead of a regular Node.
+    description : str, optional
+        A textual description of the node's purpose or constraints. Used as soft
+        constraints during optimization and for documentation.
 
-    Notes:
-        If trainable=True:
-            - If data is already a Node, extracts underlying data and updates name
-            - Creates ParameterNode with extracted data, name, trainable=True
+    Returns
+    -------
+    Node or ParameterNode
+        A Node object containing the data. Returns ParameterNode if trainable=True,
+        otherwise returns Node.
 
-        If trainable=False:
-            - If data is already a Node, returns it (with warning if name provided)
-            - Otherwise creates new Node with data, name
+    Raises
+    ------
+    AssertionError
+        If description is provided but is not a string or None.
+
+    Notes
+    -----
+    The behavior differs based on the trainable parameter:
+    
+    If trainable=True:
+        - If data is already a Node, extracts its underlying data and creates a new ParameterNode
+        - The name is preserved from the original node if no new name is provided
+        - Always returns a new ParameterNode instance
+    
+    If trainable=False:
+        - If data is already a Node, returns it unchanged (with a warning if a new name was provided)
+        - Otherwise creates a new Node with the provided data and name
+    
+    The created nodes are automatically registered in the global GRAPH registry.
+
+    See Also
+    --------
+    Node : The base node class
+    ParameterNode : Trainable node class for optimization parameters
+    MessageNode : Node class for operator outputs
+
+    Examples
+    --------
+    >>> # Create a simple node
+    >>> x = node(5, name="x")
+    >>> 
+    >>> # Create a trainable parameter node
+    >>> weight = node(0.5, name="weight", trainable=True)
+    >>> 
+    >>> # Nodes can contain complex data structures
+    >>> config = node({"learning_rate": 0.01, "batch_size": 32}, name="config")
     """
     assert type(description) is str or description is None
 
@@ -55,20 +99,50 @@ NAME_SCOPES = []  # A stack of name scopes
 
 
 class Graph:
-    """Graph is a registry of all the nodes, forming a Directed Acyclic Graph (DAG).
+    """Registry and manager for all nodes in the computation graph.
 
-    Attributes:
-        _nodes (defaultdict): An instance-level attribute, which is a defaultdict of lists, used as a lookup table to find nodes by name.
+    The Graph class maintains a global registry of all nodes created during program execution,
+    organizing them into a Directed Acyclic Graph (DAG) structure. It provides functionality
+    for node registration, retrieval, and graph traversal operations.
 
-    Notes:
-        The Graph class manages and organizes nodes in a Directed Acyclic Graph (DAG).
-        It provides methods to register nodes, clear the graph, retrieve nodes by name, and identify root nodes.
-        The `register` method assumes that elements in `_nodes` are never removed,
-        which is important for maintaining the integrity of node names.
+    Attributes
+    ----------
+    TRACE : bool
+        Class-level flag controlling whether new operations create traced MessageNodes.
+        When True (default), operations on nodes are recorded in the graph for automatic
+        differentiation. When False, operations execute without creating graph connections.
+    _nodes : defaultdict[str, list[Node]]
+        Instance-level registry mapping node names to lists of nodes with that name.
+        Multiple nodes can share the same base name but are differentiated by indices.
+
+    Notes
+    -----
+    The Graph maintains several important invariants:
+    
+    1. **Unique Naming**: Each node has a unique identifier in the format "name:index"
+       where index increments for nodes with the same base name.
+    
+    2. **No Removal**: Once registered, nodes are never removed from the registry.
+       This ensures stable references and consistent indexing.
+    
+    3. **DAG Structure**: The graph maintains a directed acyclic structure with no cycles,
+       enabling proper feedback propagation during backward passes.
+    
+    4. **Name Scoping**: Supports hierarchical name scopes (similar to TensorFlow) through
+       the global NAME_SCOPES stack, allowing organized node naming in nested contexts.
+    
+    The Graph class is typically accessed through the global GRAPH instance rather than
+    instantiated directly.
+
+    See Also
+    --------
+    Node : Base class for graph nodes
+    NAME_SCOPES : Global stack for hierarchical naming contexts
     """
 
     TRACE = True  # When True, we trace the graph when creating MessageNode. When False, we don't trace the graph.
     LEGACY_GRAPH_BEHAVIOR = False  # When True, we use the legacy graph behavior where nodes are stored in lists. When False, we only store the count of nodes to save memory.
+    ALLOW_NESTED_GRAPHS = False # When True, we allow nested graphs. When False, we don't allow nested graphs.
 
     def __init__(self):
         """Initialize the Graph object.
@@ -572,11 +646,56 @@ def get_op_name(description):
 
 
 class NodeVizStyleGuide:
-    """A class to provide a standardized way to visualize nodes in a graph.
+    """Style guide for visualizing nodes in graph representations.
 
-    Attributes:
-        style (str): Defines the style of the visualization. Default is 'default'.
-        print_limit (int): Sets the maximum number of characters to print for node descriptions and content. Default is 100.
+    Provides a standardized approach to generating visual attributes for nodes when
+    rendering computation graphs using tools like Graphviz. Controls aspects such as
+    node shapes, colors, labels, and truncation of long content.
+
+    Parameters
+    ----------
+    style : str, default='default'
+        The visualization style to use. Currently only 'default' is supported.
+    print_limit : int, default=100
+        Maximum number of characters to display for node descriptions and content
+        before truncation with ellipsis.
+
+    Attributes
+    ----------
+    style : str
+        The current visualization style.
+    print_limit : int
+        Maximum characters before truncation.
+
+    Methods
+    -------
+    get_attrs(x)
+        Generate complete visualization attributes for a node.
+    get_label(x)
+        Construct the text label for a node.
+    get_node_shape(x)
+        Determine the shape to use for a node.
+    get_color(x)
+        Assign fill color to a node.
+    get_style(x)
+        Set the visual style properties of a node.
+
+    Notes
+    -----
+    This class defines the visual language for graph representations:
+    
+    - **ParameterNodes** are rendered as boxes with light blue fill
+    - **ExceptionNodes** are rendered as ellipses with red fill
+    - **Regular Nodes** are rendered as ellipses with default fill
+    - **Trainable nodes** have a filled, solid style
+    
+    Labels include the node's Python name, description, and truncated content.
+    Long descriptions and content are automatically truncated to improve readability.
+
+    See Also
+    --------
+    NodeVizStyleGuideColorful : Enhanced colorful visualization style
+    Node.backward : Method that uses visualization during backward pass
     """
 
     def __init__(self, style="default", print_limit=100):
@@ -700,11 +819,54 @@ class NodeVizStyleGuide:
 
 
 class NodeVizStyleGuideColorful(NodeVizStyleGuide):
-    """A class to provide a colorful style guide for visualizing nodes in a graph.
+    """Enhanced colorful style guide for visualizing nodes in graph representations.
 
-    Attributes:
-        style (str): Defines the style of the visualization. Default is 'default'.
-        print_limit (int): Sets the maximum number of characters to print for node descriptions and content. Default is 100.
+    Extends the base NodeVizStyleGuide with more visually distinctive styling,
+    including colored borders and enhanced color schemes for different node types.
+    Particularly useful for presentations and debugging complex graphs.
+
+    Parameters
+    ----------
+    style : str, default='default'
+        The visualization style to use. Currently only 'default' is supported.
+    print_limit : int, default=100
+        Maximum number of characters to display for node descriptions and content
+        before truncation with ellipsis.
+
+    Attributes
+    ----------
+    style : str
+        The current visualization style.
+    print_limit : int
+        Maximum characters before truncation.
+
+    Methods
+    -------
+    get_attrs(x)
+        Generate complete visualization attributes including border properties.
+    get_border_color(x)
+        Assign border color based on node type.
+    get_color(x)
+        Assign fill color with enhanced color scheme.
+    get_style(x)
+        Always returns 'filled,solid' for consistent appearance.
+
+    Notes
+    -----
+    Enhanced visual scheme compared to base class:
+    
+    - **ParameterNodes**: Light pink fill (#FFE5E5) with red border (#FF7E79)
+    - **ExceptionNodes**: Red fill (firebrick1) with black border
+    - **Regular Nodes**: Light blue fill (#DEEBF6) with blue border (#5C9BD5)
+    - All nodes have increased border width (1.2) for better visibility
+    
+    This style guide is automatically used in Node.backward() when visualize=True
+    for clearer graph representations.
+
+    See Also
+    --------
+    NodeVizStyleGuide : Base visualization style guide
+    Node.backward : Method that uses this for colorful visualization
     """
 
     def __init__(self, style="default", print_limit=100):
@@ -950,6 +1112,24 @@ class Node(AbstractNode[T]):
         """
         return (-self.level, id(self), self)
 
+    def _detach(self):
+        """Detach the node from its children and parents to break the graph.
+
+        Notes:
+            This method removes all edges between the current node and its children and parents,
+            effectively isolating the current node from the graph.
+
+            XXX This method does not propagate the updated level to the children. Use with caution.
+        """
+        for c in self.children:
+            c._parents.remove(self)
+        for p in self.parents:
+            p._children.remove(self)
+        self._children = []
+        # self._parents = []  # we still keep this to allow tracking inputs to create this node for computing the ``effective'' Jacobian.
+        self.zero_feedback()
+        # NOTE we do not update the levels of this node and its children. Use with caution.
+
     def backward(
         self,
         feedback: Any = "",
@@ -1040,6 +1220,11 @@ class Node(AbstractNode[T]):
                 node.zero_feedback()
 
                 for parent in node.parents:
+                    if len(parent.parameter_dependencies) == 0 and not GRAPH.ALLOW_NESTED_GRAPHS:
+                        continue  # skip parents that are not descendants of parameters to save memory
+                        # This will break the nested graph functionality
+                        # TODO better implementation for nested graphs for memory efficiency
+
                     if parent in propagated_feedback:
                         parent._add_feedback(node, propagated_feedback[parent])
 
@@ -1080,6 +1265,9 @@ class Node(AbstractNode[T]):
                             digraph.node(parent.py_name, **nvsg.get_attrs(parent))
 
                 node._backwarded = not retain_graph  # set backwarded to True
+                if node._backwarded and not GRAPH.LEGACY_GRAPH_BEHAVIOR:
+                    node._detach()  # detach the node from the graph to save memory
+
 
             except IndexError:  # queue is empty
                 break
@@ -2034,6 +2222,72 @@ class Node(AbstractNode[T]):
 
 
 class ParameterNode(Node[T]):
+    """A trainable node that can be optimized during training.
+
+    ParameterNode extends Node to represent trainable parameters in the computation graph.
+    These nodes can be modified by optimizers during the training process and support
+    projections for constrained optimization.
+
+    Parameters
+    ----------
+    value : Any
+        The initial value of the parameter.
+    name : str, optional
+        Name identifier for the parameter node.
+    trainable : bool, default=True
+        Whether this parameter can be optimized. Usually True for ParameterNodes.
+    description : str, optional
+        Textual description used as soft constraints during optimization.
+    projections : list[Projection], optional
+        List of projection operators to apply during optimization for maintaining
+        constraints (e.g., keeping values within bounds).
+    info : dict, optional
+        Additional metadata about the parameter.
+
+    Attributes
+    ----------
+    projections : list[Projection]
+        Active projections for this parameter.
+    trainable : bool
+        Whether the parameter is trainable.
+    _dependencies : dict
+        Tracks parameter and expandable node dependencies.
+
+    Notes
+    -----
+    ParameterNodes are the primary mechanism for defining optimizable values in Trace:
+    
+    1. **Automatic Registration**: ParameterNodes register themselves as parameters
+       in the dependency tracking system.
+    
+    2. **Projection Support**: Can enforce constraints through projection operators
+       that modify proposed updates to maintain validity.
+    
+    3. **Optimizer Integration**: Optimizers specifically target ParameterNodes
+       when applying updates based on feedback.
+    
+    4. **Visualization**: Rendered as boxes (rather than ellipses) in graph
+       visualizations to distinguish them from regular nodes.
+
+    See Also
+    --------
+    Node : Base class for all nodes
+    node : Factory function that creates ParameterNodes when trainable=True
+    Optimizer : Uses ParameterNodes as optimization targets
+    Projection : Constraint enforcement for parameters
+
+    Examples
+    --------
+    >>> # Create a trainable weight parameter
+    >>> weight = ParameterNode(0.5, name="weight")
+    >>> 
+    >>> # Parameter with description for guided optimization
+    >>> prompt = ParameterNode(
+    ...     "Solve this step by step",
+    ...     name="prompt",
+    ...     description="A clear instructional prompt"
+    ... )
+    """
     # This is a shorthand of a trainable Node.
     def __init__(
         self,
@@ -2075,23 +2329,88 @@ class ParameterNode(Node[T]):
 
 
 class MessageNode(Node[T]):
-    """A node representing the output of an operator.
+    """Node representing the output of an operator in the computation graph.
 
-    The description string should begin with [operator_name] followed by details about the operator.
-    When referring to inputs in the description, use either:
-    - The keys in args (if args is a dict)
-    - The names of the nodes in args (if args is a list)
+    MessageNodes are automatically created when operations are performed on traced nodes.
+    They capture the relationship between inputs and outputs, enabling automatic differentiation
+    and feedback propagation through the graph.
 
+    Parameters
+    ----------
+    value : Any
+        The output value produced by the operator.
+    inputs : Union[List[Node], Dict[str, Node]]
+        Input nodes to the operator. Can be either:
+        - A list of Node objects (will be converted to dict with node names as keys)
+        - A dict mapping parameter names to Node objects
+    description : str
+        Description of the operator. Must begin with "[operator_name]" followed by
+        details. When referring to inputs, use the keys from the inputs dict.
+    name : str, optional
+        Name for this output node.
+    info : dict, optional
+        Additional metadata about the operation, including:
+        - 'inputs': Original function inputs
+        - 'output': Original function output
+        - 'traceable_code': Whether the operation contains traceable code
+
+    Attributes
+    ----------
+    inputs : Union[List[Node], Dict[str, Node]]
+        Copy of the input nodes to this operator.
+    hidden_dependencies : set
+        Parameters that this node depends on but aren't visible in the current graph level.
+    op_name : str
+        The operator type extracted from the description.
+
+    Notes
+    -----
+    MessageNodes serve several critical functions in the Trace system:
+    
+    1. **Operation Recording**: Each MessageNode records an operation that was performed,
+       maintaining the complete computation history.
+    
+    2. **Dependency Tracking**: Automatically tracks dependencies on parameters and
+       expandable nodes through the graph structure.
+    
+    3. **Feedback Propagation**: During backward passes, MessageNodes receive feedback
+       from children and propagate processed feedback to parent nodes.
+    
+    4. **Hidden Dependencies**: Can track dependencies on parameters not directly visible
+       in the current graph level, important for nested function calls.
+    
+    5. **Automatic Creation**: Created automatically by operators when GRAPH.TRACE is True,
+       users rarely need to instantiate MessageNodes directly.
+
+    Description Format
+    -----------------
+    The description must follow the pattern: "[operator_name] details"
+    
     Examples:
-        >>> MessageNode(node_a, inputs=[node_a],
-        >>>        description="[identity] This is an identity operator.")
-        >>> MessageNode(copy_node_a, inputs=[node_a],
-        >>>        description="[copy] This is a copy operator.")
-        >>> MessageNode(1, inputs={'a':node_a, 'b':node_b},
-        >>>        description="[Add] This is an add operator of a and b.")
+    - "[add] Addition of a and b"
+    - "[multiply] Element-wise multiplication"
+    - "[call] Function call with arguments"
 
-    Attributes:
-        value: The output value of the operator
+    See Also
+    --------
+    Node : Base class for all nodes
+    ExceptionNode : Specialized MessageNode for exceptions
+    operators : Module containing operators that create MessageNodes
+
+    Examples
+    --------
+    >>> # MessageNodes are typically created by operators
+    >>> a = node(5, name="a")
+    >>> b = node(3, name="b")
+    >>> # The following operation creates a MessageNode automatically
+    >>> c = a + b  # Creates MessageNode with inputs={'a': a, 'b': b}
+    >>> 
+    >>> # Manual creation (rarely needed)
+    >>> result = MessageNode(
+    ...     value=8,
+    ...     inputs={'a': a, 'b': b},
+    ...     description="[add] Addition of a and b"
+    ... )
     """
 
     # TODO document what needs to go into info
@@ -2201,7 +2520,70 @@ class MessageNode(Node[T]):
 
 
 class ExceptionNode(MessageNode[T]):
-    """Node containing the exception message."""
+    """Specialized node for capturing and propagating exceptions in the computation graph.
+
+    ExceptionNodes are created when operations fail during execution, preserving error
+    information in the graph structure for debugging and error-aware optimization.
+
+    Parameters
+    ----------
+    value : Exception
+        The exception that was raised during operation execution.
+    inputs : Union[List[Node], Dict[str, Node]]
+        Input nodes that led to the exception.
+    description : str, optional
+        Description of the operation that failed.
+    name : str, optional
+        Name for this exception node.
+    info : dict, optional
+        Additional context about the error, including:
+        - 'error_comment': Detailed error message for feedback
+        - 'traceback': Full traceback information
+        - 'code': Code that caused the error
+
+    Methods
+    -------
+    create_feedback(style='simple')
+        Generate feedback message from the exception.
+
+    Notes
+    -----
+    ExceptionNodes enable sophisticated error handling in Trace:
+    
+    1. **Error Preservation**: Exceptions don't break the graph; they become part of it,
+       allowing continued execution and analysis.
+    
+    2. **Error-Aware Optimization**: Optimizers can receive feedback about errors and
+       adjust parameters to avoid them in future iterations.
+    
+    3. **Debugging Support**: Full error context is preserved, including type, message,
+       and optional traceback information.
+    
+    4. **Visualization**: Rendered in red (firebrick1) in graph visualizations for
+       easy identification of error points.
+    
+    5. **Feedback Generation**: Can produce simple or detailed feedback messages for
+       optimizers to understand what went wrong.
+
+    The node's value is formatted as "(ErrorType) error message" for clarity.
+
+    See Also
+    --------
+    MessageNode : Parent class for operation outputs
+    ExecutionError : Exception type often captured in ExceptionNodes
+    bundle : Decorator that can create ExceptionNodes on errors
+
+    Examples
+    --------
+    >>> # ExceptionNodes are typically created automatically on errors
+    >>> a = node([1, 2, 3], name="list")
+    >>> b = node(5, name="index")
+    >>> # If index is out of bounds, creates ExceptionNode
+    >>> try:
+    ...     c = a[b]  # IndexError -> ExceptionNode
+    ... except:
+    ...     pass  # ExceptionNode created in graph
+    """
 
     def __init__(
         self,
@@ -2225,6 +2607,32 @@ class ExceptionNode(MessageNode[T]):
         )
 
     def create_feedback(self, style="simple"):
+        """Generate feedback message from the exception.
+
+        Parameters
+        ----------
+        style : {'simple', 'full'}, default='simple'
+            The level of detail for the feedback message:
+            - 'simple': Returns the formatted exception string
+            - 'full': Returns detailed error comment from info if available
+
+        Returns
+        -------
+        str
+            The feedback message describing the error.
+
+        Raises
+        ------
+        AssertionError
+            If style is not 'simple' or 'full'.
+
+        Notes
+        -----
+        The feedback is used by optimizers to understand what went wrong and
+        potentially adjust parameters to avoid similar errors. The 'full' style
+        is particularly useful when detailed error analysis is needed for
+        complex debugging or optimization scenarios.
+        """
         assert style in ("simple", "full")
         feedback = self._data
         if style == "full":
