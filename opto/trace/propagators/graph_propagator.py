@@ -7,6 +7,7 @@ from opto.trace.nodes import (
     get_op_name,
     IDENTITY_OPERATORS,
     NodeVizStyleGuideColorful,
+    GRAPH,
 )
 from opto.trace.propagators.propagators import Propagator, AbstractFeedback
 import heapq
@@ -112,6 +113,9 @@ class TraceGraph(AbstractFeedback):
         4. Restores original feedback
         5. Returns the collected subgraph
         """
+        if not GRAPH.ALLOW_NESTED_GRAPHS:
+            raise ValueError("Nested graphs are not allowed. Set GRAPH.ALLOW_NESTED_GRAPHS = True to enable this feature.")
+
         assert isinstance(node, MessageNode)
         if isinstance(node.info["output"], MessageNode):
             # these are the nodes where we will collect the feedback

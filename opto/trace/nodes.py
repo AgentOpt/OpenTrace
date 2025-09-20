@@ -142,6 +142,7 @@ class Graph:
 
     TRACE = True  # When True, we trace the graph when creating MessageNode. When False, we don't trace the graph.
     LEGACY_GRAPH_BEHAVIOR = False  # When True, we use the legacy graph behavior where nodes are stored in lists. When False, we only store the count of nodes to save memory.
+    ALLOW_NESTED_GRAPHS = False # When True, we allow nested graphs. When False, we don't allow nested graphs.
 
     def __init__(self):
         """Initialize the Graph object.
@@ -1111,6 +1112,24 @@ class Node(AbstractNode[T]):
         """
         return (-self.level, id(self), self)
 
+    def _detach(self):
+        """Detach the node from its children and parents to break the graph.
+
+        Notes:
+            This method removes all edges between the current node and its children and parents,
+            effectively isolating the current node from the graph.
+
+            XXX This method does not propagate the updated level to the children. Use with caution.
+        """
+        for c in self.children:
+            c._parents.remove(self)
+        for p in self.parents:
+            p._children.remove(self)
+        self._children = []
+        # self._parents = []  # we still keep this to allow tracking inputs to create this node for computing the ``effective'' Jacobian.
+        self.zero_feedback()
+        # NOTE we do not update the levels of this node and its children. Use with caution.
+
     def backward(
         self,
         feedback: Any = "",
@@ -1201,6 +1220,11 @@ class Node(AbstractNode[T]):
                 node.zero_feedback()
 
                 for parent in node.parents:
+                    if len(parent.parameter_dependencies) == 0 and not GRAPH.ALLOW_NESTED_GRAPHS:
+                        continue  # skip parents that are not descendants of parameters to save memory
+                        # This will break the nested graph functionality
+                        # TODO better implementation for nested graphs for memory efficiency
+
                     if parent in propagated_feedback:
                         parent._add_feedback(node, propagated_feedback[parent])
 
@@ -1241,6 +1265,9 @@ class Node(AbstractNode[T]):
                             digraph.node(parent.py_name, **nvsg.get_attrs(parent))
 
                 node._backwarded = not retain_graph  # set backwarded to True
+                if node._backwarded and not GRAPH.LEGACY_GRAPH_BEHAVIOR:
+                    node._detach()  # detach the node from the graph to save memory
+
 
             except IndexError:  # queue is empty
                 break
