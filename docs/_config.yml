@@ -36,7 +36,7 @@ html:
   use_issues_button: false
   use_repository_button: true
   extra_navbar: <a href="intro.html">Go to Book Content</a>
-  extra_footer: "<a href='mailto:chinganc@microsoft.com'>Contact Us</a> | <a href='https://go.microsoft.com/fwlink/?LinkID=206977'>Terms Of Use</a> | <a href='https://www.microsoft.com/trademarks'>Trademarks</a>"
+  extra_footer: "<a href='mailto:aimingnie@gmail.com'>Contact Us</a> | <a href='https://go.microsoft.com/fwlink/?LinkID=206977'>Terms Of Use</a> | <a href='https://www.microsoft.com/trademarks'>Trademarks</a>"
   analytics:
     plausible_analytics_domain: agentopt.github.io/trace
     plausible_analytics_url: https://plausible.io/js/script.js

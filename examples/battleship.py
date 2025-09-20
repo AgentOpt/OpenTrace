@@ -247,39 +247,39 @@ class BattleshipBoard:
                 background-color: #699BF7;
             }
             .water {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/empty.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/empty.png');
                 background-size: cover;
             }
             .hit {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/hit.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/hit.png');
                 background-size: cover;
             }
             .miss {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/miss.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/miss.png');
                 background-size: cover;
             }
             .ship-head-horizontal {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/ship_hl.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/ship_hl.png');
                 background-size: cover;
             }
             .ship-body-horizontal {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/ship_h.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/ship_h.png');
                 background-size: cover;
             }
             .ship-tail-horizontal {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/ship_hr.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/ship_hr.png');
                 background-size: cover;
             }
             .ship-head-vertical {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/ship_vt.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/ship_vt.png');
                 background-size: cover;
             }
             .ship-body-vertical {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/ship_v.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/ship_v.png');
                 background-size: cover;
             }
             .ship-tail-vertical {
-                background-image: url('https://microsoft.github.io/Trace/images/battleship_widgets/ship_vb.png');
+                background-image: url('https://agentopt.github.io/OpenTrace/images/battleship_widgets/ship_vb.png');
                 background-size: cover;
             }
         </style>
