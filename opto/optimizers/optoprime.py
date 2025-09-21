@@ -603,9 +603,15 @@ class OptoPrime(Optimizer):
                     raise e
         return update_dict
 
-    def extract_llm_suggestion(self, response: str):
+    def extract_llm_suggestion(self, response: str, suggestion_tag=None, reasoning_tag=None, return_only_suggestion=True) -> Dict[str, Any]:
         """Extract the suggestion from the response."""
-        suggestion_tag = self.default_json_keys["suggestion"]
+        suggestion_tag = suggestion_tag or self.default_json_keys.get("suggestion", "suggestion")
+        reasoning_tag = reasoning_tag or self.default_json_keys.get("reasoning", "reasoning")
+
+        if "```" in response:
+            match = re.findall(r"```(.*?)```", response, re.DOTALL)
+            if len(match) > 0:
+                response = match[0]
 
         json_extracted = {}
         suggestion = {}
@@ -613,7 +619,10 @@ class OptoPrime(Optimizer):
         while attempt_n < 2:
             try:
                 json_extracted = json.loads(response)
+                if isinstance(json_extracted, dict):  # trim all whitespace keys in the json_extracted
+                    json_extracted = {k.strip(): v for k, v in json_extracted.items()}
                 suggestion = json_extracted.get(suggestion_tag, json_extracted)
+                reasoning = json_extracted.get(reasoning_tag, "")
                 break
             except json.JSONDecodeError:
                 response = re.findall(r"{.*}", response, re.DOTALL)
@@ -648,7 +657,7 @@ class OptoPrime(Optimizer):
         for key in keys_to_remove:
             del suggestion[key]
 
-        return suggestion
+        return suggestion if return_only_suggestion else {"reasoning": reasoning, "variables": suggestion}
 
     def call_llm(
         self,
