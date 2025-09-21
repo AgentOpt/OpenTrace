@@ -1,6 +1,7 @@
 import pytest
-from opto.trace import node, bundle
+from opto.trace import node, bundle, GRAPH
 from opto.trace.utils import contain, sum_feedback
+GRAPH.ALLOW_NESTED_GRAPHS = True
 
 def test_flat_dependencies():
     x = node(1.0, trainable=True)

@@ -8,7 +8,35 @@ import numpy as np
 
 # List[Nodes], Node[List]
 def iterate(x: Any):
-    """Return an iterator object for node of list, tuple, set, or dict."""
+    """Create an iterator for node containers.
+
+    Parameters
+    ----------
+    x : Any
+        A node or value to iterate over. Can be list, tuple, set, dict,
+        string, or numpy array.
+
+    Returns
+    -------
+    SeqIterable or DictIterable
+        An iterator object that yields nodes during iteration.
+
+    Raises
+    ------
+    ExecutionError
+        If the input is not iterable.
+
+    Notes
+    -----
+    This function enables iteration over node containers in traced code:
+    - Lists, tuples, strings, arrays → SeqIterable
+    - Sets → Converted to list then SeqIterable
+    - Dicts → SeqIterable over keys
+    - Non-iterables → Raises ExecutionError with ExceptionNode
+
+    The returned iterator creates child nodes during iteration,
+    maintaining proper parent-child relationships in the graph.
+    """
     if not isinstance(x, Node):
         x = node(x)
     if issubclass(x.type, list) or issubclass(x.type, tuple) or issubclass(x.type, str) or issubclass(x.type, np.ndarray):
@@ -35,6 +63,41 @@ def iterate(x: Any):
 
 # List, Tuple, Set share an Iterable
 class SeqIterable:
+    """Iterator for sequence-like node containers.
+
+    Provides iteration over nodes containing lists, tuples, sets,
+    strings, or arrays. Creates child nodes for each element during
+    iteration.
+
+    Parameters
+    ----------
+    wrapped_list : Node
+        A node containing a sequence-like object.
+
+    Attributes
+    ----------
+    wrapped_list : Node
+        The node being iterated over.
+    _index : int
+        Current iteration index.
+
+    Methods
+    -------
+    __iter__()
+        Reset iterator to beginning.
+    __next__()
+        Get next element as a node.
+
+    Notes
+    -----
+    Each iteration:
+    1. Accesses the element using node indexing (wrapped_list[index])
+    2. Creates a MessageNode for the accessed element
+    3. Maintains parent-child relationship in the graph
+    4. Returns the element node
+
+    This ensures all iterations are traced in the computation graph.
+    """
     def __init__(self, wrapped_list):
         assert isinstance(wrapped_list, Node)
         self._index = 0
@@ -56,6 +119,42 @@ class SeqIterable:
 
 
 class DictIterable:
+    """Iterator for dictionary nodes.
+
+    Provides iteration over dictionary nodes, yielding (key, value)
+    tuples where values are nodes.
+
+    Parameters
+    ----------
+    wrapped_dict : Node
+        A node containing a dictionary.
+
+    Attributes
+    ----------
+    wrapped_dict : Node
+        The dictionary node being iterated.
+    keys : Node
+        Node containing the dictionary keys.
+    _index : int
+        Current iteration index.
+
+    Methods
+    -------
+    __iter__()
+        Reset iterator to beginning.
+    __next__()
+        Get next (key, value) tuple.
+
+    Notes
+    -----
+    Iteration process:
+    1. Extracts keys using ops.keys()
+    2. For each key, accesses value using wrapped_dict[key]
+    3. Returns (key, value_node) tuples
+    4. Maintains graph relationships
+
+    Used by Node.items() to provide dictionary iteration in traced code.
+    """
     def __init__(self, wrapped_dict):
         assert isinstance(wrapped_dict, Node)
         self._index = 0

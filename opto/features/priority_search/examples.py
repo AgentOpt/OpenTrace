@@ -38,7 +38,7 @@ class SequentialUpdate(PrioritySearch):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
               test_frequency: Union[int, None] = 1, # frequency of evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -69,7 +69,7 @@ class SequentialUpdate(PrioritySearch):
                       verbose=verbose,
                       test_dataset=test_dataset,
                       test_frequency=test_frequency,
-                      num_eval_samples=num_eval_samples,
+                      num_test_samples=num_test_samples,
                       log_frequency=log_frequency,
                       save_frequency=save_frequency,
                       save_path=save_path,
@@ -110,7 +110,7 @@ class SequentialSearch(PrioritySearch):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
               test_frequency: Union[int, None] = 1, # frequency of evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -140,7 +140,7 @@ class SequentialSearch(PrioritySearch):
                       verbose=verbose,
                       test_dataset=test_dataset,
                       test_frequency=test_frequency,
-                      num_eval_samples=num_eval_samples,
+                      num_test_samples=num_test_samples,
                       log_frequency=log_frequency,
                       save_frequency=save_frequency,
                       save_path=save_path,
@@ -176,7 +176,7 @@ class BeamSearch(PrioritySearch):
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
               test_frequency: Union[int, None] = 1, # frequency of evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
@@ -203,7 +203,7 @@ class BeamSearch(PrioritySearch):
                        verbose=verbose,
                        test_dataset=test_dataset,
                        test_frequency=test_frequency,
-                       num_eval_samples=num_eval_samples,
+                       num_test_samples=num_test_samples,
                        log_frequency=log_frequency,
                        save_frequency=save_frequency,
                        save_path=save_path,

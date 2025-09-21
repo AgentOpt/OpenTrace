@@ -248,13 +248,14 @@ trainer.train(
     logger=logger,
     score_range=[-10, 10],
     # trainer kwargs
-    num_epochs=5,
-    batch_size=2,  # this is just for testing. effectively, this is the same batch_size=1 and num_proposals=4
+    num_epochs=3*4,
+    batch_size=1,
     num_batches=2,
-    verbose='output',
+    verbose=False, #'output',
     guide=guide,
     num_candidates=4,
-    num_proposals=2,
+    num_proposals=4,
+    memory_update_frequency=2,
     optimizer_kwargs={'objective':"You have a task of guessing two numbers. You should make sure your guess minimizes y.",
                      'memory_size': 10}
 )

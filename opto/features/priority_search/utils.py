@@ -10,7 +10,6 @@ from opto.optimizers.utils import print_color
 from opto.trainer.algorithms.basic_algorithms import Minibatch, Trainer, batchify
 from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler, BatchRollout
-import time
 
 # Some helper functions to convert between trace.Module and update_dict
 
@@ -83,3 +82,4 @@ def create_module_from_update_dict(agent, update_dict):
     new_agent = copy.deepcopy(agent) #.copy()  # create a copy of the agent
     set_module_parameters(new_agent, update_dict)  # set the parameters of the new agent
     return new_agent  # return the new agent
+
