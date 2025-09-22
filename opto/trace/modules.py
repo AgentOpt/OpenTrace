@@ -75,42 +75,46 @@ def model(cls):
     >>> m.parameters() returns all trainable parameters
     >>> m.export('model.py') saves current state as code
     """
-    name = f"{cls.__name__}Model"
+    new_cls_name = f"{cls.__name__}Model"
     bases = (cls, Model)
+
     # for export to work, we save the references to the original cls
-    __TRACE_RESERVED_cls_name = cls.__name__
+    cls_name = str(cls.__name__)
     temp_cls_members = inspect.getmembers(cls)
-    __TRACE_RESERVED_cls_members = []
-    __TRACE_RESERVED_cls_name_to_source = {}
+    cls_members = []
+    cls_member_names = []
+    cls_name_to_source = {}
     for name, member in temp_cls_members:
         if name.startswith('__TRACE_RESERVED_'):
             continue
         if not name.startswith('__'):
-            __TRACE_RESERVED_cls_members.append((name, member))
+            cls_members.append((name, member))
+            cls_member_names.append(name)
         elif name.startswith('__'):
             try:
                 if hasattr(member, '__qualname__') and cls.__name__ in member.__qualname__:
                     inspect.getsource(member)  # additionally we see if this works
-                    __TRACE_RESERVED_cls_members.append((name, member))
+                    cls_members.append((name, member))
+                    cls_member_names.append(name)
             except (AttributeError, TypeError):
                 continue
 
-    for name, member in __TRACE_RESERVED_cls_members:
+    for name, member in cls_members:
         if 'FunModule' in str(member):
             # for these class method members, we need to access their content dynamically
             continue
-        __TRACE_RESERVED_cls_name_to_source[name] = inspect.getsource(member)
+        cls_name_to_source[name] = inspect.getsource(member)
 
-    new_class = type(name, bases, {})
+    new_class = type(new_cls_name, bases, {})
+
+    cls.reserved_cls_name = cls_name
+    cls.reserved_cls_member_names = cls_member_names
+    cls.reserved_cls_name_to_source = cls_name_to_source
+
     new_class.__module__ = cls.__module__
 
-    # for export
-    new_class.reserved_cls_name = __TRACE_RESERVED_cls_name
-    new_class.reserved_cls_members = __TRACE_RESERVED_cls_members
-    new_class.reserved_cls_name_to_source = __TRACE_RESERVED_cls_name_to_source
-
     mod = sys.modules[cls.__module__]
-    setattr(mod, name, new_class)
+    setattr(mod, new_cls_name, new_class)
     return new_class
 
 class Module(ParameterContainer):
@@ -329,9 +333,13 @@ class Model(Module):
         cls = self.__class__
         name = cls.reserved_cls_name
         trace_model_body = f"class {name}:\n"
-        cls_members = cls.reserved_cls_members
+        cls_members = inspect.getmembers(self) # cls.reserved_cls_members
+        cls_member_names = cls.reserved_cls_member_names
 
         for i, (name, member) in enumerate(cls_members):
+            if name not in cls_member_names:
+                continue
+
             if 'FunModule' in str(member):
                 if member.parameter is not None:
                     source = member.parameter.data

@@ -265,141 +265,141 @@ class NonTrainableClass:
     def another_non_trainable(self, y):
         return y + 1
 
-# def test_export_non_trainable():
-#     obj = NonTrainableClass()
-#     obj._param._data = 10  # Change node value
-#     obj._param2._data = 20  # Change another node value
-#     temp_file = "temp_non_trainable.py"
-#     try:
-#         obj.export(temp_file)
-#         with open(temp_file, "r") as f:
-#             content = f.read()
-#             # Check if class definition is present
-#             assert "class NonTrainableClass:" in content
-#             # Check if node initializations were replaced with current values
-#             assert "self._param = 10" in content
-#             assert "self._param2 = 20" in content
-#             # Verify no node() calls remain
-#             assert "node(" not in content
-#             # Verify no bundle decorators remain
-#             assert "@bundle" not in content
-#             # Check if methods are present but without decorators
-#             assert "def non_trainable_method" in content
-#             assert "def another_non_trainable" in content
-#             # Check if regular attribute is present
-#             assert "regular_attr" in content
-#     finally:
-#         if os.path.exists(temp_file):
-#             os.remove(temp_file)
+def test_export_non_trainable():
+    obj = NonTrainableClass()
+    obj._param._data = 10  # Change node value
+    obj._param2._data = 20  # Change another node value
+    temp_file = "temp_non_trainable.py"
+    try:
+        obj.export(temp_file)
+        with open(temp_file, "r") as f:
+            content = f.read()
+            # Check if class definition is present
+            assert "class NonTrainableClass:" in content
+            # Check if node initializations were replaced with current values
+            assert "self._param = 10" in content
+            assert "self._param2 = 20" in content
+            # Verify no node() calls remain
+            assert "node(" not in content
+            # Verify no bundle decorators remain
+            assert "@bundle" not in content
+            # Check if methods are present but without decorators
+            assert "def non_trainable_method" in content
+            assert "def another_non_trainable" in content
+            # Check if regular attribute is present
+            assert "regular_attr" in content
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
-# def test_export_mixed_trainable():
+def test_export_mixed_trainable():
 
-#     @model
-#     class MixedClass:
-#         def __init__(self):
-#             super().__init__()
-#             self._trainable = node(1, trainable=True)
-#             self._non_trainable = node(2, trainable=False)
-#             self.regular_attr = "test"
+    @model
+    class MixedClass:
+        def __init__(self):
+            super().__init__()
+            self._trainable = node(1, trainable=True)
+            self._non_trainable = node(2, trainable=False)
+            self.regular_attr = "test"
 
-#         @bundle(trainable=True)
-#         def trainable_method(self, x):
-#             return x
+        @bundle(trainable=True)
+        def trainable_method(self, x):
+            return x
 
-#         @bundle(trainable=False)
-#         def non_trainable_method(self, y):
-#             return y + 1
+        @bundle(trainable=False)
+        def non_trainable_method(self, y):
+            return y + 1
 
 
-#     obj = MixedClass()
-#     obj._trainable._data = 100
-#     obj._non_trainable._data = 200
+    obj = MixedClass()
+    obj._trainable._data = 100
+    obj._non_trainable._data = 200
 
-#     obj.trainable_method.parameter._data = "def trainable_method(self, x):\n     return x + 3"
+    obj.trainable_method.parameter._data = "def trainable_method(self, x):\n     return x + 3"
 
-#     temp_file = "temp_mixed.py"
-#     try:
-#         obj.export(temp_file)
-#         with open(temp_file, "r") as f:
-#             content = f.read()
-#             # Check if class definition is present
-#             assert "class MixedClass:" in content
-#             # Check if all node initializations were replaced
-#             assert "self._trainable = 100" in content
-#             assert "self._non_trainable = 200" in content
-#             # Verify no node() calls remain
-#             assert "node(" not in content
-#             # Verify no bundle decorators remain
-#             assert "@bundle" not in content
-#             # Check if methods are present but without decorators
-#             assert "def trainable_method" in content
-#             assert "return x + 3" in content
-#             assert "def non_trainable_method" in content
-#             # Check if regular attribute is present
-#             assert "regular_attr" in content
-#     finally:
-#         if os.path.exists(temp_file):
-#             os.remove(temp_file)
+    temp_file = "temp_mixed.py"
+    try:
+        obj.export(temp_file)
+        with open(temp_file, "r") as f:
+            content = f.read()
+            # Check if class definition is present
+            assert "class MixedClass:" in content
+            # Check if all node initializations were replaced
+            assert "self._trainable = 100" in content
+            assert "self._non_trainable = 200" in content
+            # Verify no node() calls remain
+            assert "node(" not in content
+            # Verify no bundle decorators remain
+            assert "@bundle" not in content
+            # Check if methods are present but without decorators
+            assert "def trainable_method" in content
+            assert "return x + 3" in content
+            assert "def non_trainable_method" in content
+            # Check if regular attribute is present
+            assert "regular_attr" in content
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
-# def test_export_and_import():
-#     @model
-#     class StrangeCalculator:
-#         def __init__(self):
-#             super().__init__()
-#             self.offset = node(2, trainable=True)
-#             self.multiplier = node(1.5, trainable=True)
+def test_export_and_import():
+    @model
+    class StrangeCalculator:
+        def __init__(self):
+            super().__init__()
+            self.offset = node(2, trainable=True)
+            self.multiplier = node(1.5, trainable=True)
 
-#         @bundle(trainable=True)
-#         def add(self, x, y):
-#             """Add two numbers with an offset"""
-#             return x + y + self.offset
+        @bundle(trainable=True)
+        def add(self, x, y):
+            """Add two numbers with an offset"""
+            return x + y + self.offset
 
-#         @bundle(trainable=True)
-#         def multiply(self, x, y):
-#             """Multiply two numbers with a multiplier"""
-#             return x * y * self.multiplier
+        @bundle(trainable=True)
+        def multiply(self, x, y):
+            """Multiply two numbers with a multiplier"""
+            return x * y * self.multiplier
 
-#     # Create instance and modify parameters
-#     calc = StrangeCalculator()
-#     calc.offset._data = 3
-#     calc.multiplier._data = 2.0
-#     calc.add.parameter._data = "def add(self, x, y):\n    return x + y + self.offset + 1"
-#     calc.multiply.parameter._data = "def multiply(self, x, y):\n    return x * y * self.multiplier * 2"
+    # Create instance and modify parameters
+    calc = StrangeCalculator()
+    calc.offset._data = 3
+    calc.multiplier._data = 2.0
+    calc.add.parameter._data = "def add(self, x, y):\n    return x + y + self.offset + 1"
+    calc.multiply.parameter._data = "def multiply(self, x, y):\n    return x * y * self.multiplier * 2"
 
-#     # Dump the model
-#     temp_file = "temp_calculator.py"
-#     try:
-#         calc.export(temp_file)
+    # Dump the model
+    temp_file = "temp_calculator.py"
+    try:
+        calc.export(temp_file)
 
-#         # Import the dumped class
-#         import importlib.util
-#         spec = importlib.util.spec_from_file_location("temp_calculator", temp_file)
-#         temp_module = importlib.util.module_from_spec(spec)
-#         spec.loader.exec_module(temp_module)
+        # Import the dumped class
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("temp_calculator", temp_file)
+        temp_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(temp_module)
 
-#         # Get the imported class
-#         ImportedCalculator = temp_module.StrangeCalculator
+        # Get the imported class
+        ImportedCalculator = temp_module.StrangeCalculator
 
-#         # Create instance and test functionality
-#         imported_calc = ImportedCalculator()
+        # Create instance and test functionality
+        imported_calc = ImportedCalculator()
 
-#         # Test the modified behavior
-#         result_add = imported_calc.add(5, 3)
-#         result_multiply = imported_calc.multiply(4, 2)
+        # Test the modified behavior
+        result_add = imported_calc.add(5, 3)
+        result_multiply = imported_calc.multiply(4, 2)
 
-#         # Verify the results match our expected modified behavior
-#         # add: 5 + 3 + 3 + 1 = 12
-#         # multiply: 4 * 2 * 2.0 * 2 = 32
-#         assert result_add == 12, f"Expected 12, got {result_add}"
-#         assert result_multiply == 32, f"Expected 32, got {result_multiply}"
+        # Verify the results match our expected modified behavior
+        # add: 5 + 3 + 3 + 1 = 12
+        # multiply: 4 * 2 * 2.0 * 2 = 32
+        assert result_add == 12, f"Expected 12, got {result_add}"
+        assert result_multiply == 32, f"Expected 32, got {result_multiply}"
 
-#         # Verify the attributes have the correct values
-#         assert imported_calc.offset == 3
-#         assert imported_calc.multiplier == 2.0
+        # Verify the attributes have the correct values
+        assert imported_calc.offset == 3
+        assert imported_calc.multiplier == 2.0
 
-#     finally:
-#         if os.path.exists(temp_file):
-#             os.remove(temp_file)
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
 def test_copy_function():
     """Test the copy function of Module class."""
