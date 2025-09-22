@@ -189,65 +189,65 @@ class ComplexClass:
     def __str__(self):
         return "ComplexClass"
 
-# def test_export_basic():
-#     dummy = DummyClass()
-#     dummy._param._data = 42  # Change the node value
-#     temp_file = "temp_dummy.py"
-#     try:
-#         dummy.export(temp_file)
-#         with open(temp_file, "r") as f:
-#             content = f.read()
-#             # Check if class definition is present
-#             assert "class DummyClass:" in content
-#             # Check if regular method is present
-#             assert "def regular_method" in content
-#             # Check if __str__ is present (overridden dunder)
-#             assert "def __str__" in content
-#             # Check if __custom__ is present (custom dunder)
-#             assert "def __custom__" in content
-#             # Check if regular attribute is present
-#             assert "regular_attr" in content
-#             # Check if node initialization was replaced with current value
-#             assert "self._param = 42" in content
-#             assert "self._param = node(1" not in content
-#     finally:
-#         if os.path.exists(temp_file):
-#             os.remove(temp_file)
+def test_export_basic():
+    dummy = DummyClass()
+    dummy._param._data = 42  # Change the node value
+    temp_file = "temp_dummy.py"
+    try:
+        dummy.export(temp_file)
+        with open(temp_file, "r") as f:
+            content = f.read()
+            # Check if class definition is present
+            assert "class DummyClass:" in content
+            # Check if regular method is present
+            assert "def regular_method" in content
+            # Check if __str__ is present (overridden dunder)
+            assert "def __str__" in content
+            # Check if __custom__ is present (custom dunder)
+            assert "def __custom__" in content
+            # Check if regular attribute is present
+            assert "regular_attr" in content
+            # Check if node initialization was replaced with current value
+            assert "self._param = 42" in content
+            assert "self._param = node(1" not in content
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
-# def test_export_complex():
-#     complex_obj = ComplexClass()
-#     temp_file = "temp_complex.py"
-#     try:
-#         complex_obj.export(temp_file)
-#         with open(temp_file, "r") as f:
-#             content = f.read()
-#             # Check if class definition is present
-#             assert "class ComplexClass:" in content
-#             # Check if complex method is present
-#             assert "def complex_method" in content
-#             # Check if __str__ is present
-#             assert "def __str__" in content
-#             # Check if nested class reference is in the method
-#             assert "self._nested.regular_method" in content
-#     finally:
-#         if os.path.exists(temp_file):
-#             os.remove(temp_file)
+def test_export_complex():
+    complex_obj = ComplexClass()
+    temp_file = "temp_complex.py"
+    try:
+        complex_obj.export(temp_file)
+        with open(temp_file, "r") as f:
+            content = f.read()
+            # Check if class definition is present
+            assert "class ComplexClass:" in content
+            # Check if complex method is present
+            assert "def complex_method" in content
+            # Check if __str__ is present
+            assert "def __str__" in content
+            # Check if nested class reference is in the method
+            assert "self._nested.regular_method" in content
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
-# def test_export_with_projection():
-#     dummy = DummyClass()
-#     temp_file = "temp_dummy_formatted.py"
-#     try:
-#         # Test with BlackCodeFormatter
-#         from opto.trace.projections import BlackCodeFormatter
-#         dummy.export(temp_file, projections=[BlackCodeFormatter()])
-#         with open(temp_file, "r") as f:
-#             content = f.read()
-#             # Check if content is properly formatted
-#             assert "class DummyClass:" in content
-#             assert "def regular_method" in content
-#     finally:
-#         if os.path.exists(temp_file):
-#             os.remove(temp_file)
+def test_export_with_projection():
+    dummy = DummyClass()
+    temp_file = "temp_dummy_formatted.py"
+    try:
+        # Test with BlackCodeFormatter
+        from opto.trace.projections import BlackCodeFormatter
+        dummy.export(temp_file, projections=[BlackCodeFormatter()])
+        with open(temp_file, "r") as f:
+            content = f.read()
+            # Check if content is properly formatted
+            assert "class DummyClass:" in content
+            assert "def regular_method" in content
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
 @model
 class NonTrainableClass:
