@@ -10,6 +10,8 @@ from __future__ import annotations
 import copy
 import math
 import random
+import functools
+import types
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -195,9 +197,11 @@ def _maybe_merge_ancestor_aware(
     
     rollouts_used = 0
     
-    # Sample training minibatch
-    tx = rng.choices(train_dataset["inputs"], k=min(train_batch_size, len(train_dataset["inputs"])))
-    ti = rng.choices(train_dataset["infos"], k=len(tx))
+    # Sample training minibatch (no replacement → lower variance)
+    k = min(train_batch_size, len(train_dataset["inputs"]))
+    idxs = np.random.choice(len(train_dataset["inputs"]), k, replace=False)
+    tx = [train_dataset["inputs"][i] for i in idxs]
+    ti = [train_dataset["infos"][i] for i in idxs]
     
     # Prefer winners for parent selection
     _compute_pareto_counts(buffer)
@@ -228,10 +232,16 @@ def _maybe_merge_ancestor_aware(
                 _apply_params(optimizer, original)
             return float(np.mean(vec)) if all(s is not None for s in vec) else -float("inf")
         
-        rollouts_used += len(tx)
+        rollouts_used += k
         merged_batch_mean = _batch_mean_for(merged_params)
         parent_means = [_batch_mean_for(ci.params), _batch_mean_for(cj.params)]
-        rollouts_used += 2 * len(tx)
+        rollouts_used += 2 * k
+
+        # Early budget guard (3*k minibatch evals) before Pareto eval
+        if budget_B is not None and budget_tracker is not None:
+            if budget_tracker["used"] + 3 * k + len(pareto_inputs) > budget_B:
+                return None
+            budget_tracker["used"] += 3 * k
         
         if merged_batch_mean <= max(parent_means):
             continue  # Not promising enough
@@ -272,14 +282,47 @@ def _train_step_generate_child(agent, guide, optimizer, train_xs, train_infos, *
     Single-parent, incremental evolution "mutation": run forward on a minibatch to get batched feedback,
     then optimizer.step(bypassing=True) to obtain a new candidate param dict (without applying).
     """
-    use_parallel = (num_threads is not None and num_threads > 1)
+    use_parallel = (num_threads is not None and num_threads > 1 and batch_run is not None)
     if use_parallel:
-        # Use async_run but ensure thread safety through parameter handling
-        # Since we're working with parameters through optimizer, this should be thread-safe
-        outputs = async_run([lambda a,x,g,info: standard_optimization_step(a, x, g, info)] * len(train_xs),
-                            args_list=[(agent, x, guide, info) for x, info in zip(train_xs, train_infos)],
-                            max_workers=num_threads,
-                            description="GEPA forward (mutate parent)")
+        # Pre-bind args → pass callables only. Robust to different batch_run signatures.
+        callables = [
+            functools.partial(standard_optimization_step, agent, x, guide, info)
+            for x, info in zip(train_xs, train_infos)
+        ]
+        try:
+            outputs = batch_run(
+                callables,
+                max_workers=num_threads,
+                description="GEPA forward (mutate parent)",
+            )
+        except TypeError:
+            # Fallback: older/other signature (e.g., batch_run(callables, max_workers))
+            try:
+                outputs = batch_run(callables, num_threads)
+            except Exception:
+                outputs = None
+        # Normalize outputs to a list of results. batch_run in different versions may:
+        #  - return the list of results,
+        #  - return a callable that returns the results,
+        #  - return a generator/iterator,
+        #  - or return None.
+        try:
+            if callable(outputs):
+                outputs = outputs()
+            elif isinstance(outputs, types.GeneratorType):
+                outputs = list(outputs)
+            elif outputs is None:
+                # fallback to sequential evaluation
+                outputs = [fn() for fn in callables]
+            elif not isinstance(outputs, (list, tuple)):
+                # Some other iterable (e.g. map object)
+                try:
+                    outputs = list(outputs)
+                except Exception:
+                    outputs = [fn() for fn in callables]
+        except Exception:
+            # Any error while normalizing → fallback to sequential
+            outputs = [fn() for fn in callables]
     else:
         # Safe sequential fallback.
         outputs = [standard_optimization_step(agent, x, guide, info) for x, info in zip(train_xs, train_infos)]
@@ -386,10 +429,6 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
         self._id_counter = 0
         self.enable_pareto_cache = enable_pareto_cache
         self._pareto_cache: Dict[Tuple, Tuple[List[float], float]] = {}
-        # >>> NEW selector (commented out as ModuleSelector may not exist)
-        # self.module_selector = ModuleSelector(self.optimizer.parameters,
-        #                                      module_groups=module_groups,
-        #                                      policy=selectmodule_policy)
 
     def _next_id(self) -> int:
         self._id_counter += 1
@@ -550,9 +589,6 @@ class GEPABeamPareto(BeamsearchAlgorithm):
         super().__init__(agent, optimizer, num_threads=num_threads, logger=logger)
         self.rng = random.Random(rng_seed)
         np.random.seed(rng_seed)
-        # self.module_selector = ModuleSelector(self.optimizer.parameters,
-        #                                      module_groups=module_groups,
-        #                                      policy=selectmodule_policy)
 
     # We keep a Pareto select helper that returns (selected_params, wins, scores)
     def select(self,
@@ -708,9 +744,6 @@ class GEPAAlgorithmBase(Trainer):
         self.optimizer = _ensure_optimizer(agent, optimizer)
         self.rng = random.Random(rng_seed)
         np.random.seed(rng_seed)
-        # self.module_selector = ModuleSelector(self.optimizer.parameters,
-        #                                      module_groups=module_groups,
-        #                                      policy=selectmodule_policy)
 
     def train(self,
               guide,
