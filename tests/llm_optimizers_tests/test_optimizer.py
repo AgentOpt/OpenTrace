@@ -29,8 +29,8 @@ def get_all_optimizers():
                     kwargs.setdefault("use_json_object_format", True)
                     __base.__init__(self, *args, **kwargs)
                     # Ensure the prompt literally mentions JSON (OpenAI requirement)
-                    if hasattr(self, "output_format_prompt") and isinstance(self.output_format_prompt, str):
-                        self.output_format_prompt = "Please answer in JSON.\n" + self.output_format_prompt
+                    if hasattr(self, "output_format_prompt") and isinstance(self.output_format_prompt, str) and "JSON" not in self.output_format_prompt.upper():
+                        self.output_format_prompt = "Please answer in JSON format.\n" + self.output_format_prompt
                 JSONSubclass.__init__ = _json_init
                 optimizers.append(JSONSubclass)
             else:

@@ -603,10 +603,11 @@ class OptoPrime(Optimizer):
                     raise e
         return update_dict
 
-    def extract_llm_suggestion(self, response: str, suggestion_tag=None, reasoning_tag=None, return_only_suggestion=True) -> Dict[str, Any]:
+    def extract_llm_suggestion(self, response: str, suggestion_tag=None, reasoning_tag=None, return_only_suggestion=True, ignore_extraction_error=None) -> Dict[str, Any]:
         """Extract the suggestion from the response."""
         suggestion_tag = suggestion_tag or self.default_json_keys.get("suggestion", "suggestion")
         reasoning_tag = reasoning_tag or self.default_json_keys.get("reasoning", "reasoning")
+        ignore_extraction_error = ignore_extraction_error or getattr(self, "ignore_extraction_error", False)
 
         if "```" in response:
             match = re.findall(r"```(.*?)```", response, re.DOTALL)
@@ -646,9 +647,8 @@ class OptoPrime(Optimizer):
                 for key, value in pairs:
                     suggestion[key] = value
 
-        if len(suggestion) == 0 and not self.ignore_extraction_error:
-            print(f"Cannot extract {self.default_json_keys['suggestion']} from LLM's response:")
-            print(response)
+        if len(suggestion) == 0 and not ignore_extraction_error:
+            print(f"Cannot extract {suggestion_tag} from LLM's response:\n{response}")
 
         keys_to_remove = []
         for key, value in suggestion.items():
