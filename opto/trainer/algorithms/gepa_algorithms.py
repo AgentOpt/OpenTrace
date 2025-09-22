@@ -26,6 +26,11 @@ from opto.trainer.algorithms.basic_algorithms import (
     standard_optimization_step,
 )
 from opto.trainer.utils import async_run
+# Prefer thread-safe batched runner (deep-copies per task). Fallback handled at callsite.
+try:
+    from opto.trainer.utils import batch_run  # type: ignore
+except Exception:  # pragma: no cover
+    batch_run = None
 from opto.optimizers.utils import print_color
 
 
@@ -134,7 +139,7 @@ def _maybe_merge(buffer: List[Candidate],
 
         merged_params = _uniform_merge_params(a.params, b.params, rng)
         # Evaluate merged on Pareto subset
-        original_params = {p: copy.deepcopy(p.data) for p in agent.parameters()}
+        original_params = _snapshot_params_fast(list(agent.parameters()))
         try:
             # load params to agent
             from opto.optimizers.optimizer import Optimizer  # type: ignore
@@ -163,6 +168,98 @@ def _maybe_merge(buffer: List[Candidate],
     return None
 
 
+def _maybe_merge_ancestor_aware(
+        buffer: List[Candidate],
+        *,
+        id2cand: Dict[int, Candidate],
+        module_groups: List[List[ParameterNode]],
+        agent,
+        guide,
+        optimizer,
+        train_dataset: Dict[str, List[Any]],
+        train_batch_size: int,
+        pareto_inputs: List[Any],
+        pareto_infos: List[Any],
+        num_threads: Optional[int],
+        rng: random.Random,
+        tried_pairs: set,
+        budget_tracker: Optional[Dict[str, int]] = None,
+        budget_B: Optional[int] = None,
+        max_tries: int = 8
+) -> Optional[Tuple[Candidate, int]]:
+    """
+    Ancestor-aware merge with budget tracking. Returns (merged_candidate, rollouts_used).
+    """
+    if len(buffer) < 2:
+        return None
+    
+    rollouts_used = 0
+    
+    # Sample training minibatch
+    tx = rng.choices(train_dataset["inputs"], k=min(train_batch_size, len(train_dataset["inputs"])))
+    ti = rng.choices(train_dataset["infos"], k=len(tx))
+    
+    # Prefer winners for parent selection
+    _compute_pareto_counts(buffer)
+    pool = sorted(buffer, key=lambda c: (c.wins, c.mean), reverse=True)
+    
+    for _ in range(max_tries):
+        i, j = rng.sample(range(len(pool)), 2)
+        ci, cj = pool[i], pool[j]
+        if ci.id == cj.id:
+            continue
+        if ci.id in cj.ancestors or cj.id in ci.ancestors:
+            continue  # avoid direct ancestry
+        key = tuple(sorted((ci.id, cj.id)))
+        if key in tried_pairs:
+            continue
+        tried_pairs.add(key)
+        
+        merged_params = _uniform_merge_params(ci.params, cj.params, rng)
+        
+        # Quick minibatch acceptability check
+        def _batch_mean_for(param_dict):
+            original = _snapshot_params_fast(list(optimizer.parameters))
+            try:
+                _apply_params(optimizer, param_dict)
+                vec = evaluate(agent, guide, tx, ti, min_score=None, num_threads=num_threads,
+                               description="MERGE(mini-batch accept)")
+            finally:
+                _apply_params(optimizer, original)
+            return float(np.mean(vec)) if all(s is not None for s in vec) else -float("inf")
+        
+        rollouts_used += len(tx)
+        merged_batch_mean = _batch_mean_for(merged_params)
+        parent_means = [_batch_mean_for(ci.params), _batch_mean_for(cj.params)]
+        rollouts_used += 2 * len(tx)
+        
+        if merged_batch_mean <= max(parent_means):
+            continue  # Not promising enough
+        
+        # Full Pareto evaluation
+        original = _snapshot_params_fast(list(optimizer.parameters))
+        try:
+            _apply_params(optimizer, merged_params)
+            vec = evaluate(agent, guide, pareto_inputs, pareto_infos, min_score=None,
+                           num_threads=num_threads, description="GEPA+Merge: ancestor-aware Pareto eval")
+        finally:
+            _apply_params(optimizer, original)
+        mean = float(np.mean(vec)) if all(s is not None for s in vec) else -float("inf")
+        # Account Pareto evaluation cost in the global budget and local counter.
+        if budget_B is not None and budget_tracker is not None:
+            budget_tracker["used"] += len(pareto_inputs)
+            rollouts_used += len(pareto_inputs)
+
+        merged = Candidate(params=merged_params,
+                           eval_vector=vec, mean=mean,
+                           id=-1, parent_ids=(ci.id, cj.id),
+                           ancestors=set(ci.ancestors) | set(cj.ancestors) | {ci.id, cj.id},
+                           created_iter=0)
+        return merged, rollouts_used
+    
+    return None
+
+
 def _ensure_optimizer(agent, optimizer):
     if optimizer is not None:
         return optimizer
@@ -175,14 +272,16 @@ def _train_step_generate_child(agent, guide, optimizer, train_xs, train_infos, *
     Single-parent, incremental evolution "mutation": run forward on a minibatch to get batched feedback,
     then optimizer.step(bypassing=True) to obtain a new candidate param dict (without applying).
     """
-    use_async = num_threads is not None and num_threads > 1
-    if use_async:
+    use_parallel = (num_threads is not None and num_threads > 1)
+    if use_parallel:
+        # Use async_run but ensure thread safety through parameter handling
+        # Since we're working with parameters through optimizer, this should be thread-safe
         outputs = async_run([lambda a,x,g,info: standard_optimization_step(a, x, g, info)] * len(train_xs),
                             args_list=[(agent, x, guide, info) for x, info in zip(train_xs, train_infos)],
                             max_workers=num_threads,
                             description="GEPA forward (mutate parent)")
-        # outputs: List[(target, score, feedback)]
     else:
+        # Safe sequential fallback.
         outputs = [standard_optimization_step(agent, x, guide, info) for x, info in zip(train_xs, train_infos)]
 
     scores, targets, feedbacks = [], [], []
@@ -212,6 +311,44 @@ def _apply_params(optimizer, param_dict: Dict[ParameterNode, Any]):
     optimizer.update(param_dict)
 
 
+def _snapshot_params_fast(parameters: List[ParameterNode]) -> Dict[ParameterNode, Any]:
+    """
+    Snapshot ParameterNode->value with minimal copying:
+      - immutables (str/int/float/bool/tuple/bytes/None): no copy
+      - numpy arrays: .copy()
+      - everything else: deepcopy (safe fallback)
+    """
+    snap: Dict[ParameterNode, Any] = {}
+    immutables = (str, int, float, bool, tuple, frozenset, bytes, type(None))
+    for p in parameters:
+        v = getattr(p, "data", None)
+        if isinstance(v, immutables):
+            snap[p] = v
+        elif isinstance(v, np.ndarray):
+            snap[p] = v.copy()
+        else:
+            snap[p] = copy.deepcopy(v)
+    return snap
+
+
+def _fingerprint_params(params_dict: Dict[ParameterNode, Any]) -> Tuple:
+    """
+    Hashable fingerprint of a ParameterNode->value dict for optional caching.
+    Uses (param-id, repr(value)) with special handling for numpy arrays.
+    """
+    items: List[Tuple] = []
+    for p, v in params_dict.items():
+        pid = getattr(p, "uid", None) or getattr(p, "name", None) or id(p)
+        try:
+            if isinstance(v, np.ndarray):
+                items.append(("arr", pid, v.shape, v.dtype.str, hash(v.tobytes())))
+            else:
+                items.append(("val", pid, repr(v)))
+        except Exception:
+            items.append(("val", pid, repr(v)))
+    return tuple(sorted(items))
+
+
 # ======================= Variant 1: GEPA + Merge (UCB subclass) ======================= #
 
 class GEPAUCBSearch(UCBSearchAlgorithm):
@@ -232,7 +369,10 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
                  ucb_exploration_factor: float = 0.8,
                  rng_seed: int = 7,
                  logger=None,
-                 num_threads: Optional[int] = None):
+                 num_threads: Optional[int] = None,
+                 module_groups: Optional[Dict[str, List[ParameterNode]] | List[List[ParameterNode]]] = None,
+                 selectmodule_policy: str = "round_robin",
+                 enable_pareto_cache: bool = False):
         optimizer = _ensure_optimizer(agent, optimizer)
         super().__init__(agent, optimizer,
                          max_buffer_size=max_buffer_size,
@@ -240,22 +380,37 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
                          logger=logger,
                          num_threads=num_threads)
         self.rng = random.Random(rng_seed)
+        np.random.seed(rng_seed)  # ensure numpy reproducibility for np.random.choice
         self._pareto_inputs: List[Any] = []
         self._pareto_infos: List[Any] = []
         self._id_counter = 0
+        self.enable_pareto_cache = enable_pareto_cache
+        self._pareto_cache: Dict[Tuple, Tuple[List[float], float]] = {}
+        # >>> NEW selector (commented out as ModuleSelector may not exist)
+        # self.module_selector = ModuleSelector(self.optimizer.parameters,
+        #                                      module_groups=module_groups,
+        #                                      policy=selectmodule_policy)
 
     def _next_id(self) -> int:
         self._id_counter += 1
         return self._id_counter
 
     def _evaluate_on_pareto(self, params_dict: Dict[ParameterNode, Any], guide, *, num_threads) -> Tuple[List[float], float]:
-        original_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+        cache_key = _fingerprint_params(params_dict) if self.enable_pareto_cache else None
+        if cache_key is not None:
+            cached = self._pareto_cache.get(cache_key)
+            if cached is not None:
+                return cached
+        original_params = _snapshot_params_fast(list(self.optimizer.parameters))
         try:
             _apply_params(self.optimizer, params_dict)
             vec = _eval_on_subset(self.agent, guide, self._pareto_inputs, self._pareto_infos,
                                   num_threads=num_threads, desc="GEPA: evaluate on Pareto subset")
             mean = float(np.mean(vec)) if all(s is not None for s in vec) else -float("inf")
-            return vec, mean
+            result = (vec, mean)
+            if cache_key is not None:
+                self._pareto_cache[cache_key] = result
+            return result
         finally:
             _apply_params(self.optimizer, original_params)
 
@@ -293,11 +448,14 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
 
         buffer: List[Candidate] = []
         tried_merges: set = set()
+        id2cand: Dict[int, Candidate] = {}
 
         # Seed with current params
-        base_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+        base_params = _snapshot_params_fast(list(self.optimizer.parameters))
         v0, m0 = self._evaluate_on_pareto(base_params, guide, num_threads=num_threads)
-        buffer.append(Candidate(params=base_params, eval_vector=v0, mean=m0, id=self._next_id(), ancestors=set()))
+        seed = Candidate(params=base_params, eval_vector=v0, mean=m0, id=self._next_id(), ancestors=set(), created_iter=0)
+        buffer.append(seed)
+        id2cand[seed.id] = seed
         print_color(f"[GEPA] Seed candidate mean={m0:.4f}", "cyan")
 
         metrics = {"best_means": [], "new_child_means": [], "merge_accepts": 0, "total_merges": 0}
@@ -384,16 +542,17 @@ class GEPABeamPareto(BeamsearchAlgorithm):
       - replace deep beam expansion with GEPA’s single-parent incremental evolution
     """
 
-    def __init__(self,
-                 agent,
-                 optimizer=None,
-                 *,
-                 rng_seed: int = 11,
-                 logger=None,
-                 num_threads: Optional[int] = None):
+    def __init__(self, agent, optimizer=None, *, rng_seed: int = 11, logger=None,
+                 num_threads: Optional[int] = None,
+                 module_groups: Optional[Dict[str, List[ParameterNode]] | List[List[ParameterNode]]] = None,
+                 selectmodule_policy: str = "round_robin"):
         optimizer = _ensure_optimizer(agent, optimizer)
         super().__init__(agent, optimizer, num_threads=num_threads, logger=logger)
         self.rng = random.Random(rng_seed)
+        np.random.seed(rng_seed)
+        # self.module_selector = ModuleSelector(self.optimizer.parameters,
+        #                                      module_groups=module_groups,
+        #                                      policy=selectmodule_policy)
 
     # We keep a Pareto select helper that returns (selected_params, wins, scores)
     def select(self,
@@ -409,7 +568,7 @@ class GEPABeamPareto(BeamsearchAlgorithm):
         """
         # Evaluate each candidate to a vector on the mini validation
         cand_objs: List[Candidate] = []
-        current_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+        current_params = _snapshot_params_fast(list(self.optimizer.parameters))
         try:
             for idx, params in enumerate(candidates):
                 _apply_params(self.optimizer, params)
@@ -436,20 +595,17 @@ class GEPABeamPareto(BeamsearchAlgorithm):
         return sel_params
 
     # Replace beam "train" with GEPA-style incremental loop (keeps BeamsearchAlgorithm API)
-    def train(self,
-              guide,
-              train_dataset,
-              *,
-              validate_dataset=None,
-              pareto_subset_size: int = 24,
-              num_search_iterations: int = 120,
-              train_batch_size: int = 2,
-              merge_every: int = 6,
-              log_frequency: Optional[int] = None,
+    def train(self, guide, train_dataset, *,
+              validate_dataset=None, pareto_subset_size: int = 24,
+              num_search_iterations: int = 120, train_batch_size: int = 2,
+              merge_every: int = 6, log_frequency: Optional[int] = None,
               save_frequency: Optional[int] = None,
               save_path: str = "checkpoints/gepa_beam_agent.pkl",
-              verbose: bool = False,
-              num_threads: Optional[int] = None):
+              verbose: bool = False, num_threads: Optional[int] = None,
+              module_groups: Optional[Dict[str, List[ParameterNode]] | List[List[ParameterNode]]] = None,
+              selectmodule_policy: str = "round_robin",
+              budget_B: Optional[int] = None,
+              accept_epsilon: float = 0.0):
         num_threads = num_threads or self.num_threads
         log_frequency = log_frequency or 5
         validate_ds = validate_dataset or train_dataset
@@ -463,16 +619,15 @@ class GEPABeamPareto(BeamsearchAlgorithm):
 
         # Seed buffer
         buffer: List[Candidate] = []
-        base_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
-        # Evaluate seed
-        current_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+        base_params = _snapshot_params_fast(list(self.optimizer.parameters))
+        original = _snapshot_params_fast(list(self.optimizer.parameters))
         try:
             _apply_params(self.optimizer, base_params)
             vec = evaluate(self.agent, guide, pareto_inputs, pareto_infos,
                            min_score=None, num_threads=num_threads,
                            description="GEPA(beam): seed evaluation")
         finally:
-            _apply_params(self.optimizer, current_params)
+            _apply_params(self.optimizer, original)
         m0 = float(np.mean(vec)) if all(s is not None for s in vec) else -float("inf")
         buffer.append(Candidate(params=base_params, eval_vector=vec, mean=m0, id=0, ancestors=set()))
         tried_merges: set = set()
@@ -496,13 +651,13 @@ class GEPABeamPareto(BeamsearchAlgorithm):
                 continue
 
             # Evaluate child on Pareto subset
-            current_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+            original = _snapshot_params_fast(list(self.optimizer.parameters))
             try:
                 _apply_params(self.optimizer, update_dict)
                 vec = evaluate(self.agent, guide, pareto_inputs, pareto_infos, min_score=None,
                                num_threads=num_threads, description="GEPA(beam): child eval")
             finally:
-                _apply_params(self.optimizer, current_params)
+                _apply_params(self.optimizer, original)
             mean = float(np.mean(vec)) if all(s is not None for s in vec) else -float("inf")
             buffer.append(Candidate(params=update_dict, eval_vector=vec, mean=mean, id=len(buffer),
                                     parent_ids=(parent.id,), ancestors=set(parent.ancestors) | {parent.id}))
@@ -545,16 +700,17 @@ class GEPAAlgorithmBase(Trainer):
     Useful when you want the simplest control loop with your own logging/saving.
     """
 
-    def __init__(self,
-                 agent,
-                 optimizer=None,
-                 *,
-                 rng_seed: int = 13,
-                 logger=None,
-                 num_threads: Optional[int] = None):
+    def __init__(self, agent, optimizer=None, *, rng_seed: int = 13, logger=None,
+                 num_threads: Optional[int] = None,
+                 module_groups: Optional[Dict[str, List[ParameterNode]] | List[List[ParameterNode]]] = None,
+                 selectmodule_policy: str = "round_robin"):
         super().__init__(agent, num_threads=num_threads, logger=logger)
         self.optimizer = _ensure_optimizer(agent, optimizer)
         self.rng = random.Random(rng_seed)
+        np.random.seed(rng_seed)
+        # self.module_selector = ModuleSelector(self.optimizer.parameters,
+        #                                      module_groups=module_groups,
+        #                                      policy=selectmodule_policy)
 
     def train(self,
               guide,
@@ -579,8 +735,8 @@ class GEPAAlgorithmBase(Trainer):
 
         # Seed
         buffer: List[Candidate] = []
-        base_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
-        original = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+        base_params = _snapshot_params_fast(list(self.optimizer.parameters))
+        original = _snapshot_params_fast(list(self.optimizer.parameters))
         try:
             _apply_params(self.optimizer, base_params)
             vec = evaluate(self.agent, guide, xsP, isP, min_score=None, num_threads=num_threads,
@@ -608,7 +764,7 @@ class GEPAAlgorithmBase(Trainer):
                 continue
 
             # Eval child
-            original = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
+            original = _snapshot_params_fast(list(self.optimizer.parameters))
             try:
                 _apply_params(self.optimizer, update_dict)
                 vec = evaluate(self.agent, guide, xsP, isP, min_score=None, num_threads=num_threads,
