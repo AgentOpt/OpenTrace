@@ -550,8 +550,7 @@ class PrioritySearch(SearchTemplate):
         matched_candidates_and_samples = self.match_candidates_and_samples(self._exploration_candidates, samples)
         # NOTE len(matched_candidates_and_samples) <= len(self._exploration_candidates) since some exploration candidates might be duplicated.
         candidate_batchrollouts_list = [ (k,b) for k, v in matched_candidates_and_samples.items() for b in v]
-        assert len(samples) == len(candidate_batchrollouts_list), "All samples must be associated with exploration candidates."
-        n_batches = len(samples)  # number of batch rollouts in the samples
+        n_batches = len(candidate_batchrollouts_list)  # number of batch rollouts in the samples
 
         # need to copy optimizer for the n_batches
         def _backward(n):
@@ -690,6 +689,7 @@ class PrioritySearch(SearchTemplate):
             for c in candidates:
                 assert len(_results[c]) > 0, f"ModuleCandidate with id {id(c)} has no rollouts. Samples are not collected by known candidates."
 
+        assert len(samples) == sum(len(rollouts) for rollouts in _results.values()), "All samples must be associated with exploration candidates."
         return _results
 
     def update_memory(self, validate_results, verbose: bool = False, **kwargs):
