@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.features.priority_search.search_template import Samples, SearchTemplate, BatchRollout
-from opto.features.priority_search.module_regressor import ModuleCandidateRegressor
+from opto.features.priority_search.module_regressor import ModuleCandidateRegressor, LinearRegressor, LinearUCBRegressor
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
 
@@ -45,11 +45,13 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               # Regressor specific parameters
+              regressor_type: str = 'logistic',  # type of the regressor; 'logistic' or 'linear' or 'linear_ucb'
               regressor_embedding_model: str = "gemini/text-embedding-004",  # embedding model for the regressor
               regressor_learning_rate: float = 0.2,  # learning rate for the regressor
               regressor_regularization_strength: float = 1e-4,  # L2 regularization strength for the regressor
               regressor_max_iterations: int = 20000,  # maximum iterations for regressor training
               regressor_tolerance: float = 5e-3,  # convergence tolerance for the regressor
+              regressor_alpha: float = 1.0,  # UCB exploration parameter for the regressor
               use_validation = False, # whether to validate new proposals with the validation set
               # Additional keyword arguments
               **kwargs
@@ -61,11 +63,13 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
         Args:
             All parameters from the parent PrioritySearch.train() method, plus:
+            regressor_type (str, optional): Type of the regressor; 'logistic' or 'linear' or 'linear_ucb'. Defaults to 'logistic'.
             regressor_embedding_model (str, optional): Embedding model for the regressor. Defaults to "gemini/text-embedding-004".
             regressor_learning_rate (float, optional): Learning rate for the regressor. Defaults to 0.2.
             regressor_regularization_strength (float, optional): L2 regularization strength for the regressor. Defaults to 1e-4.
             regressor_max_iterations (int, optional): Maximum iterations for regressor training. Defaults to 20000.
             regressor_tolerance (float, optional): Convergence tolerance for the regressor. Defaults to 5e-3.
+            regressor_alpha (float, optional): UCB exploration parameter for the regressor. Defaults to 1.0.
             use_validation (bool, optional): Whether to validate new proposals with the validation set. Defaults to False.
         """
 
@@ -85,7 +89,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         self._enforce_using_data_collecting_candidates = False
         self.use_validation = use_validation
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
-        self.regressor = ModuleCandidateRegressor(
+        if regressor_type == 'logistic':
+            self.regressor = ModuleCandidateRegressor(
             embedding_model=regressor_embedding_model,
             num_threads=num_threads,
             learning_rate=regressor_learning_rate,
@@ -93,7 +98,21 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             max_iterations=regressor_max_iterations,
             tolerance=regressor_tolerance
         )
-
+        elif regressor_type == 'linear':
+            self.regressor = LinearRegressor(
+                embedding_model=regressor_embedding_model,
+                num_threads=num_threads,
+                regularization_strength=regressor_regularization_strength
+            )
+        elif regressor_type == 'linear_ucb':
+            self.regressor = LinearUCBRegressor(
+                embedding_model=regressor_embedding_model,
+                num_threads=num_threads,
+                regularization_strength=regressor_regularization_strength,
+                alpha=regressor_alpha
+            )
+        else:
+            raise ValueError(f"Invalid regressor type: {regressor_type}")
         SearchTemplate.train(self, guide=guide,
                       train_dataset=train_dataset,
                       validate_dataset=validate_dataset,

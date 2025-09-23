@@ -272,4 +272,214 @@ class ModuleCandidateRegressor:
             candidate.predicted_score = predicted_score
             
         return predicted_scores
+
+class LinearRegressor(ModuleCandidateRegressor):
+    """Use closed-form solution for regularized linear regression."""
+    def update(self, memory: List[Tuple[float, ModuleCandidate]]):
+        """Update the regression model parameters using the input batch of candidates.
+        Uses closed-form solution for L2 regularized linear regression: w = (X^T X + λI)^(-1) X^T y
+        """
+        start_time = time.time()
+        batch = [candidate for _, candidate in memory]
+        print_color("Updating linear regression model using closed-form solution...", "blue")
+        
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(batch)
+        
+        # Get training data from memory (only candidates with rollout data)
+        training_candidates = [candidate for candidate in batch if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
+        
+        if len(training_candidates) == 0:
+            print_color("Warning: No training data available for linear regression model.", "yellow")
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print_color(f"Linear regressor update completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
+            return
+            
+        # Extract features (embeddings) and targets (mean scores)
+        X_list = []
+        y_list = []
+        
+        for candidate in training_candidates:
+            embedding = candidate.embedding
+            mean_score = candidate.mean_score()
+            
+            if mean_score is not None:
+                X_list.append(embedding)
+                y_list.append(mean_score)
+        
+        if len(X_list) == 0:
+            print_color("Warning: No valid training samples for linear regression.", "yellow")
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print_color(f"Linear regressor update completed in {elapsed_time:.4f} seconds (no valid samples)", "cyan")
+            return
+            
+        print_color(f"Updating linear regression model with {len(training_candidates)} candidates ({len(X_list)} samples)...", "blue")
+        
+        # Convert to numpy arrays
+        X = np.array(X_list)  # Shape: (n_samples, n_features)
+        y = np.array(y_list)  # Shape: (n_samples,)
+        
+        # Update dimensions if needed
+        if X.shape[1] != self.linear_dim:
+            self.linear_dim = X.shape[1]
+            
+        # Closed-form solution for L2 regularized linear regression
+        # w = (X^T X + λI)^(-1) X^T y
+        # where λ is the regularization strength
+        
+        n_features = X.shape[1]
+        lambda_reg = self.regularization_strength
+        
+        # Add bias term by augmenting X with a column of ones
+        X_augmented = np.column_stack([X, np.ones(X.shape[0])])  # Shape: (n_samples, n_features + 1)
+        
+        # Create regularization matrix (don't regularize bias term)
+        reg_matrix = lambda_reg * np.eye(n_features + 1)
+        reg_matrix[-1, -1] = 0  # Don't regularize the bias term
+        
+        try:
+            # Solve the normal equation: (X^T X + λI) w = X^T y
+            XTX_reg = X_augmented.T @ X_augmented + reg_matrix
+            XTy = X_augmented.T @ y
+            
+            # Save the covariance matrix (inverse of XTX_reg)
+            self.cov = np.linalg.inv(XTX_reg)
+            
+            # Use numpy's linear solver for better numerical stability
+            w_augmented = np.linalg.solve(XTX_reg, XTy)
+            
+            # Extract weights and bias
+            self.weights = w_augmented[:-1]  # All but last element
+            self.bias = w_augmented[-1]     # Last element
+            
+            # Calculate training error for reporting
+            predictions = X @ self.weights + self.bias
+            mse = np.mean((predictions - y) ** 2)
+            l2_penalty = lambda_reg * np.sum(self.weights ** 2)
+            total_cost = mse + l2_penalty
+            
+            print_color(f"Linear regression solved successfully. MSE: {mse:.6f}, L2 penalty: {l2_penalty:.6f}, Total cost: {total_cost:.6f}, Bias: {self.bias:.6f}", "green")
+            
+        except np.linalg.LinAlgError as e:
+            print_color(f"Warning: Linear algebra error in closed-form solution: {e}", "yellow")
+            print_color("Falling back to pseudo-inverse solution...", "yellow")
+            
+            # Fallback to pseudo-inverse if regular solve fails
+            try:
+                self.cov = np.linalg.pinv(XTX_reg)
+                w_augmented = self.cov @ XTy
+                self.weights = w_augmented[:-1]
+                self.bias = w_augmented[-1]
+                print_color("Pseudo-inverse solution computed successfully.", "green")
+            except Exception as e2:
+                print_color(f"Error: Both regular and pseudo-inverse solutions failed: {e2}", "red")
+                print_color("Keeping previous weights and bias.", "yellow")
+        
+        # Print timing information
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print_color(f"Linear regressor update completed in {elapsed_time:.4f} seconds", "cyan")
+
+    def predict_scores(self, memory: List[Tuple[float, ModuleCandidate]]):
+        """Predict scores for all candidates in the memory."""
+        # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
+        if len(memory) == 0:
+            return
+        batch = [candidate for _, candidate in memory]
+
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(batch)
+        
+        # Collect all embeddings in order
+        embeddings = []
+        for candidate in batch:
+            embeddings.append(candidate.embedding)
+        
+
+        # Batch prediction using vectorized operations
+        X_batch = np.array(embeddings)
+        predicted_scores = X_batch.dot(self.weights) + self.bias
+
+        # Clip predicted scores to be between 0 and 1
+        predicted_scores = np.clip(predicted_scores, 0, 1)
+        
+        # Update each candidate with predicted score as attribute
+        for candidate, predicted_score in zip(batch, predicted_scores):
+            candidate.predicted_score = float(predicted_score)
+            
+        return predicted_scores
+
+class LinearUCBRegressor(LinearRegressor):
+    """Linear UCB regressor that uses Upper Confidence Bound scores for exploration-exploitation balance."""
+    
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3, alpha=1.0):
+        super().__init__(embedding_model, num_threads, learning_rate, regularization_strength, max_iterations, tolerance)
+        self.alpha = alpha  # UCB exploration parameter
+        self.cov = None     # Will be set during update()
+    
+    def predict_scores(self, memory: List[Tuple[float, ModuleCandidate]]):
+        """Predict UCB scores for all candidates in the memory.
+        UCB score = predicted_reward + alpha * sqrt(x^T * Cov * x)
+        where Cov is the covariance matrix from linear regression.
+        """
+        # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
+        if len(memory) == 0:
+            return
+        batch = [candidate for _, candidate in memory]
+
+        # Ensure all candidates have embeddings
+        self._update_memory_embeddings_for_batch(batch)
+        
+        # Check if we have a trained model
+        if not hasattr(self, 'weights') or self.weights is None or not hasattr(self, 'cov') or self.cov is None:
+            print_color("Warning: No trained model available for UCB predictions. Using random scores.", "yellow")
+            # Return random scores as fallback
+            predicted_scores = np.random.uniform(0, 1, len(batch))
+            for candidate, predicted_score in zip(batch, predicted_scores):
+                candidate.predicted_score = float(predicted_score)
+            return predicted_scores
+        
+        # Collect all embeddings in order
+        embeddings = []
+        for candidate in batch:
+            embeddings.append(candidate.embedding)
+
+        # Batch prediction using vectorized operations
+        X_batch = np.array(embeddings)  # Shape: (n_candidates, n_features)
+        
+        # Augment features with bias term (add column of ones)
+        X_augmented = np.column_stack([X_batch, np.ones(X_batch.shape[0])])  # Shape: (n_candidates, n_features + 1)
+        
+        # Compute mean predictions (exploitation term)
+        w_augmented = np.concatenate([self.weights, [self.bias]])  # Combine weights and bias
+        mean_predictions = X_augmented @ w_augmented
+        
+        # Compute confidence bounds (exploration term)
+        # confidence = sqrt(x^T * Cov * x) for each candidate
+        confidence_bounds = []
+        for i in range(X_augmented.shape[0]):
+            x_i = X_augmented[i, :]  # Feature vector for candidate i
+            # Compute x_i^T * Cov * x_i
+            confidence = np.sqrt(x_i.T @ self.cov @ x_i)
+            confidence_bounds.append(confidence)
+        
+        confidence_bounds = np.array(confidence_bounds)
+        
+        # Compute UCB scores: mean + alpha * confidence
+        ucb_scores = mean_predictions + self.alpha * confidence_bounds
+        
+        # Clip UCB scores to be between 0 and 1 (optional, depending on your use case)
+        predicted_scores = np.clip(ucb_scores, 0, 1)
+        
+        # Update each candidate with predicted UCB score as attribute
+        for i, candidate in enumerate(batch):
+            candidate.predicted_score = float(predicted_scores[i])
+            # Also store the individual components for debugging/analysis
+            candidate.mean_prediction = float(mean_predictions[i])
+            candidate.confidence_bound = float(confidence_bounds[i])
+            candidate.ucb_score = float(ucb_scores[i])
+            
+        return predicted_scores
        
