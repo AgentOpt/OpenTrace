@@ -129,7 +129,8 @@ class SearchTemplate(Trainer):
               batch_size = 1,  # batch size for updating the agent
               num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
-              num_epochs = 1,  # number of training epochs
+              num_epochs = 1,  # number of training epochs (int or None)
+              num_steps = None,  # number of training steps (int or None)
               num_threads = None,  # maximum number of threads to use
               verbose = False,  # whether to print the output of the agent
               # evaluation
@@ -195,7 +196,10 @@ class SearchTemplate(Trainer):
         samples = None
         train_scores = []  # to store the scores of the agent during training
         train_num_samples = []  # to store the number of samples used to compute each score
-        while self.n_epochs < num_epochs :
+        num_steps = num_steps if num_steps is not None else 0
+        num_epochs = num_epochs if num_epochs is not None else 0
+        # Train the agent at least for num_epochs or num_steps
+        while self.n_epochs < num_epochs or self.n_iters < num_steps:
 
             print(f"Epoch: {self.n_epochs}. Iteration: {self.n_iters}")
 

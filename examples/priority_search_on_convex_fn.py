@@ -248,7 +248,8 @@ trainer.train(
     logger=logger,
     score_range=[-10, 10],
     # trainer kwargs
-    num_epochs=3*4,
+    num_epochs=1,
+    num_steps=5,
     batch_size=1,
     num_batches=2,
     verbose=False, #'output',

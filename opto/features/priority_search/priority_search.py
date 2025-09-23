@@ -276,7 +276,8 @@ class PrioritySearch(SearchTemplate):
               batch_size = 1,  # batch size for updating the agent
               num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # range of (min_score, max_score) to clip the scores; if None, no clipping is applied
-              num_epochs = 1,  # number of training epochs
+              num_epochs = 1,  # number of training epochs (int or None)
+              num_steps = None,  # number of training steps (int or None)
               num_threads = None,  # maximum number of threads to use
               verbose = False,  # whether to print the output of the agent
               # evaluation
@@ -357,6 +358,7 @@ class PrioritySearch(SearchTemplate):
                       num_batches=num_batches,
                       score_range=score_range,
                       num_epochs=num_epochs,
+                      num_steps=num_steps,
                       num_threads=num_threads,
                       verbose=verbose,
                       test_dataset=test_dataset,
