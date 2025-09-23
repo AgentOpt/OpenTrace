@@ -4,6 +4,10 @@ from typing import Any, Optional, Callable, Dict, Union, Type, List
 import re
 import json
 
+class TraceObject:
+    def __str__(self):
+        # Any subclass that inherits this will be friendly to the optimizer
+        raise NotImplementedError("Subclasses must implement __str__")
 
 class TracedInput(BaseModel):
     """Pydantic model for input fields in TracedLLM inheritance pattern."""
