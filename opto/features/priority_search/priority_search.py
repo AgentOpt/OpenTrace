@@ -581,6 +581,11 @@ class PrioritySearch(SearchTemplate):
                                   max_workers=self.num_threads,  # use the number of threads specified in the class
                                   description=f"Calling optimizers: Generating {n_proposals} proposals for each of {n_batches} batches",)
 
+        # Clear the optimizers to avoid memory leaks
+        for optimizer in optimizers:
+            optimizer.zero_feedback()  # reset the optimizer's feedback
+            optimizer.parameters = []  # clear the optimizer's parameters to avoid memory leaks
+
         # update_dicts is a list of dicts of length n_batches * n_proposals
         # Create ModuleCandidate objects for each proposed update_dict that is non-trivial
         candidates = [ModuleCandidate(self.agent, update_dict, optimizer)
