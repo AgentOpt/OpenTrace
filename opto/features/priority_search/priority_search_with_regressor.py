@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.features.priority_search.search_template import Samples, SearchTemplate, BatchRollout
-from opto.features.priority_search.module_regressor import ModuleCandidateRegressor, LinearRegressor, LinearUCBRegressor, LLMRegressor
+from opto.features.priority_search.module_regressor import LogisticRegressor, LinearRegressor, LinearUCBRegressor, LLMRegressor
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
 
@@ -93,7 +93,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         self.regressor_type = regressor_type
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
         if regressor_type == 'logistic':
-            self.regressor = ModuleCandidateRegressor(
+            self.regressor = LogisticRegressor(
             embedding_model=regressor_embedding_model,
             num_threads=num_threads,
             learning_rate=regressor_learning_rate,
