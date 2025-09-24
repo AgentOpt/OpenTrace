@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.features.priority_search.search_template import Samples, SearchTemplate, BatchRollout
-from opto.features.priority_search.module_regressor import ModuleCandidateRegressor, LinearRegressor, LinearUCBRegressor
+from opto.features.priority_search.module_regressor import ModuleCandidateRegressor, LinearRegressor, LinearUCBRegressor, LLMRegressor
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
 
@@ -45,7 +45,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               # Regressor specific parameters
-              regressor_type: str = 'logistic',  # type of the regressor; 'logistic' or 'linear' or 'linear_ucb'
+              regressor_type: str = 'logistic',  # type of the regressor; 'logistic' or 'linear' or 'linear_ucb' or 'llm'
+              regressor_model_name: str = "gemini/gemini-2.0-flash",  # model name for the regressor
               regressor_embedding_model: str = "gemini/text-embedding-004",  # embedding model for the regressor
               regressor_learning_rate: float = 0.2,  # learning rate for the regressor
               regressor_regularization_strength: float = 1e-4,  # L2 regularization strength for the regressor
@@ -63,7 +64,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
         Args:
             All parameters from the parent PrioritySearch.train() method, plus:
-            regressor_type (str, optional): Type of the regressor; 'logistic' or 'linear' or 'linear_ucb'. Defaults to 'logistic'.
+            regressor_type (str, optional): Type of the regressor; 'logistic' or 'linear' or 'linear_ucb' or 'llm'. Defaults to 'logistic'.
+            regressor_model_name (str, optional): Model name for the regressor. Defaults to "gemini/gemini-2.0-flash".
             regressor_embedding_model (str, optional): Embedding model for the regressor. Defaults to "gemini/text-embedding-004".
             regressor_learning_rate (float, optional): Learning rate for the regressor. Defaults to 0.2.
             regressor_regularization_strength (float, optional): L2 regularization strength for the regressor. Defaults to 1e-4.
@@ -88,6 +90,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         )
         self._enforce_using_data_collecting_candidates = False
         self.use_validation = use_validation
+        self.regressor_type = regressor_type
         # Initialize the regressor with the long-term memory and custom parameters - this is the only difference from parent class
         if regressor_type == 'logistic':
             self.regressor = ModuleCandidateRegressor(
@@ -110,6 +113,11 @@ class PrioritySearch_with_Regressor(PrioritySearch):
                 num_threads=num_threads,
                 regularization_strength=regressor_regularization_strength,
                 alpha=regressor_alpha
+            )
+        elif regressor_type == 'llm':
+            self.regressor = LLMRegressor(
+                model_name=regressor_model_name,
+                num_threads=num_threads,
             )
         else:
             raise ValueError(f"Invalid regressor type: {regressor_type}")
@@ -259,5 +267,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
         """ Compute the priority for the candidate based on the predicted score. """
         if not isinstance(candidate, ModuleCandidate):
             raise TypeError("candidate must be an instance of ModuleCandidate.")
-        # By default, we compute the mean score of the rollouts
-        return candidate.predicted_score
+        if self.regressor_type == 'linear_ucb':
+            # For Linear UCB, we use the predicted score (ucb score) as exploration priority, use the (pessimistic) mean prediction as exploitation priority.
+            return candidate.mean_prediction
+        else:
+            return candidate.predicted_score
