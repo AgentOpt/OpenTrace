@@ -162,7 +162,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
 
 
         self.update_memory_with_regressor(verbose=verbose, **kwargs)
-        # self.print_memory_stats()
+        self.print_memory_stats()
         # TODO Log information about the update
         info_log = {
             'n_iters': self.n_iters,  # number of iterations
