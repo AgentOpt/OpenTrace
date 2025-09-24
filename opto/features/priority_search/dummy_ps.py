@@ -68,7 +68,7 @@ class DummyPrioritySearch(PrioritySearch):
             for param in self.agent.parameters():
                 # values are random strings using time.time()
                 # Make the random_string very long
-                update_dict[param] = "random_string_"*10000000 + str(time.time()) 
+                update_dict[param] = "random_string_" + str(time.time()) 
             update_dict = remap_update_dict(self.agent, update_dict)  # remap the update dict to the agent's parameters
             return update_dict  # return the proposed parameters
 
