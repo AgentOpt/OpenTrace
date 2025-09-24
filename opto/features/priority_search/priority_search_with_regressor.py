@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.features.priority_search.search_template import Samples, SearchTemplate, BatchRollout
-from opto.features.priority_search.module_regressor import LogisticRegressor, LinearRegressor, LinearUCBRegressor, LLMRegressor
+from opto.features.priority_search.regressor import LogisticRegressor, LinearRegressor, LinearUCBRegressor, LLMRegressor
 from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate, HeapMemory
 import heapq
 
