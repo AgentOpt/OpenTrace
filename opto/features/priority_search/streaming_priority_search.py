@@ -88,7 +88,8 @@ class StreamingPrioritySearch(PrioritySearch):
         assert len(candidates) <= self.num_candidates, f"Number of proposed candidates {len(candidates)} must be less than num_candidates {self.num_candidates}."
         if len(candidates) == self.num_candidates:
             print("Warning: Number of proposed candidates is equal to num_candidates. Running in pure exploration mode.")
-        assert len(results) == len(exploration_candidates) + len(candidates), "Number of candidates in results must match the number of exploration candidates and proposed candidates."
+        # remove this assertion since some candidates might be duplicates
+        # assert len(results) == len(exploration_candidates) + len(candidates), f"Number of candidates in results must match the number of exploration candidates and proposed candidates. Getting {len(results)} vs {len(exploration_candidates) + len(candidates)}."
         return results
 
     def compute_exploration_priority(self, candidate) -> float:

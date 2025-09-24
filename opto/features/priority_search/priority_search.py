@@ -9,7 +9,7 @@ from opto.optimizers.optimizer import Optimizer
 from opto.trainer.utils import async_run, safe_mean
 from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout, save_train_config
-from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy
+from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy, deepcopy_module
 
 
 class ModuleCandidate:
@@ -44,7 +44,7 @@ class ModuleCandidate:
         """ Apply the update_dict to the base_module and return the updated module.
         A new module is always created so the base_module is not modified.
         The new module has a new attribute _module_candidate which is this candidate."""
-        module = create_module_from_update_dict(self.base_module, self.update_dict) if self.update_dict else copy.deepcopy(self.base_module)  #
+        module = create_module_from_update_dict(self.base_module, self.update_dict) if self.update_dict else deepcopy_module(self.base_module)  #
         setattr(module, '__TRACE_RESERVED_module_candidate_id', id(self))
         return module  # return the updated module
 
@@ -52,34 +52,6 @@ class ModuleCandidate:
         """ Apply update to the base_module in place. """
         set_module_parameters(base_module or self.base_module, self.update_dict)
 
-    # def __getstate__(self):
-    #     """ Get the state of the candidate for serialization. """
-    #     state = copy.deepcopy(self.__dict__)  # this will detach the nodes from the computation graph
-    #     state['base_module'] = self.base_module
-    #     state = self.__dict__.copy()
-    #     return state
-
-    # def __setstate__(self, state):
-    #     """ Set the state of the candidate from serialization. """
-    #     self.__dict__.update(state)
-
-    # def __deepcopy__(self, memo):
-    #     """ Create a deep copy, except for the base_module which is not copied, it is the original module. """
-    #     cls = self.__class__
-    #     result = cls.__new__(cls)
-    #     memo[id(self)] = result
-    #     for k, v in self.__dict__.items():
-    #         if k != 'base_module':
-    #             setattr(result, k, copy.deepcopy(v, memo))
-    #         else:
-    #             setattr(result, k, v)  # base_module is not copied, it is the original module
-    #     return result
-
-    # def copy(self):
-    #     """ Create a shallow copy, except for the base_module which is not copied, it is the original module. """
-    #     new_obj = self.__class__.__new__(self.__class__)  # create a new instance of the same class
-    #     new_obj.__dict__.update(self.__dict__)
-    #     return new_obj
 
     def __eq__(self, other):
         """ Check if two candidates are equal based on their base_module and update_dict. """
@@ -298,6 +270,7 @@ class PrioritySearch(SearchTemplate):
               memory_update_frequency: Optional[int | None] = 0,  # number of iterations to keep the candidates in the short-term memory before merging them into the long-term memory. 0 means only long-term memory is used. None means only short-term memory is used.
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
+              decouple_optimizers: bool = True,  # whether to decouple the optimizers for each candidate; if True, each candidate will have its own optimizer instance; if False, all candidates share the same optimizer instance.
               # Additional keyword arguments
               **kwargs
               ):
@@ -343,7 +316,8 @@ class PrioritySearch(SearchTemplate):
             ucb_exploration_constant=ucb_exploration_constant,
             long_term_memory_size=long_term_memory_size,
             short_term_memory_size=short_term_memory_size,
-            memory_update_frequency=memory_update_frequency
+            memory_update_frequency=memory_update_frequency,
+            decouple_optimizers=decouple_optimizers,
         )
 
         self._enforce_using_data_collecting_candidates = True
@@ -369,7 +343,7 @@ class PrioritySearch(SearchTemplate):
                       save_path=save_path,
                       **kwargs)
 
-    def _initialize_search_parameters(self,
+    def _initialize_search_parameters(self, *,
                                     num_candidates,
                                     num_proposals,
                                     validate_exploration_candidates,
@@ -379,7 +353,8 @@ class PrioritySearch(SearchTemplate):
                                     ucb_exploration_constant,
                                     long_term_memory_size,
                                     short_term_memory_size,
-                                    memory_update_frequency):
+                                    memory_update_frequency,
+                                    decouple_optimizers):
         """Initialize search parameters and memory structures.
 
         Args:
@@ -393,6 +368,7 @@ class PrioritySearch(SearchTemplate):
             long_term_memory_size (int): Size of the long-term heap memory
             short_term_memory_size (int): Size of the short-term memory
             memory_update_frequency (int): The candidates are merged into long-term memory after this many iterations.
+            decouple_optimizers (bool): Whether to decouple optimizers for each candidate
         """
         # Validate and adjust num_candidates based on number of optimizers
         if num_candidates < len(self._optimizers):
@@ -405,6 +381,7 @@ class PrioritySearch(SearchTemplate):
         self.validate_exploration_candidates = validate_exploration_candidates
         self.use_best_candidate_to_explore = use_best_candidate_to_explore
         self.score_function = score_function
+        self.decouple_optimizers = decouple_optimizers
 
         # Validate and set score range for UCB
         if score_range is None:
@@ -552,12 +529,15 @@ class PrioritySearch(SearchTemplate):
         candidate_batchrollouts_list = [ (k,b) for k, v in matched_candidates_and_samples.items() for b in v]
         n_batches = len(candidate_batchrollouts_list)  # number of batch rollouts in the samples
 
+        def copy_optimizer(optimizer):
+            return copy.deepcopy(optimizer) if self.decouple_optimizers else optimizer
+
         # need to copy optimizer for the n_batches
         def _backward(n):
             candidate, rollouts = candidate_batchrollouts_list[n]
             optimizer = candidate.optimizer or self.optimizer
             # Create a copy of the optimizer to avoid modifying the original one and to allow parallel execution
-            optimizer = copy.deepcopy(optimizer)
+            optimizer = copy_optimizer(optimizer)
             optimizer.parameters = rollouts.module.parameters()  # set the optimizer's parameters to the proposal's parameters
             targets = [r.target for r in rollouts]
             feedbacks = [r.feedback for r in rollouts]
@@ -577,7 +557,7 @@ class PrioritySearch(SearchTemplate):
         assert len(optimizers) == n_batches, "Number of optimizers must match number of batch rollouts."
         # need to copy optimizer for the n_proposals
         # NOTE when optimizer is deepcopied, its parameters are not copied.
-        optimizers = [copy.deepcopy(o) for o in optimizers ] * n_proposals  # repeat args_list n_proposals times
+        optimizers = [copy_optimizer(o) for o in optimizers ] * n_proposals  # repeat args_list n_proposals times
         assert len(optimizers) == n_batches * n_proposals, "Number of optimizers must match number of batch rollouts times number of proposals."
 
         # For each optimizer, containing the backward feedback, we call it n_proposals times to get the proposed parameters.
