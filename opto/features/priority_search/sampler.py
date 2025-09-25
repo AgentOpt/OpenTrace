@@ -5,6 +5,7 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trainer.utils import batch_run
 from opto.trainer.guide import Guide
+from opto.features.priority_search.utils import deepcopy_module
 
 @dataclass
 class Rollout:
@@ -311,7 +312,8 @@ class Sampler:
                 if i % self.subbatch_size == 0 and i > 0:
                     configs.append(RolloutConfig(module=agent, xs=_xs, infos=_infos, guide=self.guide))
                     # reset
-                    agent = copy.deepcopy(agent) # create a deep copy of the agent for the next sub-batch
+                    # agent = copy.deepcopy(agent) # create a deep copy of the agent for the next sub-batch
+                    agent = deepcopy_module(agent)  # remove _copy suffixes
                     _xs, _infos = [], []
                 _xs.append(xs[i])
                 _infos.append(infos[i])
