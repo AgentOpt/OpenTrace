@@ -7,34 +7,24 @@ import litellm
 import time
 from opto.features.priority_search.priority_search import ModuleCandidate
 
-class LogisticRegressor:
-    """
-    Predict scores using embedding logistic regression for ModuleCandidate objects. 
-    Should have two key methods: predict_scores and predict_scores_for_batch. 
-    predict_scores has no parameters, it could return predicted scores for all candidates in the memory. 
-    predict_scores_for_batch has one parameter, a batch of candidates, it could return predicted scores for the batch of candidates."""
+class RegressorTemplate:
+    """Base class template for regression-based predictors for ModuleCandidate objects.
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
+    Provides common functionality for embedding generation and candidate processing.
+    Subclasses should implement update() and predict_scores() methods.
+    """
+    
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4):
         # In the regressor, no need for calling LLM to make the prediction. So we could predict the entire memory at once.
         self.max_candidates_to_predict = 500
         self.embedding_model = embedding_model
         self.num_threads = num_threads
-        self.learning_rate = learning_rate
-        self.initial_learning_rate = learning_rate
         self.regularization_strength = regularization_strength  # L2 regularization strength (lambda)
-        self.max_iterations = max_iterations
-        self.tolerance = tolerance
-        self.patience = 20  # Early stopping patience
-        self.lr_decay_factor = 0.8   # Learning rate decay factor
         # default linear dimension is 768
         self.linear_dim = 768
         # Initialize weights with larger values for more aggressive learning
         self.weights = np.random.normal(0, 0.1, self.linear_dim)
         self.bias = 0.0
-        
-    def _sigmoid(self, z):
-        """Sigmoid activation function for logistic regression."""
-        return 1.0 / (1.0 + np.exp(-z))
 
     def _get_parameter_text(self, candidate):
         """Get the parameter text for a ModuleCandidate."""
@@ -100,6 +90,35 @@ class LogisticRegressor:
             # Assign embeddings back to candidates
             for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
                 candidate.embedding = embedding
+
+    def update(self, memory: List[Tuple[float, ModuleCandidate]]):
+        """Update the regression model parameters. Should be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement the update method")
+    
+    def predict_scores(self, memory: List[Tuple[float, ModuleCandidate]]):
+        """Predict scores for candidates. Should be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement the predict_scores method")
+
+class LogisticRegressor(RegressorTemplate):
+    """
+    Predict scores using embedding logistic regression for ModuleCandidate objects. 
+    Should have two key methods: predict_scores and predict_scores_for_batch. 
+    predict_scores has no parameters, it could return predicted scores for all candidates in the memory. 
+    predict_scores_for_batch has one parameter, a batch of candidates, it could return predicted scores for the batch of candidates."""
+    
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
+        super().__init__(embedding_model, num_threads, regularization_strength)
+        # Logistic regression specific parameters
+        self.learning_rate = learning_rate
+        self.initial_learning_rate = learning_rate
+        self.max_iterations = max_iterations
+        self.tolerance = tolerance
+        self.patience = 20  # Early stopping patience
+        self.lr_decay_factor = 0.8   # Learning rate decay factor
+        
+    def _sigmoid(self, z):
+        """Sigmoid activation function for logistic regression."""
+        return 1.0 / (1.0 + np.exp(-z))
 
     def update(self, memory: List[Tuple[float, ModuleCandidate]]):
         """This function update the regression model parameters using the input batch of candidates.
@@ -273,8 +292,25 @@ class LogisticRegressor:
             
         return predicted_scores
 
-class LinearRegressor(LogisticRegressor):
+class LinearRegressor(RegressorTemplate):
     """Use closed-form solution for regularized linear regression."""
+    
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4, transformation_exploration_factor=0.0):
+        super().__init__(embedding_model, num_threads, regularization_strength)
+        # The transformation exploration factor should lie in [0,1]
+        assert 0 <= transformation_exploration_factor <= 1, "Transformation exploration factor must be between 0 and 1"
+        self.transformation_exploration_factor = transformation_exploration_factor  # 0: [0,1] -> [0,1], 1: [0,1] -> [-1,0]
+    
+    def _transform_targets(self, y):
+        """Transform targets from [0,1] to exploration range based on transformation_exploration_factor."""
+        # General formula: [0,1] -> [0-factor, 1-factor] = [-factor, 1-factor]
+        return y - self.transformation_exploration_factor
+    
+    def _inverse_transform_predictions(self, predictions):
+        """Transform predictions back from exploration range to [0,1]."""
+        # Inverse of the transformation: add back the transformation factor
+        return predictions + self.transformation_exploration_factor
+    
     def update(self, memory: List[Tuple[float, ModuleCandidate]]):
         """Update the regression model parameters using the input batch of candidates.
         Uses closed-form solution for L2 regularized linear regression: w = (X^T X + λI)^(-1) X^T y
@@ -321,6 +357,9 @@ class LinearRegressor(LogisticRegressor):
         X = np.array(X_list)  # Shape: (n_samples, n_features)
         y = np.array(y_list)  # Shape: (n_samples,)
         
+        # Apply transformation to target values for exploration
+        y_transformed = self._transform_targets(y)
+        
         # Update dimensions if needed
         if X.shape[1] != self.linear_dim:
             self.linear_dim = X.shape[1]
@@ -335,28 +374,27 @@ class LinearRegressor(LogisticRegressor):
         # Add bias term by augmenting X with a column of ones
         X_augmented = np.column_stack([X, np.ones(X.shape[0])])  # Shape: (n_samples, n_features + 1)
         
-        # Create regularization matrix (don't regularize bias term)
+        # Create regularization matrix (regularize both weights and bias)
         reg_matrix = lambda_reg * np.eye(n_features + 1)
-        reg_matrix[-1, -1] = 0  # Don't regularize the bias term
         
         try:
             # Solve the normal equation: (X^T X + λI) w = X^T y
             XTX_reg = X_augmented.T @ X_augmented + reg_matrix
-            XTy = X_augmented.T @ y
-            
-            # Save the covariance matrix (inverse of XTX_reg)
-            self.cov = np.linalg.inv(XTX_reg)
+            XTy = X_augmented.T @ y_transformed
             
             # Use numpy's linear solver for better numerical stability
             w_augmented = np.linalg.solve(XTX_reg, XTy)
+            
+            # Save the regularized Gram matrix
+            self.cov = XTX_reg
             
             # Extract weights and bias
             self.weights = w_augmented[:-1]  # All but last element
             self.bias = w_augmented[-1]     # Last element
             
-            # Calculate training error for reporting
-            predictions = X @ self.weights + self.bias
-            mse = np.mean((predictions - y) ** 2)
+            # Calculate training error for reporting (using transformed targets)
+            predictions_transformed = X @ self.weights + self.bias
+            mse = np.mean((predictions_transformed - y_transformed) ** 2)
             l2_penalty = lambda_reg * np.sum(self.weights ** 2)
             total_cost = mse + l2_penalty
             
@@ -368,11 +406,12 @@ class LinearRegressor(LogisticRegressor):
             
             # Fallback to pseudo-inverse if regular solve fails
             try:
-                self.cov = np.linalg.pinv(XTX_reg)
-                w_augmented = self.cov @ XTy
+                XTX_reg_stabilized = XTX_reg + 1e-6 * np.eye(XTX_reg.shape[0])
+                w_augmented = np.linalg.solve(XTX_reg_stabilized, XTy)
+                self.cov = XTX_reg_stabilized
                 self.weights = w_augmented[:-1]
                 self.bias = w_augmented[-1]
-                print_color("Pseudo-inverse solution computed successfully.", "green")
+                print_color("Regularized solve solution computed successfully.", "green")
             except Exception as e2:
                 print_color(f"Error: Both regular and pseudo-inverse solutions failed: {e2}", "red")
                 print_color("Keeping previous weights and bias.", "yellow")
@@ -400,7 +439,10 @@ class LinearRegressor(LogisticRegressor):
 
         # Batch prediction using vectorized operations
         X_batch = np.array(embeddings)
-        predicted_scores = X_batch.dot(self.weights) + self.bias
+        predicted_scores_transformed = X_batch.dot(self.weights) + self.bias
+        
+        # Transform predictions back to [0,1] range
+        predicted_scores = self._inverse_transform_predictions(predicted_scores_transformed)
 
         # Clip predicted scores to be between 0 and 1
         predicted_scores = np.clip(predicted_scores, 0, 1)
@@ -414,8 +456,8 @@ class LinearRegressor(LogisticRegressor):
 class LinearUCBRegressor(LinearRegressor):
     """Linear UCB regressor that uses Upper Confidence Bound scores for exploration-exploitation balance."""
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3, alpha=1.0):
-        super().__init__(embedding_model, num_threads, learning_rate, regularization_strength, max_iterations, tolerance)
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4, alpha=1.0, transformation_exploration_factor=0.0):
+        super().__init__(embedding_model, num_threads, regularization_strength, transformation_exploration_factor)
         self.alpha = alpha  # UCB exploration parameter
         self.cov = None     # Will be set during update()
     
@@ -452,19 +494,25 @@ class LinearUCBRegressor(LinearRegressor):
         # Augment features with bias term (add column of ones)
         X_augmented = np.column_stack([X_batch, np.ones(X_batch.shape[0])])  # Shape: (n_candidates, n_features + 1)
         
-        # Compute mean predictions (exploitation term)
+        # Compute mean predictions in transformed space (exploitation term)
         w_augmented = np.concatenate([self.weights, [self.bias]])  # Combine weights and bias
-        mean_predictions = X_augmented @ w_augmented
+        mean_predictions_transformed = X_augmented @ w_augmented
         
         # Compute confidence bounds (exploration term) - vectorized
-        # confidence = sqrt(x^T * Cov * x) for each candidate
-        # Vectorized computation: diag(X @ Cov @ X^T) gives x_i^T @ Cov @ x_i for each row x_i
-        confidence_bounds = np.sqrt(np.diag(X_augmented @ self.cov @ X_augmented.T))
+        # confidence = sqrt(x^T * Cov^(-1) * x) for each candidate
+        # Since self.cov now stores XTX_reg, we need to solve instead of multiply
+        # Vectorized computation using solve for better numerical stability
+        cov_X_T = np.linalg.solve(self.cov, X_augmented.T)
+        confidence_bounds = np.sqrt(np.sum(X_augmented * cov_X_T.T, axis=1))
         
-        # Compute UCB scores: mean + alpha * confidence
-        ucb_scores = mean_predictions + self.alpha * confidence_bounds
+        # Compute UCB scores in transformed space: mean + alpha * confidence
+        ucb_scores_transformed = mean_predictions_transformed + self.alpha * confidence_bounds
         
-        # Clip UCB scores to be between 0 and 1 (optional, depending on your use case)
+        # Transform predictions back to [0,1] range
+        ucb_scores = self._inverse_transform_predictions(ucb_scores_transformed)
+        mean_predictions = self._inverse_transform_predictions(mean_predictions_transformed)
+        
+        # Clip UCB scores to be between 0 and 1
         predicted_scores = np.clip(ucb_scores, 0, 1)
         mean_predictions = np.clip(mean_predictions, 0, 1)
         
