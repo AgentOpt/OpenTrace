@@ -45,6 +45,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               # Regressor specific parameters
+              decouple_optimizers: bool = True,  # whether to decouple the optimizers for each candidate; if True, each candidate will have its own optimizer instance; if False, all candidates share the same optimizer instance.
               regressor_type: str = 'logistic',  # type of the regressor; 'logistic' or 'linear' or 'linear_ucb' or 'llm'
               regressor_model_name: str = "gemini/gemini-2.0-flash",  # model name for the regressor
               regressor_embedding_model: str = "gemini/text-embedding-004",  # embedding model for the regressor
@@ -88,7 +89,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             ucb_exploration_constant=ucb_exploration_constant,
             long_term_memory_size=long_term_memory_size,
             short_term_memory_size=short_term_memory_size,
-            memory_update_frequency=memory_update_frequency
+            memory_update_frequency=memory_update_frequency,
+            decouple_optimizers=decouple_optimizers
         )
         self._enforce_using_data_collecting_candidates = False
         self.use_validation = use_validation
