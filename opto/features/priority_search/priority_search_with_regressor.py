@@ -53,6 +53,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               regressor_max_iterations: int = 20000,  # maximum iterations for regressor training
               regressor_tolerance: float = 5e-3,  # convergence tolerance for the regressor
               regressor_alpha: float = 1.0,  # UCB exploration parameter for the regressor
+              regressor_transformation_exploration_factor: float = 0.0,  # transformation exploration factor for linear regressors (0: no transformation, 1: maximum exploration)
               use_validation = False, # whether to validate new proposals with the validation set
               # Additional keyword arguments
               **kwargs
@@ -72,6 +73,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             regressor_max_iterations (int, optional): Maximum iterations for regressor training. Defaults to 20000.
             regressor_tolerance (float, optional): Convergence tolerance for the regressor. Defaults to 5e-3.
             regressor_alpha (float, optional): UCB exploration parameter for the regressor. Defaults to 1.0.
+            regressor_transformation_exploration_factor (float, optional): Transformation exploration factor for linear regressors. 0 means no transformation ([0,1] -> [0,1]), 1 means maximum exploration ([0,1] -> [-1,0]). Defaults to 0.0.
             use_validation (bool, optional): Whether to validate new proposals with the validation set. Defaults to False.
         """
 
@@ -105,14 +107,16 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             self.regressor = LinearRegressor(
                 embedding_model=regressor_embedding_model,
                 num_threads=num_threads,
-                regularization_strength=regressor_regularization_strength
+                regularization_strength=regressor_regularization_strength,
+                transformation_exploration_factor=regressor_transformation_exploration_factor
             )
         elif regressor_type == 'linear_ucb':
             self.regressor = LinearUCBRegressor(
                 embedding_model=regressor_embedding_model,
                 num_threads=num_threads,
                 regularization_strength=regressor_regularization_strength,
-                alpha=regressor_alpha
+                alpha=regressor_alpha,
+                transformation_exploration_factor=regressor_transformation_exploration_factor
             )
         elif regressor_type == 'llm':
             self.regressor = LLMRegressor(
