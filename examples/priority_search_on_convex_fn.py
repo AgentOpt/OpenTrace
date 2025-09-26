@@ -229,7 +229,7 @@ class RewardGuide(Guide):
         # score, feedbak str
         obs, reward, done, info = self.env.step(response)
 
-        return reward, obs + '\n\n' + info['feedback']
+        return reward, ((obs + '\n\n') if obs else '') + info.get('feedback', '')
 
 env = SixHumpCamel(horizon=200)
 train_dataset = dict(inputs=[None], infos=[None])
@@ -257,6 +257,5 @@ trainer.train(
     num_candidates=4,
     num_proposals=4,
     memory_update_frequency=2,
-    optimizer_kwargs={'objective':"You have a task of guessing two numbers. You should make sure your guess minimizes y.",
-                     'memory_size': 10}
+    optimizer_kwargs={'objective':"You have a task of guessing two numbers. You should make sure your guess minimizes y.", 'memory_size': 10}
 )
