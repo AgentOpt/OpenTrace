@@ -456,7 +456,7 @@ class LinearRegressor(RegressorTemplate):
 class LinearUCBRegressor(LinearRegressor):
     """Linear UCB regressor that uses Upper Confidence Bound scores for exploration-exploitation balance."""
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4, alpha=1.0, transformation_exploration_factor=0.0):
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4, alpha=0.3, transformation_exploration_factor=0.0):
         super().__init__(embedding_model, num_threads, regularization_strength, transformation_exploration_factor)
         self.alpha = alpha  # UCB exploration parameter
         self.cov = None     # Will be set during update()
@@ -481,6 +481,8 @@ class LinearUCBRegressor(LinearRegressor):
             predicted_scores = np.random.uniform(0, 1, len(batch))
             for candidate, predicted_score in zip(batch, predicted_scores):
                 candidate.predicted_score = float(predicted_score)
+                # Also set mean_prediction for consistency with main prediction path
+                candidate.mean_prediction = float(predicted_score)
             return predicted_scores
         
         # Collect all embeddings in order
@@ -504,6 +506,10 @@ class LinearUCBRegressor(LinearRegressor):
         # Vectorized computation using solve for better numerical stability
         cov_X_T = np.linalg.solve(self.cov, X_augmented.T)
         confidence_bounds = np.sqrt(np.sum(X_augmented * cov_X_T.T, axis=1))
+        
+        # print the mean scores and confidence bounds for debugging and tuning hyperparameters
+        print_color(f"Mean predictions: {mean_predictions_transformed}", "green")
+        print_color(f"Bonus (without alpha): {confidence_bounds}", "green")
         
         # Compute UCB scores in transformed space: mean + alpha * confidence
         ucb_scores_transformed = mean_predictions_transformed + self.alpha * confidence_bounds
@@ -643,7 +649,7 @@ class LLMRegressor:
                              for candidate_batch in candidate_batches]
             batch_results = async_run(
                 batch_functions,
-                max_workers=self.num_threads,
+                max_workers=200,
                 description=f"Processing {len(candidate_batches)} candidate batches"
             )
             # Flatten results
