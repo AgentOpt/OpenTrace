@@ -1,4 +1,6 @@
 import numpy as np
+import torch
+import torch.nn.init as init
 from opto.trainer.utils import  async_run
 from opto.optimizers.utils import print_color
 from typing import Union, List, Tuple, Dict, Any, Optional
@@ -33,9 +35,10 @@ class RegressorTemplate:
             return "base_module_parameters"
         
         # Get the first value from update_dict (similar to additional_instructions)
-        # TODO: support for multiple parameters
-        parameter_text = list(candidate.update_dict.values())[0]
-        return str(parameter_text)
+        # Support for multiple parameters
+        # Return a text representation of the dictionary
+        parameter_text = str(candidate.update_dict)
+        return parameter_text
 
     def _get_embedding(self, candidate):
         """Get the embedding for a ModuleCandidate."""
@@ -58,10 +61,7 @@ class RegressorTemplate:
             return embedding
         except Exception as e:
             print_color(f"ERROR: Embedding API call failed after retries: {e}", "red")
-            # Return a random embedding as fallback to prevent complete failure
-            print_color("Using random embedding as fallback", "yellow")
-            fallback_embedding = np.random.normal(0, 0.01, self.linear_dim)
-            return fallback_embedding / np.linalg.norm(fallback_embedding)
+            return None
     
     def _update_memory_embeddings_for_batch(self, batch):
         """Update the embeddings for a batch of candidates."""
@@ -146,32 +146,14 @@ class LogisticRegressor(RegressorTemplate):
         
         for candidate in training_candidates:
             embedding = candidate.embedding
-            eval_count = candidate.num_rollouts
-            mean_score = candidate.mean_score()
-            
-            if mean_score is None:
-                continue
+            scores = [r['score'] for r in candidate.rollouts]
+            for score in scores:
+                if score is None:
+                    continue
+                else:
+                    X_list.append(embedding)
+                    y_list.append(score)
                 
-            # Calculate score_sum from mean_score and eval_count
-            # Assuming scores are binary (0 or 1), score_sum = mean_score * eval_count
-            score_sum = mean_score * eval_count
-            
-            # score_sum directly represents the number of successes
-            num_successes = int(round(score_sum))
-            num_failures = eval_count - num_successes
-            
-            # Ensure non-negative values
-            num_successes = max(0, num_successes)
-            num_failures = max(0, num_failures)
-            
-            # Create binary training samples: 1 for success, 0 for failure
-            for _ in range(num_successes):
-                X_list.append(embedding)
-                y_list.append(1.0)
-            
-            for _ in range(num_failures):
-                X_list.append(embedding)
-                y_list.append(0.0)
         
         if len(X_list) == 0:
             print_color("Warning: No binary training samples generated.", "yellow")
@@ -209,7 +191,7 @@ class LogisticRegressor(RegressorTemplate):
         
         for iteration in range(self.max_iterations):
             # Forward pass
-            z = X.dot(self.weights) + self.bias
+            z = X @ self.weights + self.bias
             predictions = self._sigmoid(z)
             
             # Compute cost with L2 regularization
@@ -228,7 +210,7 @@ class LogisticRegressor(RegressorTemplate):
                 patience_counter += 1
             
             # Backward pass (compute gradients with L2 regularization)
-            dw = (1/m) * X.T.dot(predictions - y) + 2 * self.regularization_strength * self.weights
+            dw = (1/m) * X.T @ (predictions - y) + 2 * self.regularization_strength * self.weights
             db = (1/m) * np.sum(predictions - y)
             gradient_norm = np.linalg.norm(dw)
             
@@ -278,12 +260,16 @@ class LogisticRegressor(RegressorTemplate):
         # Collect all embeddings in order
         embeddings = []
         for candidate in batch:
-            embeddings.append(candidate.embedding)
+            if candidate.embedding:
+                embeddings.append(candidate.embedding)
+            else:
+                candidate.embedding = self._get_embedding(candidate)
+                embeddings.append(candidate.embedding)
         
 
         # Batch prediction using vectorized operations
         X_batch = np.array(embeddings)
-        z = X_batch.dot(self.weights) + self.bias
+        z = X_batch @ self.weights + self.bias
         predicted_scores = self._sigmoid(z)
         
         # Update each candidate with predicted score as attribute
@@ -338,11 +324,14 @@ class LinearRegressor(RegressorTemplate):
         
         for candidate in training_candidates:
             embedding = candidate.embedding
-            mean_score = candidate.mean_score()
-            
-            if mean_score is not None:
-                X_list.append(embedding)
-                y_list.append(mean_score)
+            scores = [r['score'] for r in candidate.rollouts]
+            # Filter out None scores
+            for score in scores:
+                if score is None:
+                    continue
+                else:
+                    X_list.append(embedding)
+                    y_list.append(score)
         
         if len(X_list) == 0:
             print_color("Warning: No valid training samples for linear regression.", "yellow")
@@ -439,7 +428,7 @@ class LinearRegressor(RegressorTemplate):
 
         # Batch prediction using vectorized operations
         X_batch = np.array(embeddings)
-        predicted_scores_transformed = X_batch.dot(self.weights) + self.bias
+        predicted_scores_transformed = X_batch @ self.weights + self.bias
         
         # Transform predictions back to [0,1] range
         predicted_scores = self._inverse_transform_predictions(predicted_scores_transformed)
@@ -595,7 +584,7 @@ class LLMRegressor:
                     'eval_count': candidate.num_rollouts,
                     'mean_score': candidate.mean_score(),
                     'score_sum': candidate.mean_score() * candidate.num_rollouts,
-                    'score_variance': 0.0  # Could calculate if needed
+                    'score_variance': self._calculate_score_variance(candidate)
                 }
                 self.training_data.append(training_entry)
         if len(self.training_data) == 0:
@@ -610,12 +599,11 @@ class LLMRegressor:
     
     def _get_candidate_params(self, candidate):
         """Extract parameters from a ModuleCandidate for LLM processing."""
-        if hasattr(candidate, 'update_dict') and candidate.update_dict:
-            return {k.py_name if hasattr(k, 'py_name') else str(k): str(v) for k, v in candidate.update_dict.items()}
-        else:
-            # Default parameters if no update_dict
-            print_color("Warning: No update_dict found for candidate. Using default parameters.", "yellow")
-            return {'base_module': "base_module_parameters"}
+        assert hasattr(candidate, 'update_dict'), "Candidate must have an update_dict"
+        assert candidate.update_dict, "Candidate update_dict must not be empty"
+        
+        return {k.py_name if hasattr(k, 'py_name') else str(k): str(v) for k, v in candidate.update_dict.items()}
+        
     
     def predict_scores(self, memory: List[Tuple[float, ModuleCandidate]]):
         """Predict scores for all candidates in the memory."""
@@ -671,18 +659,25 @@ class LLMRegressor:
         print_color(f"LLM regressor prediction completed in {elapsed_time:.4f} seconds", "cyan")
         
         return np.array(all_predicted_scores)
-    
+
+    def _calculate_score_variance(self, candidate):
+        """Calculate the variance of the scores for a candidate."""
+        scores = [rollout['score'] for rollout in candidate.rollouts if rollout['score'] is not None]
+        return np.var(scores)
+
     def _predict_scores_for_batch(self, candidate_batch):
         """Predict scores for a single batch of candidates."""
         # Convert candidates to prediction format
         batch_to_predict = []
         for candidate in candidate_batch:
+            # calculate the variance of the scores for the candidate
+            
             entry = {
                 'candidate': candidate,
                 'params': self._get_candidate_params(candidate),
-                'eval_count': getattr(candidate, 'num_rollouts', 0),
-                'mean_score': candidate.mean_score() if hasattr(candidate, 'mean_score') and candidate.mean_score() is not None else 0.0,
-                'score_variance': 0.0
+                # 'eval_count': getattr(candidate, 'num_rollouts', 0),
+                # 'mean_score': candidate.mean_score() if hasattr(candidate, 'mean_score') and candidate.mean_score() is not None else 0.0,
+                # 'score_variance': self._calculate_score_variance(candidate)
             }
             batch_to_predict.append(entry)
         
@@ -920,7 +915,7 @@ class LLMRegressor:
                     try:
                         predicted_score = float(match.group(2).strip())
                     except (ValueError, TypeError):
-                        predicted_score = 0.0
+                        predicted_score = None
                     score_estimates[index] = predicted_score
             
             return score_estimates
@@ -936,11 +931,12 @@ class LLMRegressor:
         for idx in range(len(shuffled_prediction_batch)):
             candidate_key = str(idx)
             original_idx = shuffled_to_original_idx[idx]
+
+            assert candidate_key in score_estimates, f"Candidate key {candidate_key} not in score_estimates"
+            assert score_estimates[candidate_key] is not None, f"Predicted score for candidate {candidate_key} is None"
+
+            predicted_score = score_estimates[candidate_key]
             
-            if candidate_key in score_estimates:
-                predicted_score = score_estimates[candidate_key]
-            else:
-                predicted_score = 0.0
             
             predicted_scores.append((original_idx, predicted_score))
         
