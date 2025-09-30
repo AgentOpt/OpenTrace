@@ -699,8 +699,24 @@ class LLMRegressor:
                 predicted_scores_all_rounds.append(predicted_scores)
         
         # Calculate average predicted scores across all rounds
-        avg_predicted_scores = np.mean(predicted_scores_all_rounds, axis=0)
-        return avg_predicted_scores.tolist()
+        # There may be None values in individual candidate scores, only keep the non-None scores to calculate the average
+        num_candidates = len(batch_to_predict)
+        avg_predicted_scores = []
+        
+        # Convert to numpy array for easier handling, but handle None values
+        scores_matrix = np.array(predicted_scores_all_rounds, dtype=object)
+        
+        for candidate_idx in range(num_candidates):
+            # Extract all scores for this candidate across all rounds
+            candidate_scores = scores_matrix[:, candidate_idx]
+            
+            # Filter out None values and calculate average
+            valid_scores = [score for score in candidate_scores if score is not None]
+            avg_score = np.mean(valid_scores) if valid_scores else 0.0 # Predict 0 at this step, so this candidate with prediction error will not be selected
+            
+            avg_predicted_scores.append(avg_score)
+        
+        return avg_predicted_scores
     
     def _sample_training_subset(self):
         """Sample a subset of training data for prompt construction."""
@@ -929,8 +945,8 @@ class LLMRegressor:
             original_idx = shuffled_to_original_idx[idx]
 
             assert candidate_key in score_estimates, f"Candidate key {candidate_key} not in score_estimates"
-            assert score_estimates[candidate_key] is not None, f"Predicted score for candidate {candidate_key} is None"
-
+            # assert score_estimates[candidate_key] is not None, f"Predicted score for candidate {candidate_key} is None"
+            # predicted_score could be None
             predicted_score = score_estimates[candidate_key]
             
             
