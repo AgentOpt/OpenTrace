@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-import torch.nn.init as init
+import torch.nn as nn
+import torch.optim as optim
 from opto.trainer.utils import  async_run
 from opto.optimizers.utils import print_color
 from typing import Union, List, Tuple, Dict, Any, Optional
@@ -106,7 +107,7 @@ class LogisticRegressor(RegressorTemplate):
     predict_scores has no parameters, it could return predicted scores for all candidates in the memory. 
     predict_scores_for_batch has one parameter, a batch of candidates, it could return predicted scores for the batch of candidates."""
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.2, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.001, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
         super().__init__(embedding_model, num_threads, regularization_strength)
         # Logistic regression specific parameters
         self.learning_rate = learning_rate
@@ -114,7 +115,13 @@ class LogisticRegressor(RegressorTemplate):
         self.max_iterations = max_iterations
         self.tolerance = tolerance
         self.patience = 20  # Early stopping patience
-        self.lr_decay_factor = 0.8   # Learning rate decay factor
+        
+        # Convert weights and bias to PyTorch tensors
+        self.weights_tensor = torch.tensor(self.weights, dtype=torch.float32, requires_grad=True)
+        self.bias_tensor = torch.tensor(self.bias, dtype=torch.float32, requires_grad=True)
+        
+        # Initialize Adam optimizer (will be reinitialized when dimensions change)
+        self.optimizer = None
         
     def _sigmoid(self, z):
         """Sigmoid activation function for logistic regression."""
@@ -162,62 +169,55 @@ class LogisticRegressor(RegressorTemplate):
             print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
             return
         print_color(f"Updating regression model with {len(training_candidates)} candidates ({len(X_list)} binary samples)...", "blue")
-        # Convert to numpy arrays
-        X = np.array(X_list)
-        y = np.array(y_list)
+        # Convert to PyTorch tensors
+        X = torch.tensor(X_list, dtype=torch.float32)
+        y = torch.tensor(y_list, dtype=torch.float32)
         
-        # Ensure X has the right dimensions
-        if X.shape[1] != self.linear_dim:
-            self.linear_dim = X.shape[1]
-            # Initialize weights with larger values for more aggressive learning
-            self.weights = np.random.normal(0, 0.1, self.linear_dim)
+        # Assert that dimensions match - this should never fail if properly initialized
+        assert X.shape[1] == self.linear_dim, f"Feature dimension mismatch: expected {self.linear_dim}, got {X.shape[1]}. This indicates an initialization error."
         
-        # Convergence-based regularized logistic regression training using all raw binary data
-        m = len(X_list)
-        # print_color(f"Training regularized logistic regression with {m} binary samples from {len(training_candidates)} candidates until convergence.", "blue")
-        # print_color(f"Using L2 regularization strength: {self.regularization_strength}, learning rate: {self.learning_rate}", "blue")
-        # print_color(f"Max iterations: {self.max_iterations}, tolerance: {self.tolerance}", "blue")
+        # Initialize Adam optimizer with current parameters
+        self.optimizer = optim.Adam([self.weights_tensor, self.bias_tensor], 
+                                   lr=self.learning_rate, 
+                                   weight_decay=self.regularization_strength)
         
-        
-        # Training loop until convergence with adaptive learning rate and early stopping
-        prev_cost = float('inf')
-        best_cost = float('inf')
+        # Training loop with PyTorch and Adam optimizer
+        prev_loss = float('inf')
+        best_loss = float('inf')
         converged = False
-        iteration = 0
         patience_counter = 0
         
-        # Reset learning rate
-        self.learning_rate = self.initial_learning_rate
+        print_color(f"Training with PyTorch and Adam optimizer: lr={self.learning_rate}, weight_decay={self.regularization_strength}", "blue")
         
         for iteration in range(self.max_iterations):
-            # Forward pass
-            z = X @ self.weights + self.bias
-            predictions = self._sigmoid(z)
+            # Zero gradients
+            self.optimizer.zero_grad()
             
-            # Compute cost with L2 regularization
-            epsilon = 1e-15  # Small value to prevent log(0)
-            predictions_clipped = np.clip(predictions, epsilon, 1 - epsilon)
-            log_likelihood = -np.mean(y * np.log(predictions_clipped) + (1 - y) * np.log(1 - predictions_clipped))
-            l2_penalty = self.regularization_strength * np.sum(self.weights ** 2)
-            total_cost = log_likelihood + l2_penalty
+            # Forward pass
+            z = X @ self.weights_tensor + self.bias_tensor
+            predictions = torch.sigmoid(z)
+            
+            # Compute binary cross-entropy loss (PyTorch handles regularization via weight_decay)
+            loss = nn.functional.binary_cross_entropy(predictions, y)
+            
+            # Backward pass and optimization
+            loss.backward()
+            self.optimizer.step()
+            
+            current_loss = loss.item()
             
             # Check for improvement and early stopping
-            cost_change = abs(prev_cost - total_cost)
-            if total_cost < best_cost:
-                best_cost = total_cost
+            loss_change = abs(prev_loss - current_loss)
+            if current_loss < best_loss:
+                best_loss = current_loss
                 patience_counter = 0
             else:
                 patience_counter += 1
             
-            # Backward pass (compute gradients with L2 regularization)
-            dw = (1/m) * X.T @ (predictions - y) + 2 * self.regularization_strength * self.weights
-            db = (1/m) * np.sum(predictions - y)
-            gradient_norm = np.linalg.norm(dw)
-            
-            # Check convergence criteria (stricter)
-            if cost_change < self.tolerance and gradient_norm < self.tolerance:
+            # Check convergence criteria
+            if loss_change < self.tolerance:
                 converged = True
-                print_color(f"Converged at iteration {iteration + 1}: cost change {cost_change:.10f}, gradient norm {gradient_norm:.10f}", "green")
+                print_color(f"Converged at iteration {iteration + 1}: loss change {loss_change:.10f}", "green")
                 break
             
             # Early stopping if no improvement
@@ -225,22 +225,18 @@ class LogisticRegressor(RegressorTemplate):
                 print_color(f"Early stopping at iteration {iteration + 1}: no improvement for {self.patience} iterations", "yellow")
                 break
             
-            # Adaptive learning rate: decay if no improvement for several iterations
-            if patience_counter > 0 and patience_counter % 10 == 0:
-                self.learning_rate *= self.lr_decay_factor
-                print_color(f"Reducing learning rate to {self.learning_rate:.6f}", "yellow")
-            
-            # Update parameters
-            self.weights -= self.learning_rate * dw
-            self.bias -= self.learning_rate * db
-            
-            prev_cost = total_cost
+            prev_loss = current_loss
+        
+        # Update numpy versions for compatibility with existing code
+        self.weights = self.weights_tensor.detach().numpy()
+        self.bias = self.bias_tensor.item()
         
         # Final status
+        final_loss = loss.item()
         if converged:
-            print_color(f"Logistic regression converged after {iteration + 1} iterations. Final cost: {total_cost:.6f} (Log-likelihood: {log_likelihood:.6f}, L2 penalty: {l2_penalty:.6f}), bias: {self.bias:.6f}", "green")
+            print_color(f"PyTorch logistic regression converged after {iteration + 1} iterations. Final loss: {final_loss:.6f}, bias: {self.bias:.6f}", "green")
         else:
-            print_color(f"Logistic regression reached max iterations ({self.max_iterations}). Final cost: {total_cost:.6f} (Log-likelihood: {log_likelihood:.6f}, L2 penalty: {l2_penalty:.6f}), bias: {self.bias:.6f}", "yellow")
+            print_color(f"PyTorch logistic regression reached max iterations ({self.max_iterations}). Final loss: {final_loss:.6f}, bias: {self.bias:.6f}", "yellow")
         
         # Print timing information
         end_time = time.time()
