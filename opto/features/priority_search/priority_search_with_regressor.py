@@ -50,11 +50,12 @@ class PrioritySearch_with_Regressor(PrioritySearch):
               regressor_model_name: str = "gemini/gemini-2.0-flash",  # model name for the regressor
               regressor_embedding_model: str = "gemini/text-embedding-004",  # embedding model for the regressor
               regressor_learning_rate: float = 0.2,  # learning rate for the regressor
-              regressor_regularization_strength: float = 1e-4,  # L2 regularization strength for the regressor
+              regressor_regularization_strength: float = 1,  # L2 regularization strength for the regressor
               regressor_max_iterations: int = 20000,  # maximum iterations for regressor training
               regressor_tolerance: float = 5e-3,  # convergence tolerance for the regressor
               regressor_alpha: float = 1.0,  # UCB exploration parameter for the regressor
               regressor_transformation_exploration_factor: float = 0.0,  # transformation exploration factor for linear regressors (0: no transformation, 1: maximum exploration)
+              regressor_projection_dim: int = None,  # projection dimension for the regressor
               use_validation = False, # whether to validate new proposals with the validation set
               # Additional keyword arguments
               **kwargs
@@ -75,6 +76,7 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             regressor_tolerance (float, optional): Convergence tolerance for the regressor. Defaults to 5e-3.
             regressor_alpha (float, optional): UCB exploration parameter for the regressor. Defaults to 1.0.
             regressor_transformation_exploration_factor (float, optional): Transformation exploration factor for linear regressors. 0 means no transformation ([0,1] -> [0,1]), 1 means maximum exploration ([0,1] -> [-1,0]). Defaults to 0.0.
+            regressor_projection_dim (int, optional): Projection dimension for the regressor. Defaults to None.
             use_validation (bool, optional): Whether to validate new proposals with the validation set. Defaults to False.
         """
 
@@ -103,14 +105,16 @@ class PrioritySearch_with_Regressor(PrioritySearch):
             learning_rate=regressor_learning_rate,
             regularization_strength=regressor_regularization_strength,
             max_iterations=regressor_max_iterations,
-            tolerance=regressor_tolerance
+            tolerance=regressor_tolerance,
+            linear_dim=regressor_projection_dim
         )
         elif regressor_type == 'linear':
             self.regressor = LinearRegressor(
                 embedding_model=regressor_embedding_model,
                 num_threads=num_threads,
                 regularization_strength=regressor_regularization_strength,
-                transformation_exploration_factor=regressor_transformation_exploration_factor
+                transformation_exploration_factor=regressor_transformation_exploration_factor,
+                linear_dim=regressor_projection_dim
             )
         elif regressor_type == 'linear_ucb':
             self.regressor = LinearUCBRegressor(
@@ -118,7 +122,8 @@ class PrioritySearch_with_Regressor(PrioritySearch):
                 num_threads=num_threads,
                 regularization_strength=regressor_regularization_strength,
                 alpha=regressor_alpha,
-                transformation_exploration_factor=regressor_transformation_exploration_factor
+                transformation_exploration_factor=regressor_transformation_exploration_factor,
+                linear_dim=regressor_projection_dim
             )
         elif regressor_type == 'llm':
             self.regressor = LLMRegressor(
