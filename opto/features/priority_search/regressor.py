@@ -595,13 +595,13 @@ class LinearUCBRegressor(LinearRegressor):
         
         # Update each candidate with predicted UCB score as attribute
         for i, candidate in enumerate(batch):
-            candidate.predicted_score = float(predicted_scores[i])
+            candidate.predicted_score = float(ucb_scores[i])
             # Also store the individual components for debugging/analysis
             candidate.mean_prediction = float(mean_predictions[i])
             # candidate.confidence_bound = float(confidence_bounds[i])
             # candidate.ucb_score = float(ucb_scores[i])
             
-        return predicted_scores
+        return ucb_scores
 DOMAIN_CONTEXT = """## Problem Context and Domain Knowledge
                     You are a score prediction model for tau-bench agent configurations. You are optimizing agents for tool-agent-user interaction in real-world domains (airline and retail environments).
 
