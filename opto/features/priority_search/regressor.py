@@ -10,6 +10,70 @@ import litellm
 import time
 from opto.features.priority_search.priority_search import ModuleCandidate
 
+
+class GaussianRandomProjection:
+    """
+    Gaussian Random Projection for dimensionality reduction of linear features.
+    
+    Projects high-dimensional embeddings to a lower-dimensional space using a random
+    Gaussian matrix. This preserves approximate distances (Johnson-Lindenstrauss lemma)
+    while reducing computational complexity.
+    """
+    
+    def __init__(self, input_dim: int, output_dim: int, random_seed: Optional[int] = None):
+        """
+        Initialize Gaussian Random Projection.
+        
+        Args:
+            input_dim: Original dimensionality of features
+            output_dim: Target dimensionality after projection
+            random_seed: Random seed for reproducibility
+        """
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.random_seed = random_seed
+        
+        # Set random seed for reproducibility
+        if random_seed is not None:
+            np.random.seed(random_seed)
+        
+        # Create random projection matrix: N(0, 1/sqrt(output_dim))
+        # This scaling ensures approximate preservation of distances
+        self.projection_matrix = np.random.normal(
+            0, 1/np.sqrt(self.output_dim), 
+            size=(self.input_dim, self.output_dim)
+        )
+        
+        print_color(f"Initialized Gaussian Random Projection: {input_dim}D → {output_dim}D", "green")
+    
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        """
+        Transform data using the fitted projection matrix.
+        
+        Args:
+            X: Input features of shape (n_samples, input_dim)
+            
+        Returns:
+            Projected features of shape (n_samples, output_dim)
+        """
+        if X.shape[1] != self.input_dim:
+            raise ValueError(f"Input dimension mismatch: expected {self.input_dim}, got {X.shape[1]}")
+        
+        # Apply random projection: X_projected = X @ projection_matrix
+
+        # calculate the norm of the features, before and after projection, for debugging
+        # before_norm = np.linalg.norm(X, axis=1)
+        # after_norm = np.linalg.norm(X @ self.projection_matrix, axis=1)
+        # print_color(f"Before projection norm: {before_norm}, after projection norm: {after_norm}", "green")
+
+        # I have tested the norm of the features before projection is 1, after projection is almost 1.
+        return X @ self.projection_matrix
+    
+    def get_projected_dim(self) -> int:
+        """Return the output dimensionality after projection."""
+        return self.output_dim
+
+
 class RegressorTemplate:
     """Base class template for regression-based predictors for ModuleCandidate objects.
     
@@ -17,14 +81,30 @@ class RegressorTemplate:
     Subclasses should implement update() and predict_scores() methods.
     """
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4):
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1, linear_dim=None):
         # In the regressor, no need for calling LLM to make the prediction. So we could predict the entire memory at once.
         self.max_candidates_to_predict = 500
         self.embedding_model = embedding_model
         self.num_threads = num_threads
         self.regularization_strength = regularization_strength  # L2 regularization strength (lambda)
-        # default linear dimension is 768
-        self.linear_dim = 768
+        
+        # Default original embedding dimension (from text-embedding-004)
+        self.original_embedding_dim = 768
+        
+        if linear_dim is not None:
+            # Use random projection from 768D to linear_dim
+            self.linear_dim = linear_dim
+            print_color(f"Using random projection: {self.original_embedding_dim}D → {linear_dim}D", "blue")
+            self.random_projector = GaussianRandomProjection(
+                input_dim=self.original_embedding_dim,
+                output_dim=linear_dim,
+                random_seed=42
+            )
+        else:
+            # Use default 768D without projection
+            self.linear_dim = self.original_embedding_dim
+            self.random_projector = None
+            
         # Initialize weights with larger values for more aggressive learning
         self.weights = np.random.normal(0, 0.1, self.linear_dim)
         self.bias = 0.0
@@ -59,6 +139,12 @@ class RegressorTemplate:
                 operation_name="Embedding API call"
             )
             embedding = response.data[0].embedding
+            if self.random_projector is not None:
+                # Convert to numpy array and reshape for transform (expects 2D: n_samples x n_features)
+                embedding_array = np.array(embedding).reshape(1, -1)
+                projected = self.random_projector.transform(embedding_array)
+                # Convert back to list and flatten
+                embedding = projected.flatten().tolist()
             return embedding
         except Exception as e:
             print_color(f"ERROR: Embedding API call failed after retries: {e}", "red")
@@ -107,8 +193,8 @@ class LogisticRegressor(RegressorTemplate):
     predict_scores has no parameters, it could return predicted scores for all candidates in the memory. 
     predict_scores_for_batch has one parameter, a batch of candidates, it could return predicted scores for the batch of candidates."""
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.001, regularization_strength=1e-4, max_iterations=20000, tolerance=5e-3):
-        super().__init__(embedding_model, num_threads, regularization_strength)
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, learning_rate=0.001, regularization_strength=1, max_iterations=20000, tolerance=5e-3, linear_dim=None):
+        super().__init__(embedding_model, num_threads, regularization_strength,linear_dim)
         # Logistic regression specific parameters
         self.learning_rate = learning_rate
         self.initial_learning_rate = learning_rate
@@ -277,8 +363,8 @@ class LogisticRegressor(RegressorTemplate):
 class LinearRegressor(RegressorTemplate):
     """Use closed-form solution for regularized linear regression."""
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4, transformation_exploration_factor=0.0):
-        super().__init__(embedding_model, num_threads, regularization_strength)
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1, transformation_exploration_factor=0.0, linear_dim=None):
+        super().__init__(embedding_model, num_threads, regularization_strength, linear_dim)
         # The transformation exploration factor should lie in [0,1]
         assert 0 <= transformation_exploration_factor <= 1, "Transformation exploration factor must be between 0 and 1"
         self.transformation_exploration_factor = transformation_exploration_factor  # 0: [0,1] -> [0,1], 1: [0,1] -> [-1,0]
@@ -430,7 +516,7 @@ class LinearRegressor(RegressorTemplate):
         predicted_scores = self._inverse_transform_predictions(predicted_scores_transformed)
 
         # Clip predicted scores to be between 0 and 1
-        predicted_scores = np.clip(predicted_scores, 0, 1)
+        # predicted_scores = np.clip(predicted_scores, 0, 1)
         
         # Update each candidate with predicted score as attribute
         for candidate, predicted_score in zip(batch, predicted_scores):
@@ -441,8 +527,8 @@ class LinearRegressor(RegressorTemplate):
 class LinearUCBRegressor(LinearRegressor):
     """Linear UCB regressor that uses Upper Confidence Bound scores for exploration-exploitation balance."""
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1e-4, alpha=0.3, transformation_exploration_factor=0.0):
-        super().__init__(embedding_model, num_threads, regularization_strength, transformation_exploration_factor)
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1, alpha=0.3, transformation_exploration_factor=0.0, linear_dim=None):
+        super().__init__(embedding_model, num_threads, regularization_strength, transformation_exploration_factor, linear_dim)
         self.alpha = alpha  # UCB exploration parameter
         self.cov = None     # Will be set during update()
     
@@ -504,8 +590,8 @@ class LinearUCBRegressor(LinearRegressor):
         mean_predictions = self._inverse_transform_predictions(mean_predictions_transformed)
         
         # Clip UCB scores to be between 0 and 1
-        predicted_scores = np.clip(ucb_scores, 0, 1)
-        mean_predictions = np.clip(mean_predictions, 0, 1)
+        # predicted_scores = np.clip(ucb_scores, 0, 1)
+        # mean_predictions = np.clip(mean_predictions, 0, 1)
         
         # Update each candidate with predicted UCB score as attribute
         for i, candidate in enumerate(batch):
