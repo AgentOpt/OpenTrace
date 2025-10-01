@@ -26,7 +26,7 @@ class ChatHistory:
             max_len: Maximum number of messages to keep in history
             auto_summary: Whether to automatically summarize old messages
         """
-        self.messages: List[Dict[str, Union[str, trace.Node]]] = []
+        self.messages: List[Dict[str, Any]] = []
         self.max_len = max_len
         self.auto_summary = auto_summary
 
@@ -52,7 +52,7 @@ class ChatHistory:
         self.messages.append({"role": role, "content": content})
         self._trim_history()
 
-    def append(self, message: Dict[str, Union[str, trace.Node]]):
+    def append(self, message: Dict[str, Any]):
         """Append a message directly to history."""
         if "role" not in message or "content" not in message:
             raise ValueError("Message must have 'role' and 'content' fields.")
