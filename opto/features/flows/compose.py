@@ -131,6 +131,20 @@ DEFAULT_SYSTEM_PROMPT_DESCRIPTION = ("the system prompt to the agent. By tuning 
 
 @trace.model
 class TracedLLM:
+    """
+    This high-level model provides an easy-to-use interface for LLM calls with system prompts and optional chat history.
+
+    Python usage patterns:
+
+        llm = UF_LLM(system_prompt)
+        response = llm.chat(user_prompt)
+        response_2 = llm.chat(user_prompt_2)
+
+    The underlying Trace Graph:
+        TracedLLM_response0 = TracedLLM.forward.call_llm(args_0=system_prompt0, args_1=TracedLLM0_user_query0)
+        TracedLLM_response1 = TracedLLM.forward.call_llm(args_0=system_prompt0, args_1=TracedLLM0_user_query0, args_2=TracedLLM_response0, args_3=TracedLLM0_user_query1)
+        TracedLLM_response2 = TracedLLM.forward.call_llm(args_0=system_prompt0, args_1=TracedLLM0_user_query0, args_2=TracedLLM_response0, args_3=TracedLLM0_user_query1, args_4=TracedLLM_response1, args_5=TracedLLM0_user_query2)
+    """
     def __init__(self,
                  system_prompt: Union[str, None, trace.Node] = None,
                  llm: AbstractModel = None, chat_history_on=False,
@@ -161,22 +175,10 @@ class TracedLLM:
         current_llm_sessions.append(1)  # just a marker
 
     def forward(self, user_query: str) -> str:
-        """We build the TraceGraph in two ways.
-
-        If there is no chat history, then the graph would look like:
-
-        llm = UF_LLM(system_prompt)
-        response = llm.chat(user_prompt)
-
-        If there is chat history, the graph would look like:
-
-        llm = UF_LLM(system_prompt)
-        response = llm.chat(user_prompt)
-        response_2 = llm.chat(user_prompt_2)
+        """This function takes user_query as input, and returns the response from the LLM, with the system prompt prepended.
 
         Args:
-            *args: For direct pattern - single string argument
-            **kwargs: For inheritance pattern - named input fields
+            user_query: The user query to send to the LLM
 
         Returns:
             str: For direct pattern
