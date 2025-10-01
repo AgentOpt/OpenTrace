@@ -442,6 +442,7 @@ class PrioritySearch(SearchTemplate):
             'using_short_term_memory': self.memory is self.short_term_memory,  # whether the current memory is the short-term memory
             'using_long_term_memory': self.memory is self.long_term_memory,  # whether the current memory is the long-term memory
         }
+        # Due to some api errors, failed sampling process is not counted in the total samples. If we want to count it, we can calculate total_samples from the parameters of the trainer. In this way, different runs could have same number of total samples, not influenced by the randomness.
         total_samples = sum([candidate.num_rollouts for _, candidate in self.short_term_memory]) + \
                         sum([candidate.num_rollouts for _, candidate in self.long_term_memory])
         info_log.update({'total_samples': total_samples})
