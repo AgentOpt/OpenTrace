@@ -1,7 +1,7 @@
 import opto.trace as trace
 from typing import Union, get_type_hints, Any, Dict, List, Optional
 from opto.utils.llm import AbstractModel, LLM
-import random
+import contextvars
 
 """
 TracedLLM:
@@ -17,6 +17,7 @@ llm = TracedLLM("You are a helpful assistant.")
 response = llm("Hello, what's the weather in France today?")
 """
 
+USED_TracedLLM = contextvars.ContextVar('USED_TracedLLM', default=list())
 
 class ChatHistory:
     def __init__(self, max_len=50, auto_summary=False):
@@ -64,7 +65,7 @@ class ChatHistory:
     def get_messages(self) -> List[Dict[str, str]]:
         messages = []
         for message in self.messages:
-            if type(message['content']) is trace.Node:
+            if isinstance(message['content'], trace.Node):
                 messages.append({"role": message["role"], "content": message["content"].data})
             else:
                 messages.append(message)
@@ -73,8 +74,8 @@ class ChatHistory:
     def get_messages_as_node(self, llm_name="") -> List[trace.Node]:
         node_list = []
         for message in self.messages:
-            # issue: if user query is a node and has other computation attached, we can't rename it :(
-            if type(message['content']) is trace.Node:
+            # If user query is a node and has other computation attached, we can't rename it
+            if isinstance(message['content'], trace.Node):
                 node_list.append(message['content'])
             else:
                 role = message["role"]
@@ -154,7 +155,10 @@ class TracedLLM:
         self.llm = llm
         self.chat_history = ChatHistory()
         self.chat_history_on = chat_history_on
-        self.model_name = model_name if model_name else f"TracedLLM{random.randint(1, 9999)}"
+
+        current_llm_sessions = USED_TracedLLM.get()
+        self.model_name = model_name if model_name else f"TracedLLM{len(current_llm_sessions)}"
+        current_llm_sessions.append(1)  # just a marker
 
     def forward(self, user_query: str) -> str:
         """We build the TraceGraph in two ways.
@@ -183,7 +187,7 @@ class TracedLLM:
 
         response = self.llm(messages=messages)
 
-        @trace.bundle()
+        @trace.bundle(output_name="TracedLLM_response")
         def call_llm(*args) -> str:
             """Call the LLM model.
             Args:
@@ -198,15 +202,14 @@ class TracedLLM:
         arg_list = ([self.system_prompt] + self.chat_history.get_messages_as_node(self.model_name)
                     + [user_query_node])
 
+        response_node = call_llm(*arg_list)
+
         # save to chat history
         if self.chat_history_on:
             self.chat_history.add(user_query_node, role="user")
-            response_node = trace.node(response.choices[0].message.content,
-                                       name=f"{self.model_name}_assistant_response")
-
             self.chat_history.add(response_node, role="assistant")
 
-        return call_llm(*arg_list)
+        return response_node
 
     def chat(self, user_query: str) -> str:
         return self.forward(user_query)

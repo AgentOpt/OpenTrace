@@ -40,6 +40,7 @@ def bundle(
     allow_external_dependencies=False,
     overwrite_python_recursion=False,
     projections=None,
+    output_name=None
 ):
     """Wrap a function as a FunModule which returns node objects.
 
@@ -55,6 +56,7 @@ def bundle(
         allow_external_dependencies (bool, optional): Whether to allow external dependencies. Defaults to False.
         overwrite_python_recursion (bool, optional): Whether to overwrite Python recursion behavior. Defaults to False.
         projections (List[Projection], optional): List of projections to be used in updating trainable parameter. Defaults to None.
+        output_name (str, optional): Specify/override the name of the output node. If None, the name is derived from the function name.
 
     Returns:
         FunModule: The wrapped function that returns node objects.
@@ -73,6 +75,7 @@ def bundle(
             overwrite_python_recursion=overwrite_python_recursion,
             _ldict=prev_f_locals,  # Get the locals of the calling function
             projections=projections,
+            output_name=output_name
         )
         return fun_module
 
@@ -128,6 +131,7 @@ class FunModule(Module):
         allow_external_dependencies=False,
         overwrite_python_recursion=False,
         projections=None,
+        output_name=None,
         _ldict=None,
     ):
 
@@ -146,7 +150,7 @@ class FunModule(Module):
         self.info = dict(  # TODO explain the info dict
             # info about the decorated function
             fun=None,  # to be defined at run time
-            fun_name=fun.__qualname__,
+            fun_name=self.filter_fun_name(fun.__qualname__),
             _fun_name=fun.__name__,  # this saves the pure fun name (without the class name); this should not be modified.map=
             doc=inspect.cleandoc(docstring) if docstring is not None else "",
             signature=inspect.signature(fun),
@@ -175,6 +179,8 @@ class FunModule(Module):
         self.allow_external_dependencies = allow_external_dependencies
         self.parameter = None
         self.overwrite_python_recursion = overwrite_python_recursion
+        self.output_name = output_name
+
         if trainable:
             # trainable code uses exec which has an effect of overwrite_python_recursion==True.
             self.overwrite_python_recursion = True
@@ -260,6 +266,9 @@ class FunModule(Module):
     @property
     def name(self):
         return get_op_name(self.description)
+
+    def filter_fun_name(self, fun_name):
+        return fun_name.replace(r"<locals>.", "")
 
     def _wrap_inputs(self, fun, args, kwargs):
         """Wrap the inputs to a function as nodes when they're not.
@@ -602,7 +611,7 @@ class FunModule(Module):
             self.info["fun_name"] = "eval"
         else:
             description = self.description
-            name = self.name
+            name = self.name if self.output_name is None else self.output_name
         info = self.info.copy()
         if isinstance(output, Exception):
             e_node = ExceptionNode(
