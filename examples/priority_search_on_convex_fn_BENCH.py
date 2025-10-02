@@ -4,20 +4,13 @@ import string
 import numpy as np
 import time
 from opto.trace.utils import dedent
-from priority_search_on_convex_fn import LossLandscapeBase, np_random, Rosenbrock, SixHumpCamel, RewardGuide
+from priority_search_on_convex_fn import Rosenbrock, SixHumpCamel, RewardGuide
 
 # ============ TESTING code =============
-import datasets
 import numpy as np
 from opto import trace
-from opto.utils.llm import LLM, LiteLLM
-from opto.optimizers import OptoPrimeV2 as OptoPrime
 from opto.features.priority_search import PrioritySearch as SearchAlgorithm
-from opto.trainer.guide import Guide
-from opto.trainer.loggers import TensorboardLogger
-from opto.trainer.guide import LLMJudge
-from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm
-from opto.trainer.algorithms.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
+from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
 from typing import Any
 from opto import trainer
 from typing import Tuple

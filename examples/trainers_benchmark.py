@@ -28,7 +28,7 @@ import numpy as np
 
 from opto import trace
 from opto import trainer
-from opto.trainer.algorithms.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
+from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
 from opto.features.priority_search import PrioritySearch as SearchAlgorithm
 from opto.trainer.loggers import TensorboardLogger
 
