@@ -492,6 +492,14 @@ class LinearRegressor(RegressorTemplate):
         elapsed_time = end_time - start_time
         print_color(f"Linear regressor update completed in {elapsed_time:.4f} seconds", "cyan")
 
+        # For regressor training, we save the weights and bias.
+        # Assert weights match the linear dimension (which could be original_embedding_dim or projected dimension)
+        assert self.weights.shape[0] == self.linear_dim, f"Weights should be {self.linear_dim}D, got {self.weights.shape[0]}D"
+        # Save the weights and bias to npy
+        np.save(f"weights.npy", self.weights)
+        np.save(f"bias.npy", self.bias)
+        
+
     def predict_scores(self, memory: List[Tuple[float, ModuleCandidate]]):
         """Predict scores for all candidates in the memory."""
         # Extract all candidates from memory (memory is a list of (neg_score, candidate) tuples)
@@ -579,8 +587,8 @@ class LinearUCBRegressor(LinearRegressor):
         confidence_bounds = np.sqrt(np.sum(X_augmented * cov_X_T.T, axis=1))
         
         # print the mean scores and confidence bounds for debugging and tuning hyperparameters
-        print_color(f"Mean predictions: {mean_predictions_transformed}", "green")
-        print_color(f"Bonus (without alpha): {confidence_bounds}", "green")
+        # print_color(f"Mean predictions: {mean_predictions_transformed}", "green")
+        # print_color(f"Bonus (without alpha): {confidence_bounds}", "green")
         
         # Compute UCB scores in transformed space: mean + alpha * confidence
         ucb_scores_transformed = mean_predictions_transformed + self.alpha * confidence_bounds
