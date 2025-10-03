@@ -111,15 +111,10 @@ class RegressorTemplate:
 
     def _get_parameter_text(self, candidate):
         """Get the parameter text for a ModuleCandidate."""
-        if not candidate.update_dict:
-            # If update_dict is empty, use a default text or base module info
-            return "base_module_parameters"
-        
-        # Get the first value from update_dict (similar to additional_instructions)
-        # Support for multiple parameters
-        # Return a text representation of the dictionary
-        parameter_text = str(candidate.update_dict)
-        return parameter_text
+        assert hasattr(candidate, 'update_dict'), "ModuleCandidate must have an update_dict"
+        # Convert parameter nodes to readable names for deterministic embedding
+        params_with_names = {k.py_name: v for k, v in candidate.update_dict.items()}
+        return str(params_with_names)
 
     def _get_embedding(self, candidate):
         """Get the embedding for a ModuleCandidate."""
