@@ -1,11 +1,28 @@
+from typing import List, Optional
 import asyncio
 import functools
 import warnings
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm_asyncio
 from opto.trace.bundle import ALLOW_EXTERNAL_DEPENDENCIES
 from opto.trace.modules import Module
 from opto.trainer.guide import Guide
+
+def safe_mean(x: List[float | None], missing_value=None) -> float | None:
+    """Compute the mean of a nested list or nd.array of floats or None, returning missing_value (default None) for an empty list.
+
+    Args:
+        x (List[float | None]): List of floats or None
+        missing_value (float | None, optional): Value to return if the list is empty or contains only None. Defaults to None.
+    Returns:
+        float | None: Mean of the list, or missing_value if the list is empty or contains only None
+    """
+    x = np.array(x)  # nd.array
+    x = x[x != None] # filter out None values
+    if x.size == 0:
+        return missing_value
+    return float(np.mean(x))
 
 def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, description = None, allow_sequential_run=True):
     """Run multiple functions in asynchronously.
@@ -33,7 +50,7 @@ def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, de
     if kwargs_list is None:
         kwargs_list = [{}] * len(runs)
 
-    if (max_workers == 1) and allow_sequential_run: # run without asyncio
+    if (max_workers == 1) and allow_sequential_run:  # run without asyncio
         print(f"{description} (Running sequentially).")
         return [run(*args, **kwargs) for run, args, kwargs in zip(runs, args_list, kwargs_list)]
     else:
@@ -41,14 +58,24 @@ def async_run(runs, args_list = None, kwargs_list = None, max_workers = None, de
             loop = asyncio.get_event_loop()
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 tasks = [loop.run_in_executor(executor, functools.partial(run, *args, **kwargs))
-                        for run, args, kwargs, in zip(runs, args_list, kwargs_list)]
+                         for run, args, kwargs, in zip(runs, args_list, kwargs_list)]
 
                 # Use the description in the tqdm progress bar if provided
                 if description:
                     return await tqdm_asyncio.gather(*tasks, desc=description)
                 else:
                     return await tqdm_asyncio.gather(*tasks)
-        return asyncio.run(_run())
+
+        # Handle Jupyter notebook
+        try:
+            return asyncio.run(_run())
+        except RuntimeError:
+            loop = asyncio.get_running_loop()
+            # We're in a loop (like Jupyter), so we need to run in a new thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _run())
+                return future.result()
 
 
 def batch_run(max_workers=None, description=None):

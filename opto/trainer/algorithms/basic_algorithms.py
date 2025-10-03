@@ -10,20 +10,37 @@ from opto.trainer.evaluators import evaluate
 
 
 def standard_optimization_step(agent, x, guide, info, min_score=0):
-    """ Forward and compute feedback.
+    """Execute a standard forward pass and feedback computation step.
 
-        Args:
-            agent: trace.Module
-            x: input
-            guide: (question, student_answer, info) -> score, feedback
-            info: additional information for the guide
-            min_score: minimum score when exception happens
+    This function runs the agent on input data, evaluates the output using the guide,
+    and handles any execution errors that may occur during the process.
 
-        Returns:
-            target: output of the agent
-            score: score from the guide
-            feedback: feedback from the guide
-        """
+    Parameters
+    ----------
+    agent : trace.Module
+        The agent module to execute the forward pass on.
+    x : Any
+        Input data for the agent.
+    guide : callable
+        Guide function with signature (question, student_answer, info) -> (score, feedback).
+    info : Any
+        Additional information passed to the guide function.
+    min_score : float, optional
+        Minimum score to assign when execution exceptions occur, by default 0.
+
+    Returns
+    -------
+    tuple[trace.Node, float, str]
+        A tuple containing:
+        - target: Output node from the agent (or exception node if error occurred)
+        - score: Numeric score from the guide evaluation
+        - feedback: Text feedback from the guide evaluation
+
+    Notes
+    -----
+    If a trace.ExecutionError occurs during agent execution, the function catches
+    it and returns the exception node with the minimum score and full feedback.
+    """
     try:
         target = agent(x)
         score, feedback = guide(x, target.data, info)
@@ -34,7 +51,46 @@ def standard_optimization_step(agent, x, guide, info, min_score=0):
 
 
 class Minibatch(Trainer):
-    """ General minibatch optimization algorithm. This class defines a general training and logging routine using minimbatch sampling."""
+    """General minibatch optimization algorithm with comprehensive training infrastructure.
+    
+    This class provides a complete training framework that handles minibatch sampling,
+    evaluation, logging, checkpointing, and improvement validation. It serves as a
+    base class for various optimization algorithms that operate on minibatches.
+
+    Parameters
+    ----------
+    agent : trace.Module
+        The agent module to be trained.
+    optimizer : Optimizer
+        The optimizer instance for parameter updates.
+    num_threads : int, optional
+        Maximum number of threads for parallel execution, by default None.
+    logger : Logger, optional
+        Logger instance for tracking metrics, by default None.
+    *args
+        Additional positional arguments passed to parent class.
+    **kwargs
+        Additional keyword arguments passed to parent class.
+
+    Attributes
+    ----------
+    agent : trace.Module
+        The agent being trained.
+    optimizer : Optimizer
+        The optimizer used for parameter updates.
+    n_iters : int
+        Number of training iterations completed.
+    num_eval_samples : int
+        Number of samples used for evaluation.
+
+    Notes
+    -----
+    This class implements the core training loop including:
+    - Minibatch sampling and processing
+    - Periodic evaluation and logging
+    - Model checkpointing at specified intervals
+    - Optional improvement validation and rollback
+    """
 
     def __init__(self,
                  agent,
@@ -44,6 +100,23 @@ class Minibatch(Trainer):
                  *args,
                  **kwargs,
                  ):
+        """Initialize the Minibatch algorithm.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The agent module to be trained.
+        optimizer : Optimizer
+            The optimizer instance for parameter updates.
+        num_threads : int, optional
+            Maximum number of threads for parallel execution, by default None.
+        logger : Logger, optional
+            Logger instance for tracking metrics, by default None.
+        *args
+            Additional positional arguments passed to parent class.
+        **kwargs
+            Additional keyword arguments passed to parent class.
+        """
         super().__init__(agent, num_threads=num_threads, logger=logger, *args, **kwargs)
         self.optimizer = optimizer
         self.n_iters = 0  # number of iterations
@@ -53,13 +126,13 @@ class Minibatch(Trainer):
               guide,
               train_dataset,
               *,
-              ensure_improvement: bool = False,  # whether to check the improvement of the agent
+              ensure_improvement: bool = True,  # whether to check the improvement of the agent
               improvement_threshold: float = 0.,  # threshold for improvement
               num_epochs: int = 1,  # number of training epochs
               batch_size: int = 1,  # batch size for updating the agent
               test_dataset = None,  # dataset of (x, info) pairs to evaluate the agent
-              eval_frequency: int = 1,  # frequency of evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              test_frequency: int = 1,  # frequency of evaluation
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               log_frequency: Union[int, None] = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
               save_path: str = "checkpoints/agent.pkl",  # path to save the agent
@@ -68,23 +141,73 @@ class Minibatch(Trainer):
               num_threads: int = None,  # maximum number of threads to use (overrides self.num_threads)
               **kwargs
               ):
-        """
-            Given a dataset of (x, info) pairs, the algorithm will:
-            1. Forward the agent on the inputs and compute the feedback using the guide.
-            2. Update the agent using the feedback.
-            3. Evaluate the agent on the test dataset and log the results.
+        """Train the agent using minibatch optimization with comprehensive monitoring.
+
+        This method implements a complete training loop that processes the dataset in
+        minibatches, applies parameter updates, and tracks progress through evaluation,
+        logging, and checkpointing.
+
+        Parameters
+        ----------
+        guide : Guide
+            Guide function to provide feedback during training.
+        train_dataset : dict
+            Training dataset containing 'inputs' and 'infos' keys.
+        ensure_improvement : bool, optional
+            Whether to validate that updates improve performance, by default False.
+        improvement_threshold : float, optional
+            Minimum improvement threshold for accepting updates, by default 0.0.
+        num_epochs : int, optional
+            Number of training epochs to run, by default 1.
+        batch_size : int, optional
+            Size of minibatches for parameter updates, by default 1.
+        test_dataset : dict, optional
+            Test dataset for evaluation, defaults to train_dataset if None.
+        eval_frequency : int, optional
+            Frequency of evaluation (every N iterations), by default 1.
+        num_eval_samples : int, optional
+            Number of samples per input for evaluation, by default 1.
+        log_frequency : int, optional
+            Frequency of logging, defaults to eval_frequency if None.
+        save_frequency : int, optional
+            Frequency of saving checkpoints, by default None (no saving).
+        save_path : str, optional
+            Path template for saving agent checkpoints, by default "checkpoints/agent.pkl".
+        min_score : int, optional
+            Minimum score threshold for processing, by default None.
+        verbose : bool or str, optional
+            Verbosity level for training output, by default False.
+        num_threads : int, optional
+            Number of threads for parallel processing, by default None.
+        **kwargs
+            Additional arguments passed to subclass methods.
+
+        Returns
+        -------
+        tuple[list[float], float or None]
+            Training scores and final test score.
+
+        Notes
+        -----
+        The training procedure follows these steps for each minibatch:
+        1. Forward pass: Run agent on inputs and compute feedback using guide
+        2. Parameter update: Apply optimizer to update agent parameters
+        3. Improvement check: Optionally validate and potentially rollback updates
+        4. Evaluation: Periodically evaluate agent performance on test data
+        5. Logging: Track training metrics and parameter values
+        6. Checkpointing: Save agent state at specified intervals
         """
 
-        log_frequency = log_frequency or eval_frequency  # frequency of logging (default to eval_frequency)
+        log_frequency = log_frequency or test_frequency  # frequency of logging (default to test_frequency)
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_dataset = test_dataset or train_dataset  # default to train_dataset if test_dataset is not provided
-        self.num_eval_samples = num_eval_samples  # number of samples to use to evaluate each input
+        self.num_test_samples = num_test_samples  # number of samples to use to evaluate each input
 
         # Evaluate the agent before learning
-        if eval_frequency > 0:
+        if test_frequency > 0:
             test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
                           min_score=min_score, num_threads=num_threads,
-                          num_samples=self.num_eval_samples,
+                          num_samples=self.num_test_samples,
                           description=f"Evaluating agent (iteration {self.n_iters})")  # and log
             self.logger.log('Average test score', test_score, self.n_iters, color='green')
 
@@ -121,10 +244,10 @@ class Minibatch(Trainer):
                 self.n_iters += 1
 
                 # Evaluate the agent after update
-                if test_dataset is not None and self.n_iters % eval_frequency == 0:
+                if test_dataset is not None and self.n_iters % test_frequency == 0:
                     test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
                                   min_score=min_score, num_threads=num_threads,
-                                  num_samples=self.num_eval_samples,
+                                  num_samples=self.num_test_samples,
                                   description=f"Evaluating agent (iteration {self.n_iters})")  # and log
                     self.logger.log('Average test score', test_score, self.n_iters, color='green')
 
@@ -145,30 +268,81 @@ class Minibatch(Trainer):
         return train_scores, test_score
 
     def evaluate(self, agent, guide, xs, infos, min_score=None, num_samples=1, num_threads=None, description=None):
-        """ Evaluate the agent on the given dataset. """
+        """Evaluate the agent on a dataset and return the average score.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The agent to evaluate.
+        guide : Guide
+            Guide function to provide evaluation scores.
+        xs : list
+            List of input data points.
+        infos : list
+            List of additional information for each input.
+        min_score : float, optional
+            Minimum score for evaluation, by default None.
+        num_samples : int, optional
+            Number of samples per input for evaluation, by default 1.
+        num_threads : int, optional
+            Number of threads for parallel evaluation, by default None.
+        description : str, optional
+            Description for progress tracking, by default None.
+
+        Returns
+        -------
+        float or None
+            Average evaluation score, or None if any scores are invalid.
+        """
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
                                num_samples=num_samples, description=description)
-        if all([s is not None for s in test_scores]):
-            return np.mean(test_scores)
+        return np.mean([s for s in test_scores if s is not None])
 
     def has_improvement(self, xs, guide, infos, current_score, current_outputs, backup_dict, threshold=0, num_threads=None, *args, **kwargs):
-        # This function can be overridden by subclasses to implement their own improvement check.
-        """ Check if the updated agent is improved compared to the current one.
+        """Check if the updated agent shows improvement over the previous version.
 
-            Args:
-                xs: inputs
-                infos: additional information for the guide
-                current_score: current score of the agent
-                current_outputs: outputs of the agent, guide interaction
-                backup_dict: backup of the current value of the parameters
-                improvement_threshold: threshold for improvement
-                num_threads: maximum number of threads to use
+        This method evaluates the updated agent and compares its performance to the
+        current score to determine whether the parameter update should be accepted.
+
+        Parameters
+        ----------
+        xs : list
+            Input data points for evaluation.
+        guide : Guide
+            Guide function to provide evaluation scores.
+        infos : list
+            Additional information for each input.
+        current_score : float
+            Score of the agent before the update.
+        current_outputs : list
+            Outputs from the agent-guide interaction.
+        backup_dict : dict
+            Backup of parameter values before the update.
+        threshold : float, optional
+            Minimum improvement threshold, by default 0.
+        num_threads : int, optional
+            Number of threads for evaluation, by default None.
+        *args
+            Additional positional arguments.
+        **kwargs
+            Additional keyword arguments.
+
+        Returns
+        -------
+        bool
+            True if the update shows improvement, False otherwise.
+
+        Notes
+        -----
+        This method can be overridden by subclasses to implement custom
+        improvement validation logic. The default implementation evaluates
+        the updated agent and compares against the threshold.
         """
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         new_score = self.evaluate(self.agent, guide, xs, infos, num_threads=num_threads,
                                  description=f"Checking improvement (iteration {self.n_iters})",
-                                 num_samples=self.num_eval_samples,
+                                 num_samples=self.num_test_samples,
                                  *args, **kwargs)  # evaluate the updated agent
         if new_score is None or new_score <= current_score - threshold:
             print_color(f"Update rejected: Current score {current_score}, New score {new_score}", 'red')
@@ -179,25 +353,65 @@ class Minibatch(Trainer):
 
 
     def forward(self, agent, x, guide, info):
-        """ Forward the agent on the input and compute the feedback using the guide.
-            Args:
-                agent: trace.Module
-                x: input
-                guide: (question, student_answer, info) -> score, feedback
-                info: additional information for the guide
-            Returns:
-                outputs that will be used to update the agent
+        """Execute forward pass and compute feedback for a single input.
+
+        This method must be implemented by subclasses to define how the agent
+        processes individual inputs and generates outputs for parameter updates.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The agent module to execute.
+        x : Any
+            Input data for the agent.
+        guide : callable
+            Guide function with signature (question, student_answer, info) -> (score, feedback).
+        info : Any
+            Additional information for the guide.
+
+        Returns
+        -------
+        Any
+            Outputs that will be used by the update method to modify agent parameters.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses.
         """
         raise NotImplementedError("Subclasses must implement this method")
 
     def update(self, outputs, verbose=False, num_threads=None, **kwargs):
-        """ Subclasses can implement this method to update the agent.
-            Args:
-                outputs: returned value from self.step
-                verbose: whether to print the output of the agent
-                num_threads: maximum number of threads to use (overrides self.num_threads)
-            Returns:
-                score: average score of the minibatch of inputs
+        """Update the agent parameters based on forward pass outputs.
+
+        This method must be implemented by subclasses to define how parameter
+        updates are computed and applied based on the forward pass results.
+
+        Parameters
+        ----------
+        outputs : Any
+            Outputs returned from the forward method.
+        verbose : bool, optional
+            Whether to print verbose update information, by default False.
+        num_threads : int, optional
+            Maximum number of threads to use, overrides self.num_threads, by default None.
+        **kwargs
+            Additional keyword arguments for the update process.
+
+        Returns
+        -------
+        float or None
+            Average score of the minibatch inputs, or None if no valid scores.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses.
+
+        Notes
+        -----
+        The update method should process the outputs from forward passes,
+        apply parameter updates using the optimizer, and return performance metrics.
         """
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         raise NotImplementedError("Subclasses must implement this method")
@@ -206,7 +420,23 @@ class Minibatch(Trainer):
 
 @trace.bundle()
 def batchify(*items):
-    """ Concatenate the items into a single string """
+    """Concatenate multiple items into a formatted batch string.
+
+    Parameters
+    ----------
+    *items : Any
+        Variable number of items to concatenate into a batch.
+
+    Returns
+    -------
+    str
+        Formatted string with each item labeled by ID.
+
+    Notes
+    -----
+    This function is decorated with @trace.bundle() and creates a formatted
+    string where each item is prefixed with 'ID [i]:' for identification.
+    """
     output = ''
     for i, item in enumerate(items):
         output += f'ID {[i]}: {item}\n'
@@ -214,12 +444,49 @@ def batchify(*items):
 
 
 class MinibatchAlgorithm(Minibatch):
-    """
-        The computed output of each instance in the minibatch is aggregated and a batched feedback is provided to update the agent.
+    """Standard minibatch algorithm that aggregates outputs for batch feedback.
+
+    This algorithm processes each instance in the minibatch individually, then
+    concatenates the outputs and feedback to provide a single batched update
+    to the agent. This approach allows the agent to learn from multiple examples
+    simultaneously in each optimization step.
+
+    Attributes
+    ----------
+    agent : trace.Module
+        The agent being trained (inherited from parent).
+    optimizer : Optimizer
+        The optimizer for parameter updates (inherited from parent).
+
+    Notes
+    -----
+    The algorithm follows these steps:
+    1. Execute standard optimization steps for each minibatch instance
+    2. Aggregate targets and feedback using the batchify function
+    3. Apply optimizer backward pass with batched feedback
+    4. Update agent parameters using the optimizer step
     """
 
     def forward(self, agent, x, guide, info):
-        return standard_optimization_step(agent, x, guide, info)  # (score, target, feedback)
+        """Execute standard optimization step for a single input.
+
+        Parameters
+        ----------
+        agent : trace.Module
+            The agent to execute.
+        x : Any
+            Input data.
+        guide : callable
+            Guide function for feedback generation.
+        info : Any
+            Additional information for the guide.
+
+        Returns
+        -------
+        tuple[trace.Node, float, str]
+            Tuple of (target, score, feedback) from standard optimization step.
+        """
+        return standard_optimization_step(agent, x, guide, info)  # (target, score, feedback)
 
     def update(self, outputs, verbose=False, num_threads=None, **kwargs):
         """ Subclasses can implement this method to update the agent.
@@ -269,7 +536,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
               num_epochs = 1,  # number of training epochs
               batch_size = 1,  # batch size for updating the agent
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
-              eval_frequency = 1, # frequency of evaluation
+              test_frequency = 1, # frequency of evaluation
               log_frequency = None,  # frequency of logging
               min_score = None,  # minimum score to update the agent
               verbose = False,  # whether to print the output of the agent
@@ -284,7 +551,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
         self.current_score = None
 
         return super().train(guide, train_dataset, num_epochs=num_epochs, batch_size=batch_size,
-                      test_dataset=test_dataset, eval_frequency=eval_frequency, log_frequency=log_frequency,
+                      test_dataset=test_dataset, test_frequency=test_frequency, log_frequency=log_frequency,
                       min_score=min_score, verbose=verbose, num_threads=num_threads, **kwargs)
 
     # This code should be reusable for other algorithms

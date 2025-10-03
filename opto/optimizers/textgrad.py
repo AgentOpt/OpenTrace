@@ -92,18 +92,34 @@ def construct_tgd_prompt(
     do_in_context_examples: bool = False,
     **optimizer_kwargs,
 ):
-    """
-    Construct the textual gradient descent prompt.
+    """Construct a textual gradient descent prompt with optional components.
 
-    :param do_momentum: Whether to include momentum in the prompt.
-    :type do_momentum: bool, optional
-    :param do_constrained: Whether to include constraints in the prompt.
-    :type do_constrained: bool, optional
-    :param do_in_context_examples: Whether to include in-context examples in the prompt.
-    :type do_in_context_examples: bool, optional
-    :param optimizer_kwargs: Additional keyword arguments for formatting the prompt. These will be things like the variable description, gradient, past values, constraints, and in-context examples.
-    :return: The TGD update prompt.
-    :rtype: str
+    This function builds prompts for the TextGrad optimization algorithm, incorporating
+    various optional components like momentum, constraints, and in-context examples
+    to guide the language model in improving variable values.
+
+    Parameters
+    ----------
+    do_momentum : bool, optional
+        Whether to include momentum information from past iterations, by default False.
+    do_constrained : bool, optional
+        Whether to include constraint specifications in the prompt, by default False.
+    do_in_context_examples : bool, optional
+        Whether to include example demonstrations, by default False.
+    **optimizer_kwargs
+        Additional formatting parameters including variable descriptions, gradients,
+        past values, constraints, and examples.
+
+    Returns
+    -------
+    str or list[str]
+        Formatted prompt string, or list of prompt parts for multipart gradients.
+
+    Notes
+    -----
+    The function handles both single-string gradients and multipart gradient contexts.
+    For multipart gradients, it returns a list where the first elements contain
+    context and the last element contains the main prompt.
     """
 
     if isinstance(optimizer_kwargs["variable_grad"], str):
@@ -241,6 +257,30 @@ REDUCE_MEAN_SYSTEM_PROMPT = (
 
 @dataclass
 class GradientInfo:
+    """Container for gradient information in TextGrad optimization.
+    
+    This class stores gradient (feedback) text along with optional context information
+    that provides additional details about the gradient computation.
+
+    Parameters
+    ----------
+    gradient : str
+        The main feedback or gradient text.
+    gradient_context : dict[str, str], optional
+        Additional context information for the gradient, by default None.
+
+    Attributes
+    ----------
+    gradient : str
+        Feedback text for parameter optimization.
+    gradient_context : dict[str, str] or None
+        Optional context dictionary with additional gradient information.
+
+    Notes
+    -----
+    The class supports indexing and length operations for convenient access to
+    gradient components in optimization workflows.
+    """
     gradient: str  # feedback
     gradient_context: Optional[Dict[str, str]]
 
@@ -305,6 +345,60 @@ def get_short_value(text, n_words_offset: int = 10) -> str:
 
 
 class TextGrad(Optimizer):
+    """TextGrad optimizer implementing automatic differentiation for text-based parameters.
+    
+    TextGrad extends traditional gradient-based optimization to textual parameters by using
+    language models to compute gradients (feedback) and apply updates. It performs backward
+    propagation through computation graphs where nodes represent text values and edges
+    represent textual transformations.
+
+    The optimizer operates by:
+    1. Computing textual gradients through backward propagation using language models
+    2. Reducing multiple gradients through aggregation prompts  
+    3. Generating parameter updates based on accumulated feedback
+    4. Applying updates to improve parameter values iteratively
+
+    Parameters
+    ----------
+    parameters : list[ParameterNode]
+        List of parameter nodes to optimize.
+    llm : AbstractModel, optional
+        Language model for gradient computation and updates, by default None.
+    propagator : Propagator, optional
+        Custom propagator for trace graph processing, by default None.
+    objective : str, optional
+        Optimization objective description, by default None.
+    max_tokens : int, optional
+        Maximum tokens for language model calls, by default 4096.
+    log : bool, optional
+        Whether to log optimization steps, by default False.
+    *args
+        Additional positional arguments passed to parent class.
+    **kwargs
+        Additional keyword arguments passed to parent class.
+
+    Attributes
+    ----------
+    llm : AbstractModel
+        Language model instance for optimization operations.
+    print_limit : int
+        Character limit for printed outputs.
+    max_tokens : int
+        Token limit for language model calls.
+    new_variable_tags : list[str]
+        Tags used to extract updated variables from LLM responses.
+    optimizer_system_prompt : str
+        System prompt for variable update operations.
+    log : list or None
+        Optimization log if logging is enabled.
+
+    Notes
+    -----
+    This implementation is adapted from the TextGrad paper and codebase, providing
+    automatic differentiation for text-based optimization problems. The optimizer
+    handles complex prompt engineering scenarios where traditional gradient-based
+    methods are not applicable.
+    """
 
     def __init__(
         self,
@@ -527,27 +621,3 @@ class TextGrad(Optimizer):
                     response = response.message.content
 
         return response
-
-
-    def save(self, path: str):
-        """
-        Save the optimizer state to a file.
-        """
-        with open(path, 'wb') as f:
-            pickle.dump({
-                'print_limit': self.print_limit,
-                'max_tokens': self.max_tokens,
-                'new_variable_tags': self.new_variable_tags,
-                'optimizer_system_prompt': self.optimizer_system_prompt,
-        }, f)
-
-    def load(self, path: str):
-        """
-        Load the optimizer state from a file.
-        """
-        with open(path, 'rb') as f:
-            state = pickle.load(f)
-            self.print_limit = state['print_limit']
-            self.max_tokens = state['max_tokens']
-            self.new_variable_tags = state['new_variable_tags']
-            self.optimizer_system_prompt = state['optimizer_system_prompt']

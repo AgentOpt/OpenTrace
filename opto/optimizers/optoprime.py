@@ -1,4 +1,4 @@
-from typing import Any, List, Dict, Union, Tuple
+from typing import Any, List, Dict, Union, Tuple, Optional
 from dataclasses import dataclass, asdict
 from textwrap import dedent, indent
 import warnings
@@ -6,6 +6,7 @@ import json
 import re
 import copy
 import pickle
+import ast
 from opto.trace.nodes import ParameterNode, Node, MessageNode
 from opto.trace.propagators import TraceGraph, GraphPropagator
 from opto.trace.propagators.propagators import Propagator
@@ -15,12 +16,37 @@ from opto.utils.llm import AbstractModel, LLM
 
 
 def get_fun_name(node: MessageNode):
+    """Extract the function name from a MessageNode.
+
+    Parameters
+    ----------
+    node : MessageNode
+        The node to extract the function name from.
+
+    Returns
+    -------
+    str
+        The function name, either from node.info['fun_name'] or
+        extracted from the node name.
+    """
     if isinstance(node.info, dict) and "fun_name" in node.info:
         return node.info["fun_name"]
     return node.name.split(":")[0]
 
 
 def repr_function_call(child: MessageNode):
+    """Generate a string representation of a function call from a MessageNode.
+
+    Parameters
+    ----------
+    child : MessageNode
+        The node representing a function call.
+
+    Returns
+    -------
+    str
+        String representation in format: 'output = function(arg1=val1, arg2=val2)'.
+    """
     function_call = f"{child.py_name} = {get_fun_name(child)}("
     for k, v in child.inputs.items():
         function_call += f"{k}={v.py_name}, "
@@ -29,7 +55,29 @@ def repr_function_call(child: MessageNode):
 
 
 def node_to_function_feedback(node_feedback: TraceGraph):
-    """Convert a TraceGraph to a FunctionFeedback. roots, others, outputs are dict of variable name and its data and constraints."""
+    """Convert a TraceGraph to a FunctionFeedback structure.
+
+    Parameters
+    ----------
+    node_feedback : TraceGraph
+        The trace graph containing nodes and feedback to convert.
+
+    Returns
+    -------
+    FunctionFeedback
+        Structured feedback with separated roots, intermediates, and outputs.
+
+    Notes
+    -----
+    The conversion process:
+    1. Traverses the graph in topological order
+    2. Classifies nodes as roots, intermediates, or outputs
+    3. Extracts function documentation and call representations
+    4. Preserves user feedback from the original graph
+
+    Roots include both true root nodes and 'blanket' nodes whose
+    parents haven't been visited yet.
+    """
     depth = 0 if len(node_feedback.graph) == 0 else node_feedback.graph[-1][0]
     graph = []
     others = {}
@@ -72,7 +120,31 @@ def node_to_function_feedback(node_feedback: TraceGraph):
 
 @dataclass
 class FunctionFeedback:
-    """Feedback container used by FunctionPropagator."""
+    """Container for structured feedback from function execution traces.
+
+    Used by OptoPrime to organize execution traces into a format suitable
+    for LLM-based optimization.
+
+    Attributes
+    ----------
+    graph : list[tuple[int, str]]
+        Topologically sorted function calls with (depth, representation) pairs.
+    documentation : dict[str, str]
+        Mapping of function names to their documentation strings.
+    others : dict[str, Any]
+        Intermediate variables with (data, description) tuples.
+    roots : dict[str, Any]
+        Input/root variables with (data, description) tuples.
+    output : dict[str, Any]
+        Output/leaf variables with (data, description) tuples.
+    user_feedback : str
+        User-provided feedback about the execution.
+
+    Notes
+    -----
+    This structure separates the execution trace into logical components
+    that can be formatted into prompts for LLM-based optimization.
+    """
 
     graph: List[
         Tuple[int, str]
@@ -142,6 +214,113 @@ class ProblemInstance:
 
 
 class OptoPrime(Optimizer):
+    """Language model-based optimizer for text and code parameters.
+    
+    OptoPrime implements optimization through structured problem representation and 
+    language model reasoning. It converts execution traces into problem instances 
+    that language models can understand and improve.
+    
+    The optimizer operates by:
+    1. Collecting execution traces and feedback from the computation graph
+    2. Converting traces into structured problem representations
+    3. Prompting language models to suggest parameter improvements
+    4. Extracting and applying suggested updates to parameters
+    
+    Parameters
+    ----------
+    parameters : list[ParameterNode]
+        List of trainable parameters to optimize.
+    llm : AbstractModel, optional
+        Language model for generating parameter updates, by default None (uses default LLM).
+    propagator : Propagator, optional
+        Custom propagator for trace graph processing, by default None.
+    objective : str, optional
+        Optimization objective description, by default uses default_objective.
+    ignore_extraction_error : bool, default=True
+        Whether to ignore type conversion errors when extracting LLM suggestions.
+    include_example : bool, default=False
+        Whether to include example problems in prompts.
+    memory_size : int, default=0
+        Size of feedback memory buffer for historical context.
+    max_tokens : int, default=4096
+        Maximum tokens for language model responses.
+    log : bool, default=True
+        Whether to log optimization steps and responses.
+    prompt_symbols : dict, optional
+        Custom symbols for prompt sections (e.g., "#Variables", "#Code").
+    json_keys : dict, optional
+        Keys for JSON response format (reasoning, answer, suggestion).
+    use_json_object_format : bool, default=True
+        Whether to request JSON object format from LLM.
+    highlight_variables : bool, default=False
+        Whether to highlight variables at the end of prompts.
+    **kwargs
+        Additional keyword arguments passed to parent class.
+    
+    Attributes
+    ----------
+    llm : AbstractModel
+        The language model used for optimization.
+    objective : str
+        The optimization objective description.
+    log : list or None
+        Log of optimization steps if logging is enabled.
+    summary_log : list or None
+        Log of problem summaries if logging is enabled.
+    memory : FIFOBuffer
+        Buffer storing historical feedback.
+    
+    Methods
+    -------
+    summarize()
+        Aggregate feedback into structured problem representation.
+    problem_instance(summary, mask=None)
+        Create a ProblemInstance from aggregated feedback.
+    extract_llm_suggestion(response)
+        Parse LLM response to extract parameter updates.
+    
+    Notes
+    -----
+    OptoPrime excels at optimizing:
+    - Natural language prompts and instructions
+    - Code implementations and algorithms
+    - Mixed text-code parameters
+    - Parameters with complex constraints
+    
+    The optimizer uses structured problem representations that separate:
+    - Variables (trainable parameters)
+    - Inputs (non-trainable values)
+    - Code (execution trace)
+    - Outputs (results)
+    - Feedback (optimization signals)
+    
+    This structure enables language models to understand the optimization
+    context and suggest targeted improvements.
+    
+    See Also
+    --------
+    Optimizer : Base optimizer class
+    OptoPrimeV2 : Enhanced version with improved prompt engineering
+    TextGrad : Alternative text-based optimizer
+    
+    Examples
+    --------
+    >>> from opto.optimizers import OptoPrime
+    >>> from opto.trace import node
+    >>> 
+    >>> # Create trainable parameters
+    >>> prompt = node("Explain quantum computing", trainable=True)
+    >>> 
+    >>> # Initialize optimizer
+    >>> optimizer = OptoPrime([prompt], objective="Make explanation clearer")
+    >>> 
+    >>> # Run optimization loop
+    >>> for _ in range(5):
+    ...     output = model(prompt)
+    ...     feedback = evaluate(output)
+    ...     optimizer.backward(feedback)
+    ...     optimizer.step()
+    """
     # This is generic representation prompt, which just explains how to read the problem.
     representation_prompt = dedent(
         """
@@ -351,6 +530,34 @@ class OptoPrime(Optimizer):
         return GraphPropagator()
 
     def summarize(self):
+        """Aggregate feedback from parameters into a structured summary.
+        
+        Collects and organizes feedback from all trainable parameters into
+        a FunctionFeedback structure suitable for problem representation.
+        
+        Returns
+        -------
+        FunctionFeedback
+            Structured feedback containing:
+            - variables: Trainable parameters with values and descriptions
+            - inputs: Non-trainable root nodes
+            - graph: Topologically sorted function calls
+            - others: Intermediate computation values
+            - output: Final output values
+            - documentation: Function documentation strings
+            - user_feedback: Aggregated user feedback
+        
+        Notes
+        -----
+        The method performs several transformations:
+        1. Aggregates feedback from all trainable parameters
+        2. Converts the trace graph to FunctionFeedback structure
+        3. Separates root nodes into variables (trainable) and inputs (non-trainable)
+        4. Preserves the computation graph and intermediate values
+        
+        Parameters without feedback (disconnected from output) are still
+        included in the summary but may not receive updates.
+        """
         # Aggregate feedback from all the parameters
         feedbacks = [
             self.propagator.aggregate(node.feedback)
@@ -380,6 +587,18 @@ class OptoPrime(Optimizer):
 
     @staticmethod
     def repr_node_value(node_dict):
+        """Format node values for display.
+
+        Parameters
+        ----------
+        node_dict : dict
+            Dictionary of node names to (value, description) tuples.
+
+        Returns
+        -------
+        str
+            Formatted string with type and value for each node.
+        """
         temp_list = []
         for k, v in node_dict.items():
             if "__code" not in k:
@@ -390,6 +609,19 @@ class OptoPrime(Optimizer):
 
     @staticmethod
     def repr_node_constraint(node_dict):
+        """Format node constraints for display.
+        
+        Parameters
+        ----------
+        node_dict : dict
+            Dictionary of node names to (value, description) tuples.
+        
+        Returns
+        -------
+        str
+            Formatted string with type and constraint for each node.
+            Only includes nodes with non-None descriptions.
+        """
         temp_list = []
         for k, v in node_dict.items():
             if "__code" not in k:
@@ -401,6 +633,30 @@ class OptoPrime(Optimizer):
         return "\n".join(temp_list)
 
     def problem_instance(self, summary, mask=None):
+        """Create a ProblemInstance from aggregated feedback.
+        
+        Converts a FunctionFeedback summary into a formatted problem
+        representation for the language model.
+        
+        Parameters
+        ----------
+        summary : FunctionFeedback
+            Aggregated feedback from summarize() method.
+        mask : list[str], optional
+            List of sections to exclude from the problem instance.
+            Can include: "#Instruction", "#Code", "#Variables", etc.
+        
+        Returns
+        -------
+        ProblemInstance
+            Structured problem representation with all sections
+            formatted for language model consumption.
+        
+        Notes
+        -----
+        The mask parameter allows selective inclusion of problem
+        components, useful for ablation studies or focused optimization.
+        """
         mask = mask or []
         return ProblemInstance(
             instruction=self.objective if "#Instruction" not in mask else "",
@@ -504,12 +760,12 @@ class OptoPrime(Optimizer):
         user_prompt = self.replace_symbols(user_prompt, self.prompt_symbols)
 
         response = self.call_llm(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            verbose=verbose,
-            max_tokens=self.max_tokens,
-        )
-
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                verbose=verbose,
+                max_tokens=self.max_tokens,
+            )
+            
         if "TERMINATE" in response:
             return {}
 
@@ -534,35 +790,97 @@ class OptoPrime(Optimizer):
         self, suggestion: Dict[str, Any]
     ) -> Dict[ParameterNode, Any]:
         """Convert the suggestion in text into the right data type."""
-        # TODO: might need some automatic type conversion
-        update_dict = {}
-        for node in self.parameters:
-            if node.trainable and node.py_name in suggestion:
+        try:
+            from black import format_str, FileMode
+
+            def _format_code(s: str) -> str:
                 try:
-                    formatted_suggestion = suggestion[node.py_name]
-                    update_dict[node] = type(node.data)(formatted_suggestion)
-                except (ValueError, KeyError) as e:
-                    # catch error due to suggestion missing the key or wrong data type
-                    if self.ignore_extraction_error:
-                        warnings.warn(
-                            f"Cannot convert the suggestion '{suggestion[node.py_name]}' for {node.py_name} to the right data type"
-                        )
-                    else:
-                        raise e
+                    return format_str(s, mode=FileMode())
+                except Exception:
+                    return s
+
+        except Exception:
+            def _format_code(s: str) -> str:
+                return s
+
+        def _find_key(node_name: str, sugg: Dict[str, Any]) -> Optional[str]:
+            """Return the key in *suggestion* that corresponds to *node_name*.
+
+            - Exact match first.
+            - Otherwise allow the `__code8`  ↔ `__code:8` alias by
+            stripping one optional ':' between the stem and trailing digits.
+            """
+
+            if node_name in sugg:
+                return node_name
+
+            norm = re.sub(r":(?=\d+$)", "", node_name)
+            for k in sugg:
+                if re.sub(r":(?=\d+$)", "", k) == norm:
+                    return k
+            return None
+
+        update_dict: Dict[ParameterNode, Any] = {}
+
+        for node in self.parameters:
+            if not node.trainable:
+                continue
+
+            key = _find_key(node.py_name, suggestion)
+            if key is None:
+                continue
+
+            try:
+                raw_val = suggestion[key]
+                if isinstance(raw_val, str) and "def" in raw_val:
+                    raw_val = _format_code(raw_val)
+                if getattr(node, "data", None) is None:
+                    converted = raw_val
+                else:
+                    target_type = type(node.data)
+                    if isinstance(raw_val, str) and target_type is not str:
+                        try:
+                            literal = ast.literal_eval(raw_val)
+                            raw_val = literal
+                        except Exception:
+                            pass
+                    try:
+                        converted = target_type(raw_val)
+                    except Exception:
+                        converted = raw_val
+                update_dict[node] = converted
+            except (ValueError, KeyError, TypeError) as e:
+                if self.ignore_extraction_error:
+                    warnings.warn(
+                        f"Cannot convert the suggestion '{suggestion.get(key, '<missing>')}' for {node.py_name}: {e}"
+                    )
+                else:
+                    raise e
         return update_dict
 
-    def extract_llm_suggestion(self, response: str):
+    def extract_llm_suggestion(self, response: str, suggestion_tag=None, reasoning_tag=None, return_only_suggestion=True, ignore_extraction_error=None) -> Dict[str, Any]:
         """Extract the suggestion from the response."""
-        suggestion_tag = self.default_json_keys["suggestion"]
+        suggestion_tag = suggestion_tag or self.default_json_keys.get("suggestion", "suggestion")
+        reasoning_tag = reasoning_tag or self.default_json_keys.get("reasoning", "reasoning")
+        ignore_extraction_error = ignore_extraction_error or getattr(self, "ignore_extraction_error", False)
 
+        if "```" in response:
+            match = re.findall(r"```(.*?)```", response, re.DOTALL)
+            if len(match) > 0:
+                response = match[0]
+
+        json_extracted = {}
         suggestion = {}
         attempt_n = 0
         while attempt_n < 2:
             try:
-                suggestion = json.loads(response)[suggestion_tag]
+                json_extracted = json.loads(response)
+                if isinstance(json_extracted, dict):  # trim all whitespace keys in the json_extracted
+                    json_extracted = {k.strip(): v for k, v in json_extracted.items()}
+                suggestion = json_extracted.get(suggestion_tag, json_extracted)
+                reasoning = json_extracted.get(reasoning_tag, "")
                 break
             except json.JSONDecodeError:
-                # Remove things outside the brackets
                 response = re.findall(r"{.*}", response, re.DOTALL)
                 if len(response) > 0:
                     response = response[0]
@@ -571,31 +889,22 @@ class OptoPrime(Optimizer):
                 attempt_n += 1
 
         if not isinstance(suggestion, dict):
-            suggestion = {}
+            suggestion = json_extracted if isinstance(json_extracted, dict) else {}
 
         if len(suggestion) == 0:
-            # we try to extract key/value separately and return it as a dictionary
             pattern = rf'"{suggestion_tag}"\s*:\s*\{{(.*?)\}}'
             suggestion_match = re.search(pattern, str(response), re.DOTALL)
             if suggestion_match:
                 suggestion = {}
-                # Extract the entire content of the suggestion dictionary
                 suggestion_content = suggestion_match.group(1)
-                # Regex to extract each key-value pair;
-                # This scheme assumes double quotes but is robust to missing commas at the end of the line
                 pair_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"(.*)"'
-                # Find all matches of key-value pairs
                 pairs = re.findall(pair_pattern, suggestion_content, re.DOTALL)
                 for key, value in pairs:
                     suggestion[key] = value
 
-        if len(suggestion) == 0:
-            if not self.ignore_extraction_error:
-                print(f"Cannot extract {self.default_json_keys['suggestion']} from LLM's response:")
-                print(response)
+        if len(suggestion) == 0 and not ignore_extraction_error:
+            print(f"Cannot extract {suggestion_tag} from LLM's response:\n{response}")
 
-        # if the suggested value is a code, and the entire code body is empty (i.e., not even function signature is present)
-        # then we remove such suggestion
         keys_to_remove = []
         for key, value in suggestion.items():
             if "__code" in key and value.strip() == "":
@@ -603,7 +912,7 @@ class OptoPrime(Optimizer):
         for key in keys_to_remove:
             del suggestion[key]
 
-        return suggestion
+        return suggestion if return_only_suggestion else {"reasoning": reasoning, "variables": suggestion}
 
     def call_llm(
         self,
@@ -632,39 +941,3 @@ class OptoPrime(Optimizer):
         if verbose:
             print("LLM response:\n", response)
         return response
-
-
-    def save(self, path: str):
-        """Save the optimizer state to a file."""
-        # save the above using pickle isntead
-        with open(path, "wb") as f:
-            pickle.dump(
-                {
-                    "ignore_extraction_error": self.ignore_extraction_error,
-                    "objective": self.objective,
-                    "include_example": self.include_example,
-                    "max_tokens": self.max_tokens,
-                    "memory": self.memory,
-                    "prompt_symbols": self.prompt_symbols,
-                    "json_keys": self.default_json_keys,
-                    'output_format_prompt': self.output_format_prompt,
-                    "use_json_object_format": self.use_json_object_format,
-                    "highlight_variables": self.highlight_variables,
-                },
-                f,
-            )
-
-    def load(self, path: str):
-        """Load the optimizer state from a file."""
-        with open(path, "rb") as f:
-            state = pickle.load(f)
-            self.ignore_extraction_error = state["ignore_extraction_error"]
-            self.objective = state["objective"]
-            self.include_example = state["include_example"]
-            self.max_tokens = state["max_tokens"]
-            self.memory = state["memory"]
-            self.prompt_symbols = state["prompt_symbols"]
-            self.default_json_keys = state["json_keys"]
-            self.output_format_prompt = state['output_format_prompt']
-            self.use_json_object_format = state["use_json_object_format"]
-            self.highlight_variables = state["highlight_variables"]

@@ -86,7 +86,7 @@ class CorrectAgent:
     @bundle(trainable=True)
     def decide_lang(self, response):
         """Map the language into a variable"""
-        return 'es' if 'es' or 'spanish' in response.lower() else 'en'
+        return 'es' if 'es' in response.lower() or 'spanish' in response.lower() else 'en'
 
     @bundle(trainable=True)
     def greet(self, lang, user_name):

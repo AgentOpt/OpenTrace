@@ -183,7 +183,7 @@ Therefore, we can directly call `backward` on the next observation.
 ```
 
 ```{tip}
-To learn more about how to use Trace to create an agent in an interactive environment, check out the [Meta-World](https://microsoft.github.io/Trace/examples/robotics/metaworld.html) example.
+To learn more about how to use Trace to create an agent in an interactive environment, check out the [Meta-World](https://agentopt.github.io/OpenTrace/examples/robotics/metaworld.html) example.
 ```
 
 ## Results
@@ -289,9 +289,9 @@ In this tutorial, we showed how to create two agents and have them interact with
 If you are interested in knowing how to use Trace for your own projects, continue learning the basics of Trace.
 
 ```{note}
-To learn more about how to trace through agent-environment interactions, check out the [Meta-World](https://microsoft.github.io/Trace/examples/robotics/metaworld.html) example.
+To learn more about how to trace through agent-environment interactions, check out the [Meta-World](https://agentopt.github.io/OpenTrace/examples/robotics/metaworld.html) example.
 ```
 
 ```{note}
-To see another example of multi-agent interaction in a different environment, check out the [Negotiation Arena](https://microsoft.github.io/Trace/examples/game/negotiation_arena.html) example.
+To see another example of multi-agent interaction in a different environment, check out the [Negotiation Arena](https://agentopt.github.io/OpenTrace/examples/game/negotiation_arena.html) example.
 ```

@@ -4,6 +4,7 @@ import time
 import json
 import os
 import warnings
+from .auto_retry import retry_with_exponential_backoff
 
 try:
     import autogen  # We import autogen here to avoid the need of installing autogen
@@ -11,10 +12,48 @@ except ImportError:
     pass
 
 class AbstractModel:
-    """
-    A minimal abstraction of a model api that refreshes the model every
-    reset_freq seconds (this is useful for long-running models that may require
-    refreshing certificates or memory management).
+    """Abstract base class for LLM model wrappers with automatic refreshing.
+
+    Provides a minimal abstraction for model APIs that need periodic refreshing
+    for certificate renewal or memory management in long-running processes.
+
+    Parameters
+    ----------
+    factory : callable
+        A function that takes no arguments and returns a callable model instance.
+    reset_freq : int or None, optional
+        Number of seconds after which to refresh the model. If None, the model
+        is never refreshed.
+
+    Attributes
+    ----------
+    factory : callable
+        The factory function for creating model instances.
+    reset_freq : int or None
+        Refresh frequency in seconds.
+    model : Any
+        Property that returns the current model instance.
+
+    Methods
+    -------
+    __call__(*args, **kwargs)
+        Execute the model, refreshing if needed.
+
+    Notes
+    -----
+    This class handles:
+    1. **Automatic Refreshing**: Recreates the model instance periodically
+       to prevent issues with long-running connections.
+    2. **Serialization**: Supports pickling by recreating the model on load.
+    3. **Consistent Interface**: Ensures responses are available at
+       `response['choices'][0]['message']['content']`.
+
+    Subclasses should override the `model` property to customize behavior.
+
+    See Also
+    --------
+    AutoGenLLM : Concrete implementation using AutoGen
+    LiteLLM : Concrete implementation using LiteLLM
     """
 
     def __init__(self, factory: Callable, reset_freq: Union[int, None] = None) -> None:
@@ -55,10 +94,61 @@ class AbstractModel:
 
 
 class AutoGenLLM(AbstractModel):
-    """ This is the main class Trace uses to interact with the model. It is a
-    wrapper around autogen's OpenAIWrapper. For using models not supported by
-    autogen, subclass AutoGenLLM and override the `_factory` and  `create`
-    method. Users can pass instances of this class to optimizers' llm argument.
+    """LLM wrapper using AutoGen's OpenAIWrapper for model interactions.
+
+    This class provides integration with AutoGen for accessing various LLM APIs.
+    It handles configuration, caching, and provides a consistent interface for
+    the Trace framework.
+
+    Parameters
+    ----------
+    config_list : list, optional
+        List of model configurations. If None, attempts to load from
+        'OAI_CONFIG_LIST' environment variable or auto-constructs from
+        individual API keys.
+    filter_dict : dict, optional
+        Dictionary to filter configurations based on model properties.
+    reset_freq : int or None, optional
+        Number of seconds after which to refresh the model connection.
+
+    Methods
+    -------
+    create(**config)
+        Make a completion request with the given configuration.
+    _factory(config_list)
+        Class method to create the underlying AutoGen wrapper.
+
+    Notes
+    -----
+    Configuration sources (in priority order):
+    1. Explicitly provided config_list
+    2. OAI_CONFIG_LIST environment variable or file
+    3. Auto-construction from individual API keys (OPENAI_API_KEY, etc.)
+
+    The create() method supports AutoGen's full configuration options including:
+    - Templating with context
+    - Response caching
+    - Custom filter functions
+    - API version specification
+
+    For models not supported by AutoGen, subclass and override _factory()
+    and create() methods.
+
+    See Also
+    --------
+    AbstractModel : Base class for model wrappers
+    auto_construct_oai_config_list_from_env : Helper for config construction
+
+    Examples
+    --------
+    >>> # Using with explicit configuration
+    >>> llm = AutoGenLLM(config_list=[{"model": "gpt-4", "api_key": "..."}])
+    >>> 
+    >>> # Using with environment variables
+    >>> llm = AutoGenLLM()  # Auto-loads from environment
+    >>> 
+    >>> # Making a completion
+    >>> response = llm(messages=[{"role": "user", "content": "Hello"}])
     """
 
     def __init__(self, config_list: List = None, filter_dict: Dict = None, reset_freq: Union[int, None] = None) -> None:
@@ -162,7 +252,7 @@ class LiteLLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True) -> None:
+                 cache=True, max_retries=10, base_delay=1.0) -> None:
         if model is None:
             model = os.environ.get('TRACE_LITELLM_MODEL')
             if model is None:
@@ -171,20 +261,30 @@ class LiteLLM(AbstractModel):
 
         self.model_name = model
         self.cache = cache
-        factory = lambda: self._factory(self.model_name)  # an LLM instance uses a fixed model
+        factory = lambda: self._factory(self.model_name, max_retries=max_retries, base_delay=base_delay)  # an LLM instance uses a fixed model
         super().__init__(factory, reset_freq)
 
     @classmethod
-    def _factory(cls, model_name: str):
+    def _factory(cls, model_name: str, max_retries=10, base_delay=1.0):
         import litellm
         if model_name.startswith('azure/'):  # azure model
             azure_token_provider_scope = os.environ.get('AZURE_TOKEN_PROVIDER_SCOPE', None)
             if azure_token_provider_scope is not None:
                 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
                 credential = get_bearer_token_provider(DefaultAzureCredential(), azure_token_provider_scope)
-                return lambda *args, **kwargs: litellm.completion(model_name, *args,
-                                                                  azure_ad_token_provider=credential, **kwargs)
-        return lambda *args, **kwargs: litellm.completion(model_name, *args, **kwargs)
+                return lambda *args, **kwargs: retry_with_exponential_backoff(
+                    lambda: litellm.completion(model_name, *args,
+                                             azure_ad_token_provider=credential, **kwargs),
+                    max_retries=max_retries,
+                    base_delay=base_delay,
+                    operation_name="LiteLLM_completion"
+                )
+        return lambda *args, **kwargs: retry_with_exponential_backoff(
+            lambda: litellm.completion(model_name, *args, **kwargs),
+            max_retries=max_retries,
+            base_delay=base_delay,
+            operation_name="LiteLLM_completion"
+        )
 
     @property
     def model(self):
@@ -211,7 +311,7 @@ class CustomLLM(AbstractModel):
         server_api_key = os.environ.get('TRACE_CUSTOMLLM_API_KEY',
                                         'sk-Xhg...')  # we assume the server has an API key
         # the server API is set through `master_key` in `config.yaml` for LiteLLM proxy server
-        
+
         self.model_name = model
         self.cache = cache
         factory = lambda: self._factory(base_url, server_api_key)  # an LLM instance uses a fixed model
@@ -241,15 +341,15 @@ _LLM_REGISTRY = {
 
 class LLMFactory:
     """Factory for creating LLM instances with predefined profiles.
-    
+
     The code comes with these built-in profiles:
 
         llm_default = LLM(profile="default")     # gpt-4o-mini
-        llm_premium = LLM(profile="premium")     # gpt-4  
+        llm_premium = LLM(profile="premium")     # gpt-4
         llm_cheap = LLM(profile="cheap")         # gpt-4o-mini
         llm_fast = LLM(profile="fast")           # gpt-3.5-turbo-mini
         llm_reasoning = LLM(profile="reasoning") # o1-mini
-    
+
     You can override those built-in profiles:
 
         LLMFactory.register_profile("default", "LiteLLM", model="gpt-4o", temperature=0.5)
@@ -257,7 +357,7 @@ class LLMFactory:
         LLMFactory.register_profile("cheap", "LiteLLM", model="gpt-3.5-turbo", temperature=0.9)
         LLMFactory.register_profile("fast", "LiteLLM", model="gpt-3.5-turbo", max_tokens=500)
         LLMFactory.register_profile("reasoning", "LiteLLM", model="o1-preview")
-        
+
     An Example of using Different Backends
 
         # Register custom profiles for different use cases
@@ -276,7 +376,7 @@ class LLMFactory:
         # Multi-LLM optimizer with multiple profiles
         optimizer2 = OptoPrimeMulti(parameters, llm_profiles=["cheap", "premium", "claude_sonnet"], generation_technique="multi_llm")
     """
-    
+
     # Default profiles for different use cases
     _profiles = {
         'default': {'backend': 'LiteLLM', 'params': {'model': 'gpt-4o-mini'}},
@@ -285,27 +385,27 @@ class LLMFactory:
         'fast': {'backend': 'LiteLLM', 'params': {'model': 'gpt-3.5-turbo-mini'}},
         'reasoning': {'backend': 'LiteLLM', 'params': {'model': 'o1-mini'}},
     }
-    
+
     @classmethod
     def get_llm(cls, profile: str = 'default') -> AbstractModel:
         """Get an LLM instance for the specified profile."""
         if profile not in cls._profiles:
             raise ValueError(f"Unknown profile '{profile}'. Available profiles: {list(cls._profiles.keys())}")
-        
+
         config = cls._profiles[profile]
         backend_cls = _LLM_REGISTRY[config['backend']]
         return backend_cls(**config['params'])
-    
+
     @classmethod
     def register_profile(cls, name: str, backend: str, **params):
         """Register a new LLM profile."""
         cls._profiles[name] = {'backend': backend, 'params': params}
-    
+
     @classmethod
     def list_profiles(cls):
         """List all available profiles."""
         return list(cls._profiles.keys())
-    
+
     @classmethod
     def get_profile_info(cls, profile: str = None):
         """Get information about a profile or all profiles."""
@@ -316,21 +416,20 @@ class LLMFactory:
 
 class DummyLLM(AbstractModel):
     """A dummy LLM that does nothing. Used for testing purposes."""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  callable,
                  reset_freq: Union[int, None] = None) -> None:
         # self.message = message
         self.callable = callable
-        factory = lambda: self._factory()
-        super().__init__(factory, reset_freq)
+        super().__init__(self._factory, reset_freq)
 
     def _factory(self):
 
         # set response.choices[0].message.content
         # create a fake container with above format
 
-        class Message: 
+        class Message:
             def __init__(self, content):
                 self.content = content
         class Choice:
@@ -346,7 +445,7 @@ class DummyLLM(AbstractModel):
 class LLM:
     """
     A unified entry point for all supported LLM backends.
-    
+
     Usage:
       # pick by env var (default: LiteLLM)
       llm = LLM()

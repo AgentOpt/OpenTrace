@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Dict, Union, Tuple
+from typing import Any, List, Dict, Union, Tuple, Optional
 from dataclasses import dataclass, asdict
 from opto.optimizers.optoprime import OptoPrime, FunctionFeedback
 from opto.trace.utils import dedent
@@ -92,9 +92,10 @@ class OptimizerPromptSymbolSet:
         else:
             # Build the output string in the same XML-like format as self.output_format
             output = []
-            output.append(f"<{self.reasoning_tag}>")
-            output.append(reasoning)
-            output.append(f"</{self.reasoning_tag}>")
+            if reasoning != "":
+                output.append(f"<{self.reasoning_tag}>")
+                output.append(reasoning)
+                output.append(f"</{self.reasoning_tag}>")
             for var_name, value in variables.items():
                 output.append(f"<{self.improved_variable_tag}>")
                 output.append(f"<{self.name_tag}>{var_name}</{self.name_tag}>")
@@ -103,7 +104,6 @@ class OptimizerPromptSymbolSet:
                 output.append(f"</{self.value_tag}>")
                 output.append(f"</{self.improved_variable_tag}>")
             return "\n".join(output)
-
 
     def output_response_extractor(self, response: str) -> Dict[str, Any]:
         # the response here should just be plain text
@@ -143,6 +143,7 @@ class OptimizerPromptSymbolSet:
             "documentation": self.documentation_section_title,
         }
 
+
 class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
     """We enforce a JSON output format extraction"""
 
@@ -171,65 +172,10 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
         }
         return json.dumps(output, indent=2)
 
-    def output_response_extractor(self, response: str) -> Dict[str, Any]:
-        reasoning = ""
-        suggestion_tag = "suggestion"
+    def output_response_extractor(self, response: str, suggestion_tag = "suggestion") -> Dict[str, Any]:
+        # Use extract_llm_suggestion from OptoPrime => it could be implemented the other way around (OptoPrime would uses this helper but it should be moved out of OptoPrimev2)
+        return OptoPrime.extract_llm_suggestion(self, response, suggestion_tag=suggestion_tag, reasoning_tag="reasoning", return_only_suggestion=False)
 
-        if "```" in response:
-            response = response.replace("```", "").strip()
-
-        suggestion = {}
-        attempt_n = 0
-        while attempt_n < 2:
-            try:
-                suggestion = json.loads(response)[suggestion_tag]
-                reasoning = json.loads(response)[self.reasoning_tag]
-                break
-            except json.JSONDecodeError:
-                # Remove things outside the brackets
-                response = re.findall(r"{.*}", response, re.DOTALL)
-                if len(response) > 0:
-                    response = response[0]
-                attempt_n += 1
-            except Exception:
-                attempt_n += 1
-
-        if not isinstance(suggestion, dict):
-            suggestion = {}
-
-        if len(suggestion) == 0:
-            # we try to extract key/value separately and return it as a dictionary
-            pattern = rf'"{suggestion_tag}"\s*:\s*\{{(.*?)\}}'
-            suggestion_match = re.search(pattern, str(response), re.DOTALL)
-            if suggestion_match:
-                suggestion = {}
-                # Extract the entire content of the suggestion dictionary
-                suggestion_content = suggestion_match.group(1)
-                # Regex to extract each key-value pair;
-                # This scheme assumes double quotes but is robust to missing commas at the end of the line
-                pair_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"(.*)"'
-                # Find all matches of key-value pairs
-                pairs = re.findall(pair_pattern, suggestion_content, re.DOTALL)
-                for key, value in pairs:
-                    suggestion[key] = value
-
-        if len(suggestion) == 0:
-            print(f"Cannot extract suggestion from LLM's response:")
-            print(response)
-
-        # if the suggested value is a code, and the entire code body is empty (i.e., not even function signature is present)
-        # then we remove such suggestion
-        keys_to_remove = []
-        for key, value in suggestion.items():
-            if "__code" in key and value.strip() == "":
-                keys_to_remove.append(key)
-        for key in keys_to_remove:
-            del suggestion[key]
-
-        extracted_data = {"reasoning": reasoning,
-                          "variables": suggestion}
-
-        return extracted_data
 
 class OptimizerPromptSymbolSet2(OptimizerPromptSymbolSet):
     variables_section_title = "# Variables"
@@ -306,11 +252,47 @@ class ProblemInstance:
         )
 
 
+@dataclass
+class MemoryInstance:
+    variables: Dict[str, Tuple[Any, str]] # name -> (data, constraint)
+    feedback: str
+    optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
+
+    memory_example_template = dedent(
+        """<round{index}>{variables}<feedback>{feedback}</feedback>
+        </round{index}>"""
+    )
+
+    def __init__(self, variables: Dict[str, Any], feedback: str, optimizer_prompt_symbol_set: OptimizerPromptSymbolSet,
+                 index: Optional[int] = None):
+        self.feedback = feedback
+        self.optimizer_prompt_symbol_set = optimizer_prompt_symbol_set
+        self.variables = variables
+        self.index = index
+
+    def __str__(self) -> str:
+        var_repr = ""
+        for k, v in self.variables.items():
+            var_repr += dedent(f"""
+            <{self.optimizer_prompt_symbol_set.improved_variable_tag}>
+            <{self.optimizer_prompt_symbol_set.name_tag}>{k}</{self.optimizer_prompt_symbol_set.name_tag}>
+            <{self.optimizer_prompt_symbol_set.value_tag}>
+            {v[0]}
+            </{self.optimizer_prompt_symbol_set.value_tag}>
+            </{self.optimizer_prompt_symbol_set.improved_variable_tag}>
+        """)
+
+        return self.memory_example_template.format(
+            variables=var_repr,
+            feedback=self.feedback,
+            index=" " + str(self.index) if self.index is not None else ""
+        )
+
+
 class OptoPrimeV2(OptoPrime):
     # This is generic representation prompt, which just explains how to read the problem.
     representation_prompt = dedent(
-        """
-        You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
+        """You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
 
         Specifically, a problem will be composed of the following parts:
         - {instruction_section_title}: the instruction which describes the things you need to do or the question you should answer.
@@ -327,8 +309,7 @@ class OptoPrimeV2(OptoPrime):
         For variables we express as this:
         {variable_expression_format}
 
-        If `data_type` is `code`, it means `{value_tag}` is the source code of a python code, which may include docstring and definitions.
-        """
+        If `data_type` is `code`, it means `{value_tag}` is the source code of a python code, which may include docstring and definitions."""
     )
 
     # Optimization
@@ -409,12 +390,15 @@ class OptoPrimeV2(OptoPrime):
             max_tokens=4096,
             log=True,
             initial_var_char_limit=100,
-            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
+            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
             **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
+
+        if optimizer_prompt_symbol_set is None:
+            optimizer_prompt_symbol_set = OptimizerPromptSymbolSet()
 
         self.truncate_expression = truncate_expression
 
@@ -495,18 +479,24 @@ class OptoPrimeV2(OptoPrime):
             others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", "")
         )
 
-    @staticmethod
-    def repr_node_value(node_dict):
+    def repr_node_value(self, node_dict, node_tag="node",
+                        value_tag="value", constraint_tag="constraint"):
         temp_list = []
         for k, v in node_dict.items():
             if "__code" not in k:
-                constraint_expr = f"<constraint> ({type(v[0]).__name__}) {k}: {v[1]} </constraint>"
-                temp_list.append(
-                    f"<node name=\"{k}\" type=\"{type(v[0]).__name__}\">\n<value>{v[0]}</value>\n{constraint_expr}\n</node>\n")
+                if v[1] is not None and node_tag == self.optimizer_prompt_symbol_set.variable_tag:
+                    constraint_expr = f"<{constraint_tag}>\n{v[1]}\n</{constraint_tag}>"
+                    temp_list.append(
+                        f"<{node_tag} name=\"{k}\" type=\"{type(v[0]).__name__}\">\n<{value_tag}>\n{v[0]}\n</{value_tag}>\n{constraint_expr}\n</{node_tag}>\n")
+                else:
+                    temp_list.append(
+                        f"<{node_tag} name=\"{k}\" type=\"{type(v[0]).__name__}\">\n<{value_tag}>\n{v[0]}\n</{value_tag}>\n</{node_tag}>\n")
             else:
                 constraint_expr = f"<constraint>\n{v[1]}\n</constraint>"
+                signature = v[1].replace("The code should start with:\n", "")
+                func_body = v[0].replace(signature, "")
                 temp_list.append(
-                    f"<node name=\"{k}\" type=\"code\">\n<value>\n{v[0]}\n</value>\n{constraint_expr}\n</node>\n")
+                    f"<{node_tag} name=\"{k}\" type=\"code\">\n<{value_tag}>\n{signature}{func_body}\n</{value_tag}>\n{constraint_expr}\n</{node_tag}>\n")
         return "\n".join(temp_list)
 
     def repr_node_value_compact(self, node_dict, node_tag="node",
@@ -561,16 +551,11 @@ class OptoPrimeV2(OptoPrime):
             formatted_final = self.final_prompt.format(names=var_names)
             prefix = user_prompt.split(formatted_final)[0]
             examples = []
+            index = 0
             for variables, feedback in self.memory:
-                examples.append(
-                    json.dumps(
-                        {
-                            "variables": {k: v[0] for k, v in variables.items()},
-                            "feedback": feedback,
-                        },
-                        indent=4,
-                    )
-                )
+                index += 1
+                examples.append(str(MemoryInstance(variables, feedback, self.optimizer_prompt_symbol_set, index=index)))
+
             examples = "\n".join(examples)
             user_prompt = (
                     prefix
@@ -596,9 +581,9 @@ class OptoPrimeV2(OptoPrime):
                 else ""
             ),
             variables=(
-                self.repr_node_value_compact(summary.variables, node_tag=self.optimizer_prompt_symbol_set.variable_tag,
-                                             value_tag=self.optimizer_prompt_symbol_set.value_tag,
-                                             constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag)
+                self.repr_node_value(summary.variables, node_tag=self.optimizer_prompt_symbol_set.variable_tag,
+                                     value_tag=self.optimizer_prompt_symbol_set.value_tag,
+                                     constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag)
                 if self.optimizer_prompt_symbol_set.variables_section_title not in mask
                 else ""
             ),
@@ -693,41 +678,3 @@ class OptoPrimeV2(OptoPrime):
         if verbose:
             print("LLM response:\n", response)
         return response
-
-
-    def save(self, path: str):
-        """Save the optimizer state to a file."""
-        with open(path, 'wb') as f:
-            pickle.dump({
-                "truncate_expression": self.truncate_expression,
-                "use_json_object_format": self.use_json_object_format,
-                "ignore_extraction_error": self.ignore_extraction_error,
-                "objective": self.objective,
-                "initial_var_char_limit": self.initial_var_char_limit,
-                "optimizer_prompt_symbol_set": self.optimizer_prompt_symbol_set,
-                "include_example": self.include_example,
-                "max_tokens": self.max_tokens,
-                "memory": self.memory,
-                "default_prompt_symbols": self.default_prompt_symbols,
-                "prompt_symbols": self.prompt_symbols,
-                "representation_prompt": self.representation_prompt,
-                "output_format_prompt": self.output_format_prompt,
-            }, f)
-
-    def load(self, path: str):
-        """Load the optimizer state from a file."""
-        with open(path, 'rb') as f:
-            state = pickle.load(f)
-            self.truncate_expression = state["truncate_expression"]
-            self.use_json_object_format = state["use_json_object_format"]
-            self.ignore_extraction_error = state["ignore_extraction_error"]
-            self.objective = state["objective"]
-            self.initial_var_char_limit = state["initial_var_char_limit"]
-            self.optimizer_prompt_symbol_set = state["optimizer_prompt_symbol_set"]
-            self.include_example = state["include_example"]
-            self.max_tokens = state["max_tokens"]
-            self.memory = state["memory"]
-            self.default_prompt_symbols = state["default_prompt_symbols"]
-            self.prompt_symbols = state["prompt_symbols"]
-            self.representation_prompt = state["representation_prompt"]
-            self.output_format_prompt = state["output_format_prompt"]

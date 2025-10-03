@@ -9,8 +9,6 @@ from opto.trainer.utils import async_run, batch_run
 from opto.optimizers.utils import print_color
 from opto.trainer.algorithms.basic_algorithms import Minibatch, Trainer, batchify
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler, RolloutsGraph
-import time
 
 # Some helper functions to convert between trace.Module and update_dict
 
@@ -45,7 +43,8 @@ def is_module_copy(a, b):
         _matched = []
         for p_b in parameters_b:
             _matched.append(is_node_copy(p_a, p_b))
-    np.array(matched)
+        matched.append(_matched)
+    matched = np.array(matched)
     if np.all(np.sum(matched, axis=1) == 1) and np.all(np.sum(matched, axis=0) == 1):
         return True
     return False
@@ -79,6 +78,25 @@ def create_module_from_update_dict(agent, update_dict):
         The update_dict is a dictionary of ParameterNode: value pairs.
         A new agent will be created with the parameters set to the values from the update_dict.
     """
-    new_agent = copy.deepcopy(agent) #.copy()  # create a copy of the agent
+    # new_agent = copy.deepcopy(agent) #.copy()  # create a copy of the agent
+    new_agent = deepcopy_module(agent)  # create a copy of the agent
     set_module_parameters(new_agent, update_dict)  # set the parameters of the new agent
     return new_agent  # return the new agent
+
+
+def deepcopy_module(agent):
+    """ Create a deep copy of the agent, but reset the parameter names to remove the _copy suffixes.
+
+        This is useful when we want to create a new agent for a new rollout,
+        but we want to keep the parameter names consistent with the original agent
+        so that the optimizer can recognize them across different rollouts.
+
+        NOTE: This breaks the GRAPH's assumption on uniqueness of node names. Use with caution.
+    """
+    new_agent = copy.deepcopy(agent)
+    for p_n in new_agent.parameters():
+        for p_o in agent.parameters():
+            if is_node_copy(p_n, p_o):
+                p_n._name = p_o._name  # directly set the name to the original parameter's name
+                break
+    return new_agent
