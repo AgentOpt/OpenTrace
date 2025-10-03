@@ -4,7 +4,7 @@ import numpy as np
 
 from opto import trace
 from opto.optimizers.optoprime_v2 import OptoPrimeV2
-from opto.trainer.algorithms.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
+from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
 from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm
 from opto.trainer.guide import LLMJudge
 from opto.utils.llm import LLM

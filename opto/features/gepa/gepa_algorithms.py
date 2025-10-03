@@ -1,4 +1,4 @@
-# opto/trainer/algorithms/gepa_algorithms.py
+# opto/features/gepa/gepa_algorithms.py
 # GEPA (+Merge) algorithms for Trace
 # - GEPAUCBSearch: subclass of UCBSearchAlgorithm
 # - GEPABeamPareto: subclass of BeamsearchAlgorithm (Pareto select + single-parent incremental)
