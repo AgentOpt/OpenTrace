@@ -19,6 +19,7 @@ response = llm("Hello, what's the weather in France today?")
 
 USED_TracedLLM = contextvars.ContextVar('USED_TracedLLM', default=list())
 
+
 class ChatHistory:
     def __init__(self, max_len=50, auto_summary=False):
         """Initialize chat history for multi-turn conversation.
@@ -145,6 +146,7 @@ class TracedLLM:
         TracedLLM_response1 = TracedLLM.forward.call_llm(args_0=system_prompt0, args_1=TracedLLM0_user_query0, args_2=TracedLLM_response0, args_3=TracedLLM0_user_query1)
         TracedLLM_response2 = TracedLLM.forward.call_llm(args_0=system_prompt0, args_1=TracedLLM0_user_query0, args_2=TracedLLM_response0, args_3=TracedLLM0_user_query1, args_4=TracedLLM_response1, args_5=TracedLLM0_user_query2)
     """
+
     def __init__(self,
                  system_prompt: Union[str, None, trace.Node] = None,
                  llm: AbstractModel = None, chat_history_on=False,
@@ -159,10 +161,12 @@ class TracedLLM:
         if system_prompt is None:
             system_prompt = "You are a helpful assistant."
 
-        self.system_prompt = system_prompt if isinstance(system_prompt, trace.Node) else trace.node(system_prompt,
-                                                                                                    name='system_prompt',
-                                                                                                    description=DEFAULT_SYSTEM_PROMPT_DESCRIPTION,
-                                                                                                    trainable=trainable)
+        self.system_prompt = trace.node(system_prompt, name='system_prompt',
+                                        description=DEFAULT_SYSTEM_PROMPT_DESCRIPTION,
+                                        trainable=trainable)
+        # if system_prompt is already a node, then we have to override its trainable attribute
+        self.system_prompt.trainable = trainable
+
         if llm is None:
             llm = LLM()
         assert isinstance(llm, AbstractModel), f"{llm} must be an instance of AbstractModel"
@@ -174,8 +178,13 @@ class TracedLLM:
         self.model_name = model_name if model_name else f"TracedLLM{len(current_llm_sessions)}"
         current_llm_sessions.append(1)  # just a marker
 
-    def forward(self, user_query: str) -> str:
+    def forward(self, user_query: str, chat_history_on: Optional[bool] = None) -> str:
         """This function takes user_query as input, and returns the response from the LLM, with the system prompt prepended.
+        This method will always save chat history.
+
+        If chat_history_on is set to False, the chat history will not be included in the LLM input.
+        If chat_history_on is None, it will use the class-level chat_history_on setting.
+        If chat_history_on is True, the chat history will be included in the LLM input.
 
         Args:
             user_query: The user query to send to the LLM
@@ -183,8 +192,11 @@ class TracedLLM:
         Returns:
             str: For direct pattern
         """
+        chat_history_on = self.chat_history_on if chat_history_on is None else chat_history_on
+
         messages = [{"role": "system", "content": self.system_prompt.data}]
-        messages.extend(self.chat_history.get_messages())
+        if chat_history_on:
+            messages.extend(self.chat_history.get_messages())
         messages.append({"role": "user", "content": user_query})
 
         response = self.llm(messages=messages)
@@ -201,15 +213,16 @@ class TracedLLM:
             return response.choices[0].message.content
 
         user_query_node = trace.node(user_query, name=f"{self.model_name}_user_query")
-        arg_list = ([self.system_prompt] + self.chat_history.get_messages_as_node(self.model_name)
-                    + [user_query_node])
+        arg_list = [self.system_prompt]
+        if chat_history_on:
+            arg_list += self.chat_history.get_messages_as_node(self.model_name)
+        arg_list += [user_query_node]
 
         response_node = call_llm(*arg_list)
 
         # save to chat history
-        if self.chat_history_on:
-            self.chat_history.add(user_query_node, role="user")
-            self.chat_history.add(response_node, role="assistant")
+        self.chat_history.add(user_query_node, role="user")
+        self.chat_history.add(response_node, role="assistant")
 
         return response_node
 
