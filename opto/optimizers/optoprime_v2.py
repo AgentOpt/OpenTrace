@@ -3,7 +3,7 @@ from typing import Any, List, Dict, Union, Tuple, Optional
 from dataclasses import dataclass, asdict
 from opto.optimizers.optoprime import OptoPrime, FunctionFeedback
 from opto.trace.utils import dedent
-from opto.optimizers.utils import truncate_expression, extract_xml_like_data
+from opto.optimizers.utils import truncate_expression, extract_xml_like_data, encode_image_to_base64
 
 from opto.trace.nodes import ParameterNode, Node, MessageNode
 from opto.trace.propagators import TraceGraph, GraphPropagator
@@ -15,6 +15,11 @@ import copy
 import pickle
 import re
 from typing import Dict, Any
+
+
+@dataclass
+class MultiModalPayload:
+    image_bytes: Optional[str] = None  # base64 encoded image bytes
 
 
 class OptimizerPromptSymbolSet:
@@ -327,7 +332,7 @@ class ProblemInstance:
 
 @dataclass
 class MemoryInstance:
-    variables: Dict[str, Tuple[Any, str]] # name -> (data, constraint)
+    variables: Dict[str, Tuple[Any, str]]  # name -> (data, constraint)
     feedback: str
     optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
 
@@ -472,11 +477,14 @@ class OptoPrimeV2(OptoPrime):
             optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
+            problem_context: Optional[str] = None,
             **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
 
         self.truncate_expression = truncate_expression
+        self.problem_context = problem_context
+        self.multimodal_payload = MultiModalPayload()
 
         self.use_json_object_format = use_json_object_format if optimizer_prompt_symbol_set.expect_json and use_json_object_format else False
         self.ignore_extraction_error = ignore_extraction_error
@@ -499,7 +507,6 @@ class OptoPrimeV2(OptoPrime):
                                                         )
         self.example_problem_summary.variables = {'a': (5, "a > 0")}
         self.example_problem_summary.inputs = {'b': (1, None), 'c': (5, None)}
-        self.example_problem_summary.context = ""
 
         self.example_problem = self.problem_instance(self.example_problem_summary)
         self.example_response = self.optimizer_prompt_symbol_set.example_output(
@@ -518,6 +525,23 @@ class OptoPrimeV2(OptoPrime):
         self.default_prompt_symbols = self.optimizer_prompt_symbol_set.default_prompt_symbols
 
         self.prompt_symbols = copy.deepcopy(self.default_prompt_symbols)
+        self.initialize_prompt()
+
+    def add_image_context(self, image_path: str, context: str = ""):
+        if self.problem_context is None:
+            self.problem_context = ""
+        self.problem_context += f"{context}\n\n"
+
+        # we load in the image and convert to base64
+        data_url = encode_image_to_base64(image_path)
+        self.multimodal_payload.image_bytes = data_url
+
+        self.initialize_prompt()
+
+    def add_context(self, context: str):
+        if self.problem_context is None:
+            self.problem_context = ""
+        self.problem_context += f"{context}\n\n"
         self.initialize_prompt()
 
     def initialize_prompt(self):
@@ -540,7 +564,8 @@ class OptoPrimeV2(OptoPrime):
             instruction_section_title=self.optimizer_prompt_symbol_set.instruction_section_title.replace(" ", ""),
             code_section_title=self.optimizer_prompt_symbol_set.code_section_title.replace(" ", ""),
             documentation_section_title=self.optimizer_prompt_symbol_set.documentation_section_title.replace(" ", ""),
-            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", "")
+            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", ""),
+            context_section_title=self.optimizer_prompt_symbol_set.context_section_title.replace(" ", "")
         )
         self.output_format_prompt = self.output_format_prompt_template.format(
             output_format=self.optimizer_prompt_symbol_set.output_format,
@@ -553,7 +578,8 @@ class OptoPrimeV2(OptoPrime):
             documentation_section_title=self.optimizer_prompt_symbol_set.documentation_section_title.replace(" ", ""),
             variables_section_title=self.optimizer_prompt_symbol_set.variables_section_title.replace(" ", ""),
             inputs_section_title=self.optimizer_prompt_symbol_set.inputs_section_title.replace(" ", ""),
-            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", "")
+            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", ""),
+            context_section_title=self.optimizer_prompt_symbol_set.context_section_title.replace(" ", "")
         )
 
     def repr_node_value(self, node_dict, node_tag="node",
@@ -680,7 +706,7 @@ class OptoPrimeV2(OptoPrime):
                                              constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag) if self.optimizer_prompt_symbol_set.others_section_title not in mask else ""
             ),
             feedback=summary.user_feedback if self.optimizer_prompt_symbol_set.feedback_section_title not in mask else "",
-            context=summary.context if self.optimizer_prompt_symbol_set.context_section_title not in mask else "",
+            context=self.problem_context if self.optimizer_prompt_symbol_set.context_section_title not in mask else "",
             optimizer_prompt_symbol_set=self.optimizer_prompt_symbol_set
         )
 
@@ -742,9 +768,20 @@ class OptoPrimeV2(OptoPrime):
         if verbose not in (False, "output"):
             print("Prompt\n", system_prompt + user_prompt)
 
+        user_message_content = []
+        if self.multimodal_payload.image_bytes is not None:
+            user_message_content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": self.multimodal_payload.image_bytes
+                }
+            })
+
+        user_message_content.append({"type": "text", "text": user_prompt})
+
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": user_message_content},
         ]
 
         response_format = {"type": "json_object"} if self.use_json_object_format else None

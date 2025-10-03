@@ -1,4 +1,7 @@
+import base64
+import mimetypes
 from typing import Dict, Any
+
 
 def print_color(message, color=None, logger=None):
     colors = {
@@ -134,3 +137,17 @@ def extract_xml_like_data(text: str, reasoning_tag: str = "reasoning",
             if var_name:  # Only require name to be non-empty, value can be empty
                 result['variables'][var_name] = var_value
     return result
+
+
+def encode_image_to_base64(path: str) -> str:
+    # Read binary
+    with open(path, "rb") as f:
+        image_bytes = f.read()
+    # Guess MIME type from file extension
+    mime_type, _ = mimetypes.guess_type(path)
+    if mime_type is None:
+        # fallback
+        mime_type = "image/jpeg"
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    data_url = f"data:{mime_type};base64,{b64}"
+    return data_url
