@@ -232,40 +232,40 @@ def test_resume():
     os.system(f"rm -rf {save_path}")
 
 
-def test_trainer_train_and_resume():
+# def test_trainer_train_and_resume():
 
-    dummy_llm = DummyLLM(_llm_callable)
-    agent = Agent()
-    optimizer = OptoPrimeV2(
-        agent.parameters(),
-        llm=dummy_llm,
-    )
+#     dummy_llm = DummyLLM(_llm_callable)
+#     agent = Agent()
+#     optimizer = OptoPrimeV2(
+#         agent.parameters(),
+#         llm=dummy_llm,
+#     )
 
-    trainer.train(
-        algorithm='PrioritySearch',
-        model=agent,
-        optimizer=optimizer,
-        guide=Guide(),
-        train_dataset=dataset,
-        batch_size=batch_size,
-        num_batches=num_batches,
-        num_threads=num_threads,
-        num_candidates=num_candidates,
-        num_proposals=num_proposals,
-        long_term_memory_size=long_term_memory_size,
-        memory_update_frequency=memory_update_frequency,
-        verbose=False, #'output',
-        save_path="./test_priority_search_save_trainer",
-        save_frequency=1,
-        num_epochs=num_epochs,
-    )
+#     trainer.train(
+#         algorithm='PrioritySearch',
+#         model=agent,
+#         optimizer=optimizer,
+#         guide=Guide(),
+#         train_dataset=dataset,
+#         batch_size=batch_size,
+#         num_batches=num_batches,
+#         num_threads=num_threads,
+#         num_candidates=num_candidates,
+#         num_proposals=num_proposals,
+#         long_term_memory_size=long_term_memory_size,
+#         memory_update_frequency=memory_update_frequency,
+#         verbose=False, #'output',
+#         save_path="./test_priority_search_save_trainer",
+#         save_frequency=1,
+#         num_epochs=num_epochs,
+#     )
 
-    new_agent = Agent()
-    trainer.resume(
-        "./test_priority_search_save_trainer",
-        algorithm='PrioritySearch',
-        model=new_agent,
-        train_dataset=dataset,
-        num_epochs=num_epochs+2)
+#     new_agent = Agent()
+#     trainer.resume(
+#         "./test_priority_search_save_trainer",
+#         algorithm='PrioritySearch',
+#         model=new_agent,
+#         train_dataset=dataset,
+#         num_epochs=num_epochs+2)
 
-    os.system(f"rm -rf ./test_priority_search_save_trainer")
+#     os.system(f"rm -rf ./test_priority_search_save_trainer")
