@@ -15,37 +15,38 @@ def dataset_check(dataset):
     assert len(dataset['inputs'])==len(dataset['infos']), "Inputs and infos must have the same length"
 
 
-def resume(
-    save_path: str,
-    *,
-    algorithm: Union[Trainer, str] = 'MinibatchAlgorithm',
-    model: trace.Module,
-    train_dataset: dict,
-    validate_dataset = None,
-        test_dataset = None,
-        **kwargs):
-    """ Resume training from a checkpoint.
+# TODO finish implementing resume function
+# def resume(
+#     save_path: str,
+#     *,
+#     algorithm: Union[Trainer, str] = 'MinibatchAlgorithm',
+#     model: trace.Module,
+#     train_dataset: dict,
+#     validate_dataset = None,
+#         test_dataset = None,
+#         **kwargs):
+#     """ Resume training from a checkpoint.
 
-    Args:
-        model: the model to be trained
-        train_dataset: the training dataset
-        resume_training: path to the checkpoint
-        validate_dataset: the validation dataset
-        test_dataset: the test dataset
-        **kwargs: additional keyword arguments for the training method. If not provided, the same parameters as the last training call are used.
-    """
-    dataset_check(train_dataset)
-    trainer_class = load_trainer_class(algorithm)
-    assert issubclass(trainer_class, Trainer)
-    assert isinstance(save_path, str), "resume_training must be a path string."
-    assert hasattr(trainer_class, 'resume'), f"{trainer_class} does not support resume."
-    assert hasattr(trainer_class, 'load'), f"{trainer_class} does not support load."
-    algo = trainer_class.load(save_path)  # load the saved state
-    return algo.resume(model=model,
-                        train_dataset=train_dataset,
-                        validate_dataset=validate_dataset,
-                        test_dataset=test_dataset,
-                        **kwargs)
+#     Args:
+#         model: the model to be trained
+#         train_dataset: the training dataset
+#         resume_training: path to the checkpoint
+#         validate_dataset: the validation dataset
+#         test_dataset: the test dataset
+#         **kwargs: additional keyword arguments for the training method. If not provided, the same parameters as the last training call are used.
+#     """
+#     dataset_check(train_dataset)
+#     trainer_class = load_trainer_class(algorithm)
+#     assert issubclass(trainer_class, Trainer)
+#     assert isinstance(save_path, str), "resume_training must be a path string."
+#     assert hasattr(trainer_class, 'resume'), f"{trainer_class} does not support resume."
+#     assert hasattr(trainer_class, 'load'), f"{trainer_class} does not support load."
+#     algo = trainer_class.load(save_path)  # load the saved state
+#     return algo.resume(model=model,
+#                         train_dataset=train_dataset,
+#                         validate_dataset=validate_dataset,
+#                         test_dataset=test_dataset,
+#                         **kwargs)
 
 
 def train(
