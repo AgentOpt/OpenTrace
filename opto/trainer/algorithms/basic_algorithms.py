@@ -131,8 +131,8 @@ class Minibatch(Trainer):
               num_epochs: int = 1,  # number of training epochs
               batch_size: int = 1,  # batch size for updating the agent
               test_dataset = None,  # dataset of (x, info) pairs to evaluate the agent
-              eval_frequency: int = 1,  # frequency of evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              test_frequency: int = 1,  # frequency of evaluation
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               log_frequency: Union[int, None] = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
               save_path: str = "checkpoints/agent.pkl",  # path to save the agent
@@ -198,16 +198,16 @@ class Minibatch(Trainer):
         6. Checkpointing: Save agent state at specified intervals
         """
 
-        log_frequency = log_frequency or eval_frequency  # frequency of logging (default to eval_frequency)
+        log_frequency = log_frequency or test_frequency  # frequency of logging (default to test_frequency)
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_dataset = test_dataset or train_dataset  # default to train_dataset if test_dataset is not provided
-        self.num_eval_samples = num_eval_samples  # number of samples to use to evaluate each input
+        self.num_test_samples = num_test_samples  # number of samples to use to evaluate each input
 
         # Evaluate the agent before learning
-        if eval_frequency > 0:
+        if test_frequency > 0:
             test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
                           min_score=min_score, num_threads=num_threads,
-                          num_samples=self.num_eval_samples,
+                          num_samples=self.num_test_samples,
                           description=f"Evaluating agent (iteration {self.n_iters})")  # and log
             self.logger.log('Average test score', test_score, self.n_iters, color='green')
 
@@ -244,10 +244,10 @@ class Minibatch(Trainer):
                 self.n_iters += 1
 
                 # Evaluate the agent after update
-                if test_dataset is not None and self.n_iters % eval_frequency == 0:
+                if test_dataset is not None and self.n_iters % test_frequency == 0:
                     test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
                                   min_score=min_score, num_threads=num_threads,
-                                  num_samples=self.num_eval_samples,
+                                  num_samples=self.num_test_samples,
                                   description=f"Evaluating agent (iteration {self.n_iters})")  # and log
                     self.logger.log('Average test score', test_score, self.n_iters, color='green')
 
@@ -297,8 +297,7 @@ class Minibatch(Trainer):
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
                                num_samples=num_samples, description=description)
-        if all([s is not None for s in test_scores]):
-            return np.mean(test_scores)
+        return np.mean([s for s in test_scores if s is not None])
 
     def has_improvement(self, xs, guide, infos, current_score, current_outputs, backup_dict, threshold=0, num_threads=None, *args, **kwargs):
         """Check if the updated agent shows improvement over the previous version.
@@ -343,7 +342,7 @@ class Minibatch(Trainer):
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         new_score = self.evaluate(self.agent, guide, xs, infos, num_threads=num_threads,
                                  description=f"Checking improvement (iteration {self.n_iters})",
-                                 num_samples=self.num_eval_samples,
+                                 num_samples=self.num_test_samples,
                                  *args, **kwargs)  # evaluate the updated agent
         if new_score is None or new_score <= current_score - threshold:
             print_color(f"Update rejected: Current score {current_score}, New score {new_score}", 'red')
@@ -537,7 +536,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
               num_epochs = 1,  # number of training epochs
               batch_size = 1,  # batch size for updating the agent
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
-              eval_frequency = 1, # frequency of evaluation
+              test_frequency = 1, # frequency of evaluation
               log_frequency = None,  # frequency of logging
               min_score = None,  # minimum score to update the agent
               verbose = False,  # whether to print the output of the agent
@@ -552,7 +551,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
         self.current_score = None
 
         return super().train(guide, train_dataset, num_epochs=num_epochs, batch_size=batch_size,
-                      test_dataset=test_dataset, eval_frequency=eval_frequency, log_frequency=log_frequency,
+                      test_dataset=test_dataset, test_frequency=test_frequency, log_frequency=log_frequency,
                       min_score=min_score, verbose=verbose, num_threads=num_threads, **kwargs)
 
     # This code should be reusable for other algorithms

@@ -1,4 +1,4 @@
-from opto import trace
+from opto import trace, trainer
 from opto.trainer.loader import DataLoader
 from opto.features.priority_search.sampler import Sampler
 from opto.features.priority_search.priority_search import PrioritySearch as _PrioritySearch
@@ -7,9 +7,10 @@ from opto.optimizers import OptoPrimeV2
 from opto.trainer.guide import Guide
 from opto.utils.llm import DummyLLM
 
-import re
+import re, os
 import numpy as np
 import copy
+import pickle
 
 
 class Guide(Guide):
@@ -46,15 +47,15 @@ class Agent:
 xs = [1, 2, 3, 4, 5]
 infos = [1, 2, 3, 4, 5]
 batch_size = 3
-sub_batch_size = 2
-num_threads = 2 # 2
+num_batches = 2
+num_threads = 2
+num_epochs = 3
 dataset = {'inputs': xs, 'infos': infos}
-loader = DataLoader(dataset, batch_size=batch_size, randomize=False)
-sampler = Sampler(loader=loader, guide=Guide(), sub_batch_size=sub_batch_size, num_threads=num_threads)
 
 num_proposals = 10
 num_candidates = 5
-memory_size = 3
+long_term_memory_size = 3
+memory_update_frequency = 2
 suggested_value = 5
 
 
@@ -69,7 +70,7 @@ class PrioritySearch(_PrioritySearch):
         # In this example this will always be value 5
         assert isinstance(candidates, list), "Expected candidates to be a list"
         assert all(isinstance(c, ModuleCandidate) for c in candidates), "All candidates should be ModuleCandidate instances"
-        assert len(candidates) == samples.n_sub_batches * self.num_proposals, f"Expected {samples.n_sub_batches * self.num_proposals} candidates, got {len(candidates)}"
+        assert len(candidates) == samples.n_batchrollouts * self.num_proposals, f"Expected {samples.n_batchrollouts * self.num_proposals} candidates, got {len(candidates)}"
         return candidates
 
     def validate(self, candidates, samples, verbose=False, **kwargs):
@@ -86,7 +87,15 @@ class PrioritySearch(_PrioritySearch):
 
     def exploit(self, **kwargs):
         print("[UnitTest] Exploit at iteration:", self.n_iters)
-        candidate, info_dict = super().exploit(**kwargs)
+        if self.n_iters == 0:
+            memory = self.memory.memory
+            _candidates = [c for _, c in memory]
+            # assert all candidates have the same hash, since they are all the same in this unit test
+            hashes = [hash(c) for c in _candidates]
+            assert len(hashes) > 1, "Expected more than one candidate in memory"
+            assert 1 == len(set(hashes)), "All candidates in memory should have the same hash"
+
+        candidate, priority, info_dict = super().exploit(**kwargs)
         assert isinstance(candidate, ModuleCandidate), "Expected candidate to be an instance of ModuleCandidate"
         assert isinstance(info_dict, dict), "Expected info_dict to be a dictionary"
 
@@ -94,25 +103,25 @@ class PrioritySearch(_PrioritySearch):
         assert self.use_best_candidate_to_explore, "Expected use_best_candidate_to_explore to be True in this unit test"
         candidate = copy.deepcopy(candidate)  # Ensure we return a copy
         for p in candidate.base_module.parameters():
-            candidate.update_dict[p] = p.data + 100
+            candidate.update_dict[p] = p._data + 100
             # This will be different the exploration candidates
 
-        return candidate, info_dict
+        return candidate, priority, info_dict
 
     def explore(self, **kwargs):
         print("[UnitTest] Explore at iteration:", self.n_iters)
 
-        candidates, info_dict = super().explore(**kwargs)
+        candidates, priorities, info_dict = super().explore(**kwargs)
         assert isinstance(candidates, list)
         assert isinstance(info_dict, dict)
 
-        if self.n_iters == 0:
-            assert len(candidates) == 2, f"Expected 2 candidates, got {len(candidates)}"
+        if self.n_iters == 0:  # NOTE use +1 since we hacked exploit above using deepcopy, the returned object does not have the same reference
+            assert len(candidates) == min(long_term_memory_size, num_candidates) + 1, f"Expected {min(long_term_memory_size, num_candidates) + 1} candidates, got {len(candidates)}"
             # one from the init parameter and one from the hacked best candidate
         else:
             assert len(candidates) <= self.num_candidates, f"Expect no more than {self.num_candidates} candidates at iter {self.n_iters}, got {len(candidates)}"
         assert all(isinstance(c, ModuleCandidate) for c in candidates), "All candidates should be ModuleCandidate instances"
-        return candidates, info_dict
+        return candidates, priorities, info_dict
 
 
 
@@ -158,10 +167,105 @@ def test_priority_search():
         guide=Guide(),
         train_dataset=dataset,
         batch_size=batch_size,
-        sub_batch_size=sub_batch_size,
+        num_batches=num_batches,
         num_threads=num_threads,
         num_candidates=num_candidates,
         num_proposals=num_proposals,
-        memory_size=memory_size,
+        long_term_memory_size=long_term_memory_size,
+        memory_update_frequency=memory_update_frequency,
+        num_epochs=num_epochs,
         verbose=False, #'output',
     )
+
+
+def test_resume():
+    """
+    Test resuming the PrioritySearch algorithm from a saved state.
+    """
+    # Create a dummy LLM and an agent
+    dummy_llm = DummyLLM(_llm_callable)
+    agent = Agent()
+    optimizer = OptoPrimeV2(
+        agent.parameters(),
+        llm=dummy_llm,
+    )
+
+    algo = PrioritySearch(
+        agent,
+        optimizer,
+    )
+
+    # test pickling objects
+    pickle.dumps(agent)
+    pickle.dumps(dummy_llm)
+    pickle.dumps(optimizer)
+    pickle.dumps(algo)
+
+
+    save_path="./test_priority_search_save"
+
+    algo.train(
+        guide=Guide(),
+        train_dataset=dataset,
+        batch_size=batch_size,
+        num_batches=num_batches,
+        num_threads=num_threads,
+        num_candidates=num_candidates,
+        num_proposals=num_proposals,
+        long_term_memory_size=long_term_memory_size,
+        memory_update_frequency=memory_update_frequency,
+        verbose=False, #'output',
+        save_path=save_path,
+        save_frequency=1,
+        num_epochs=num_epochs,
+    )
+
+    new_algo = PrioritySearch.load(save_path)
+    assert new_algo.n_iters == algo.n_iters - 1, "Resumed algorithm should have the same number of iterations as the original."
+    new_agent = Agent()
+    new_algo.resume(
+        model=new_agent,
+        train_dataset=dataset,
+        num_epochs=num_epochs+2)
+    print("Resumed training for additional epochs.")
+    # assert new_algo.n_iters == num_epochs+2, "Resumed algorithm should have completed the additional epochs."
+    os.system(f"rm -rf {save_path}")
+
+
+# def test_trainer_train_and_resume():
+
+#     dummy_llm = DummyLLM(_llm_callable)
+#     agent = Agent()
+#     optimizer = OptoPrimeV2(
+#         agent.parameters(),
+#         llm=dummy_llm,
+#     )
+
+#     trainer.train(
+#         algorithm='PrioritySearch',
+#         model=agent,
+#         optimizer=optimizer,
+#         guide=Guide(),
+#         train_dataset=dataset,
+#         batch_size=batch_size,
+#         num_batches=num_batches,
+#         num_threads=num_threads,
+#         num_candidates=num_candidates,
+#         num_proposals=num_proposals,
+#         long_term_memory_size=long_term_memory_size,
+#         memory_update_frequency=memory_update_frequency,
+#         verbose=False, #'output',
+#         save_path="./test_priority_search_save_trainer",
+#         save_frequency=1,
+#         num_epochs=num_epochs,
+#     )
+
+#     new_agent = Agent()
+#     trainer.resume(
+#         "./test_priority_search_save_trainer",
+#         algorithm='PrioritySearch',
+#         model=new_agent,
+#         train_dataset=dataset,
+#         num_epochs=num_epochs+2)
+
+#     os.system(f"rm -rf ./test_priority_search_save_trainer")

@@ -1,5 +1,5 @@
 from typing import Any, List, Dict
-
+import copy, pickle, os
 from opto.trace.nodes import ParameterNode, Node
 from opto.trace.propagators import GraphPropagator
 from opto.trace.propagators.propagators import Propagator
@@ -370,8 +370,37 @@ class Optimizer(AbstractOptimizer):
 
     def save(self, path: str):
         """Save the optimizer state to a file."""
-        pass
+        # check if the directory exists
+        directory = os.path.dirname(path)
+        if directory != "":
+            os.makedirs(directory, exist_ok=True)
+        with open(path, 'wb') as f:
+            pickle.dump(self.__getstate__(), f)
 
     def load(self, path: str):
         """Load the optimizer state from a file."""
-        pass
+        with open(path, 'rb') as f:
+            state = pickle.load(f)
+            self.__setstate__(state)
+
+    # NOTE: overload __getstate__ and __setstate__ in subclasses to customize pickling behavior
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # don't pickle the parameters, as they are part of the model
+        state['parameters'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    def __deepcopy__(self, memo):
+        # deepcopy everything except self.parameters
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if k != 'parameters':
+                setattr(result, k, copy.deepcopy(v, memo))
+            else:
+                setattr(result, k, v)  # parameters is not copied, it is the original parameters
+        return result

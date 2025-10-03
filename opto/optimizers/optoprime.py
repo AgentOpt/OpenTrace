@@ -759,12 +759,12 @@ class OptoPrime(Optimizer):
         user_prompt = self.replace_symbols(user_prompt, self.prompt_symbols)
 
         response = self.call_llm(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            verbose=verbose,
-            max_tokens=self.max_tokens,
-        )
-
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                verbose=verbose,
+                max_tokens=self.max_tokens,
+            )
+            
         if "TERMINATE" in response:
             return {}
 
@@ -887,39 +887,3 @@ class OptoPrime(Optimizer):
         if verbose:
             print("LLM response:\n", response)
         return response
-
-
-    def save(self, path: str):
-        """Save the optimizer state to a file."""
-        # save the above using pickle isntead
-        with open(path, "wb") as f:
-            pickle.dump(
-                {
-                    "ignore_extraction_error": self.ignore_extraction_error,
-                    "objective": self.objective,
-                    "include_example": self.include_example,
-                    "max_tokens": self.max_tokens,
-                    "memory": self.memory,
-                    "prompt_symbols": self.prompt_symbols,
-                    "json_keys": self.default_json_keys,
-                    'output_format_prompt': self.output_format_prompt,
-                    "use_json_object_format": self.use_json_object_format,
-                    "highlight_variables": self.highlight_variables,
-                },
-                f,
-            )
-
-    def load(self, path: str):
-        """Load the optimizer state from a file."""
-        with open(path, "rb") as f:
-            state = pickle.load(f)
-            self.ignore_extraction_error = state["ignore_extraction_error"]
-            self.objective = state["objective"]
-            self.include_example = state["include_example"]
-            self.max_tokens = state["max_tokens"]
-            self.memory = state["memory"]
-            self.prompt_symbols = state["prompt_symbols"]
-            self.default_json_keys = state["json_keys"]
-            self.output_format_prompt = state['output_format_prompt']
-            self.use_json_object_format = state["use_json_object_format"]
-            self.highlight_variables = state["highlight_variables"]

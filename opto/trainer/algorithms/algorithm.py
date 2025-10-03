@@ -225,8 +225,7 @@ class Trainer(AbstractAlgorithm):
         """
         raise NotImplementedError
 
-
-    def save(self, path: str):
+    def save(self, save_path: str):
         """Save the trainer and its components to a file.
 
         Parameters
@@ -240,30 +239,11 @@ class Trainer(AbstractAlgorithm):
         types (Module, Guide, DataLoader, Optimizer) to separate files with
         appropriate extensions. The main trainer state is saved as a pickle file.
         """
-        with open(path, 'wb') as f:
-            d = {}
-            for key, value in self.__dict__.items():
-                if isinstance(value, Module):
-                    _path = path+ f"_{key}.module"
-                    value.save(_path)
-                    d[key] = _path
-                elif isinstance(value, Guide):
-                    _path = path + f"_{key}.guide"
-                    value.save(_path)
-                    d[key] = _path
-                elif isinstance(value, DataLoader):
-                    _path = path + f"_{key}.dataloader"
-                    value.save(_path)
-                    d[key] = _path
-                elif isinstance(value, Optimizer):
-                    _path = path + f"_{key}.optimizer"
-                    value.save(_path)
-                    d[key] = _path
-                else:
-                    d[key] = value
-            pickle.dump(d, f)
+        raise NotImplementedError
 
-    def load(self, path: str):
+    @classmethod
+    def load(cls,
+             load_path: str):
         """Load the trainer and its components from a file.
 
         Parameters
@@ -278,28 +258,67 @@ class Trainer(AbstractAlgorithm):
         warns if attributes from the saved state are not found in the current
         trainer instance.
         """
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-            for key, value in data.items():
-                if key not in self.__dict__:
-                    warning_msg = f"Key '{key}' not found in the algorithm's attributes. Skipping loading for this key."
-                    print(warning_msg)  # or use logging.warning(warning_msg)
-                    continue
+        raise NotImplementedError
 
-                # key is in the algorithm's attributes
-                if isinstance(value, str):
-                    if value.endswith('.module'):
-                        attr = self.__dict__[key]
-                        assert isinstance(attr, Module), f"Expected {key} to be a Module, got {type(attr)}"
-                    elif value.endswith('.guide'):
-                        attr = self.__dict__[key]
-                        assert isinstance(attr, Guide), f"Expected {key} to be an Guide, got {type(attr)}"
-                    elif value.endswith('.dataloader'):
-                        attr = self.__dict__[key]
-                        assert isinstance(attr, DataLoader), f"Expected {key} to be a DataLoader, got {type(attr)}"
-                    elif value.endswith('.optimizer'):
-                        attr = self.__dict__[key]
-                        assert isinstance(attr, Optimizer), f"Expected {key} to be an Optimizer, got {type(attr)}"
-                    attr.load(value)
-                else:
-                    self.__dict__[key] = value
+    def resume(self, *,
+               model: Module,
+               train_dataset: dict ,
+               **kwargs):
+        raise NotImplementedError
+
+
+
+
+    # TODO remove these old save and load methods
+    # def save(self, path: str):
+
+    #     with open(path, 'wb') as f:
+    #         d = {}
+    #         for key, value in self.__dict__.items():
+    #             if isinstance(value, Module):
+    #                 _path = path+ f"_{key}.module"
+    #                 value.save(_path)
+    #                 d[key] = _path
+    #             elif isinstance(value, Guide):
+    #                 _path = path + f"_{key}.guide"
+    #                 value.save(_path)
+    #                 d[key] = _path
+    #             elif isinstance(value, DataLoader):
+    #                 _path = path + f"_{key}.dataloader"
+    #                 value.save(_path)
+    #                 d[key] = _path
+    #             elif isinstance(value, Optimizer):
+    #                 _path = path + f"_{key}.optimizer"
+    #                 value.save(_path)
+    #                 d[key] = _path
+    #             else:
+    #                 d[key] = value
+    #         pickle.dump(d, f)
+
+    # def load(self, path: str):
+    #     """ Load the guide from a file. """
+    #     with open(path, 'rb') as f:
+    #         data = pickle.load(f)
+    #         for key, value in data.items():
+    #             if key not in self.__dict__:
+    #                 warning_msg = f"Key '{key}' not found in the algorithm's attributes. Skipping loading for this key."
+    #                 print(warning_msg)  # or use logging.warning(warning_msg)
+    #                 continue
+
+    #             # key is in the algorithm's attributes
+    #             if isinstance(value, str):
+    #                 if value.endswith('.module'):
+    #                     attr = self.__dict__[key]
+    #                     assert isinstance(attr, Module), f"Expected {key} to be a Module, got {type(attr)}"
+    #                 elif value.endswith('.guide'):
+    #                     attr = self.__dict__[key]
+    #                     assert isinstance(attr, Guide), f"Expected {key} to be an Guide, got {type(attr)}"
+    #                 elif value.endswith('.dataloader'):
+    #                     attr = self.__dict__[key]
+    #                     assert isinstance(attr, DataLoader), f"Expected {key} to be a DataLoader, got {type(attr)}"
+    #                 elif value.endswith('.optimizer'):
+    #                     attr = self.__dict__[key]
+    #                     assert isinstance(attr, Optimizer), f"Expected {key} to be an Optimizer, got {type(attr)}"
+    #                 attr.load(value)
+    #             else:
+    #                 self.__dict__[key] = value

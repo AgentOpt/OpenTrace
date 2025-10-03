@@ -446,12 +446,15 @@ class OptoPrimeV2(OptoPrime):
             max_tokens=4096,
             log=True,
             initial_var_char_limit=100,
-            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
+            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
             **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
+
+        if optimizer_prompt_symbol_set is None:
+            optimizer_prompt_symbol_set = OptimizerPromptSymbolSet()
 
         self.truncate_expression = truncate_expression
 
@@ -731,40 +734,3 @@ class OptoPrimeV2(OptoPrime):
         if verbose:
             print("LLM response:\n", response)
         return response
-
-    def save(self, path: str):
-        """Save the optimizer state to a file."""
-        with open(path, 'wb') as f:
-            pickle.dump({
-                "truncate_expression": self.truncate_expression,
-                "use_json_object_format": self.use_json_object_format,
-                "ignore_extraction_error": self.ignore_extraction_error,
-                "objective": self.objective,
-                "initial_var_char_limit": self.initial_var_char_limit,
-                "optimizer_prompt_symbol_set": self.optimizer_prompt_symbol_set,
-                "include_example": self.include_example,
-                "max_tokens": self.max_tokens,
-                "memory": self.memory,
-                "default_prompt_symbols": self.default_prompt_symbols,
-                "prompt_symbols": self.prompt_symbols,
-                "representation_prompt": self.representation_prompt,
-                "output_format_prompt": self.output_format_prompt,
-            }, f)
-
-    def load(self, path: str):
-        """Load the optimizer state from a file."""
-        with open(path, 'rb') as f:
-            state = pickle.load(f)
-            self.truncate_expression = state["truncate_expression"]
-            self.use_json_object_format = state["use_json_object_format"]
-            self.ignore_extraction_error = state["ignore_extraction_error"]
-            self.objective = state["objective"]
-            self.initial_var_char_limit = state["initial_var_char_limit"]
-            self.optimizer_prompt_symbol_set = state["optimizer_prompt_symbol_set"]
-            self.include_example = state["include_example"]
-            self.max_tokens = state["max_tokens"]
-            self.memory = state["memory"]
-            self.default_prompt_symbols = state["default_prompt_symbols"]
-            self.prompt_symbols = state["prompt_symbols"]
-            self.representation_prompt = state["representation_prompt"]
-            self.output_format_prompt = state["output_format_prompt"]

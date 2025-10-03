@@ -1,10 +1,12 @@
 import os
+import ast
 import pickle
 import copy
+import sys
 import inspect
 import textwrap
 from opto.trace.containers import ParameterContainer, trainable_method
-from opto.trace.nodes import ParameterNode
+from opto.trace.nodes import ParameterNode, Node
 from opto.trace.projections import Projection, BlackCodeFormatter
 
 import functools
@@ -70,94 +72,50 @@ def model(cls):
     ...         return x * self.weight
     >>> 
     >>> m = MyModel()
-    >>> # m.parameters() returns all trainable parameters
-    >>> # m.export('model.py') saves current state as code
+    >>> m.parameters() returns all trainable parameters
+    >>> m.export('model.py') saves current state as code
     """
+    new_cls_name = f"{cls.__name__}Model"
+    bases = (cls, Model)
 
-    class ModelWrapper(cls, Module):
+    # for export to work, we save the references to the original cls
+    cls_name = str(cls.__name__)
+    temp_cls_members = inspect.getmembers(cls)
+    cls_members = []
+    cls_member_names = []
+    cls_name_to_source = {}
+    for name, member in temp_cls_members:
+        if name.startswith('__TRACE_RESERVED_'):
+            continue
+        if not name.startswith('__'):
+            cls_members.append((name, member))
+            cls_member_names.append(name)
+        elif name.startswith('__'):
+            try:
+                if hasattr(member, '__qualname__') and cls.__name__ in member.__qualname__:
+                    inspect.getsource(member)  # additionally we see if this works
+                    cls_members.append((name, member))
+                    cls_member_names.append(name)
+            except (AttributeError, TypeError):
+                continue
 
-        def export(self, filename, projections: Optional[List[Projection]] = None):
-            """Dump the model's source code to a file, including all methods and attributes.
-            Ignores dunder methods unless they were overridden by the user.
-            """
-            if projections is None:
-                projections = [BlackCodeFormatter()]
+    for name, member in cls_members:
+        if 'FunModule' in str(member):
+            # for these class method members, we need to access their content dynamically
+            continue
+        cls_name_to_source[name] = inspect.getsource(member)
 
-            trace_model_body = f"class {cls.__name__}:\n"
+    new_class = type(new_cls_name, bases, {})
 
-            # Get all members of the class
-            all_members = inspect.getmembers(self)
-            cls_members = inspect.getmembers(cls)
-            cls_member_names = [m[0] for m in cls_members]
+    cls.reserved_cls_name = cls_name
+    cls.reserved_cls_member_names = cls_member_names
+    cls.reserved_cls_name_to_source = cls_name_to_source
 
-            # Filter out dunder methods unless they were overridden
-            filtered_members = []
-            for name, member in all_members:
-                # Skip internal trace reserved members
-                if name.startswith('__TRACE_RESERVED_'):
-                    continue
+    new_class.__module__ = cls.__module__
 
-                if name not in cls_member_names:
-                    continue
-
-                # Include if it's not a dunder method or if it was overridden
-                if not name.startswith('__'):
-                    filtered_members.append((name, member))
-                elif name.startswith('__'):
-                    # For dunder methods, check if they were overridden
-                    try:
-                        print(cls.__name__, "<>", member.__qualname__)
-                        # MixedClass <> test_export_mixed_trainable.<locals>.MixedClass.__init__
-                        # if we wrap it inside a function, the qualname is different than when we dont
-                        if hasattr(member, '__qualname__') and cls.__name__ in member.__qualname__:
-                            filtered_members.append((name, member))
-                    except (AttributeError, TypeError):
-                        # Skip if we can't determine if it was overridden
-                        continue
-
-            # Process each member
-            for i, (name, member) in enumerate(filtered_members):
-                print(name, member)
-                if 'FunModule' in str(member):
-                    # Handle methods
-                    if member.parameter is not None:
-                        source = member.parameter.data
-                    else:
-                        source = member.info['source']
-                    source = textwrap.dedent(source)
-                    indented = textwrap.indent(source, "    ")
-                    trace_model_body += indented
-                else:  # this is a class method
-                    source = inspect.getsource(member)
-                    source = textwrap.dedent(source)
-                    indented = textwrap.indent(source, "    ")
-                    trace_model_body += indented
-
-                if i < len(all_members) - 1:
-                    trace_model_body += "\n"  # only one newline between members
-
-            # Replace node initializations with their current values
-            # WARNING: there might be corner cases that this static analysis does not cover
-            import re
-            node_pattern = r'self\.(\w+)\s*=\s*node\([^)]*\)'
-
-            def replace_node(match):
-                attr_name = match.group(1)
-                if hasattr(self, attr_name):
-                    attr = getattr(self, attr_name)
-                    if hasattr(attr, 'data'):
-                        return f"self.{attr_name} = {attr.data}"
-                return match.group(0)  # Return original if replacement not possible
-
-            trace_model_body = re.sub(node_pattern, replace_node, trace_model_body)
-
-            trace_model_body = functools.reduce(lambda body, proj: proj.project(body), projections, trace_model_body)
-
-            with open(filename, "w") as f:
-                f.write(trace_model_body)
-
-    return ModelWrapper
-
+    mod = sys.modules[cls.__module__]
+    setattr(mod, new_cls_name, new_class)
+    return new_class
 
 class Module(ParameterContainer):
     """Base class for all Trace models and wrapped functions.
@@ -310,3 +268,133 @@ class Module(ParameterContainer):
             else:  # if the parameter does not exist
                 assert k not in self.__dict__
                 setattr(self, k, v)
+
+
+class Model(Module):
+    """ Base class for all models. A model is a container of parameters with methods. """
+
+    def _replace_self_assignments_with_node_data(self, source: str) -> str:
+        """
+        Replace any `self.<attr> = ...` in `source` with `self.<attr> = <attr.data>`
+        when `getattr(self, '<attr>')` is a Node and has a `.data` attribute.
+
+        If `.data` is a string of Python code, it will be inserted as code.
+        Otherwise `.data` is inserted via repr().
+        """
+
+        class Rewriter(ast.NodeTransformer):
+            def __init__(self, outer_self):
+                self._self = outer_self
+
+            def visit_Assign(self, node: ast.Assign) -> ast.AST:
+                # Check if any target is `self.<name>`
+                replace_names = []
+                for t in node.targets:
+                    if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
+                        replace_names.append(t.attr)
+
+                # Nothing to do
+                if not replace_names:
+                    return self.generic_visit(node)
+
+                # Decide replacement expression ONCE per assignment
+                new_value = node.value
+                for name in replace_names:
+                    try:
+                        attr = getattr(self._self, name)
+                    except AttributeError:
+                        continue
+                    if isinstance(attr, Node) and hasattr(attr, "data"):
+                        data = attr.data
+                        # If it's a string, assume it's code; otherwise, literal via repr
+                        if isinstance(data, str):
+                            try:
+                                new_value = ast.parse(data, mode="eval").body
+                            except SyntaxError:
+                                # fall back to literal repr if not valid code
+                                new_value = ast.parse(repr(data), mode="eval").body
+                        else:
+                            new_value = ast.parse(repr(data), mode="eval").body
+                        # Once we have a replacement value, we can stop; it applies to the whole RHS
+                        break
+
+                node.value = new_value
+                return node
+
+        tree = ast.parse(source)
+        tree = Rewriter(self).visit(tree)
+        ast.fix_missing_locations(tree)
+        # Python 3.9+: ast.unparse available
+        return ast.unparse(tree)
+
+    def export(self, filename, projections: Optional[List[Projection]] = None):
+        if projections is None:
+            projections = [BlackCodeFormatter()]
+        cls = self.__class__
+        name = cls.reserved_cls_name
+        trace_model_body = f"class {name}:\n"
+        cls_members = inspect.getmembers(self) # cls.reserved_cls_members
+        cls_member_names = cls.reserved_cls_member_names
+
+        for i, (name, member) in enumerate(cls_members):
+            if name not in cls_member_names:
+                continue
+
+            if 'FunModule' in str(member):
+                if member.parameter is not None:
+                    source = member.parameter.data
+                else:
+                    source = member.info['source']
+                source = textwrap.dedent(source)
+                indented = textwrap.indent(source, "    ")
+                trace_model_body += indented
+            else:
+                source = cls.reserved_cls_name_to_source[name] # inspect.getsource(member)
+                source = textwrap.dedent(source)
+                indented = textwrap.indent(source, "    ")
+                trace_model_body += indented
+            if i < len(cls_members) - 1:
+                trace_model_body += "\n"
+
+        trace_model_body = self._replace_self_assignments_with_node_data(trace_model_body)
+
+        trace_model_body = functools.reduce(lambda body, proj: proj.project(body), projections, trace_model_body)
+        with open(filename, "w") as f:
+            f.write(trace_model_body)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        return result
+
+    def __getstate__(self):
+        parameters_dict = self.parameters_dict()
+        non_parameters_dict = {}
+        for k, v in self.__dict__.items():
+            if k not in parameters_dict:
+                if k.startswith('__TRACE_RESERVED_'):
+                    continue
+                non_parameters_dict[k] = v
+        return dict(parameters_dict=parameters_dict,
+                    non_parameters_dict=non_parameters_dict)
+
+    def __setstate__(self, state):
+        parameters_dict = state['parameters_dict']
+        non_parameters_dict = state['non_parameters_dict']
+        self._set(parameters_dict)
+        self.__dict__.update(non_parameters_dict)
+
+    def save(self, file_name: str):
+        directory = os.path.dirname(file_name)
+        if directory != "":
+            os.makedirs(directory, exist_ok=True)
+        with open(file_name, "wb") as f:
+            pickle.dump(copy.deepcopy(self.__getstate__()), f)
+
+    def load(self, file_name):
+        with open(file_name, "rb") as f:
+            loaded_data = pickle.load(f)
+            self.__setstate__(loaded_data)
