@@ -37,6 +37,7 @@ class OptimizerPromptSymbolSet:
     instruction_section_title = "# Instruction"
     code_section_title = "# Code"
     documentation_section_title = "# Documentation"
+    context_section_title = "# Context"
 
     node_tag = "node"  # nodes that are constants in the graph
     variable_tag = "variable"  # nodes that can be changed
@@ -141,6 +142,7 @@ class OptimizerPromptSymbolSet:
             "instruction": self.instruction_section_title,
             "code": self.code_section_title,
             "documentation": self.documentation_section_title,
+            "context": self.context_section_title
         }
 
 
@@ -242,6 +244,7 @@ class OptimizerPromptSymbolSet2(OptimizerPromptSymbolSet):
     instruction_section_title = "# Instruction"
     code_section_title = "# Code"
     documentation_section_title = "# Documentation"
+    context_section_title = "# Context"
 
     node_tag = "const"  # nodes that are constants in the graph
     variable_tag = "var"  # nodes that can be changed
@@ -264,6 +267,7 @@ class ProblemInstance:
     others: str
     outputs: str
     feedback: str
+    context: str
 
     optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
 
@@ -292,6 +296,9 @@ class ProblemInstance:
 
         # Feedback
         {feedback}
+        
+        # Context
+        {context}
         """
     )
 
@@ -305,6 +312,7 @@ class ProblemInstance:
             outputs=self.outputs,
             others=self.others,
             feedback=self.feedback,
+            context=self.context
         )
 
 
@@ -359,6 +367,7 @@ class OptoPrimeV2(OptoPrime):
         - {others_section_title}: the intermediate values created through the code execution.
         - {outputs_section_title}: the result of the code output.
         - {feedback_section_title}: the feedback about the code's execution result.
+        - {context_section_title}: the context information that might be useful to solve the problem.
 
         In `{variables_section_title}`, `{inputs_section_title}`, `{outputs_section_title}`, and `{others_section_title}`, the format is:
 
@@ -413,14 +422,19 @@ class OptoPrimeV2(OptoPrime):
 
     example_prompt = dedent(
         """
-
         Here are some feasible but not optimal solutions for the current problem instance. Consider this as a hint to help you understand the problem better.
 
         ================================
-
         {examples}
-
         ================================
+        """
+    )
+
+    context_prompt = dedent(
+        """
+        Here is some additional **context** to solving this problem:
+        
+        {context}
         """
     )
 
@@ -476,6 +490,7 @@ class OptoPrimeV2(OptoPrime):
                                                         )
         self.example_problem_summary.variables = {'a': (5, "a > 0")}
         self.example_problem_summary.inputs = {'b': (1, None), 'c': (5, None)}
+        self.example_problem_summary.context = ""
 
         self.example_problem = self.problem_instance(self.example_problem_summary)
         self.example_response = self.optimizer_prompt_symbol_set.example_output(
@@ -656,6 +671,7 @@ class OptoPrimeV2(OptoPrime):
                                              constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag) if self.optimizer_prompt_symbol_set.others_section_title not in mask else ""
             ),
             feedback=summary.user_feedback if self.optimizer_prompt_symbol_set.feedback_section_title not in mask else "",
+            context=summary.context if self.optimizer_prompt_symbol_set.context_section_title not in mask else "",
             optimizer_prompt_symbol_set=self.optimizer_prompt_symbol_set
         )
 
