@@ -156,7 +156,7 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
 
     expect_json = True
 
-    custom_output_format_instruction = """
+    custom_output_format_instruction = dedent("""
     {{
         "reasoning": <Your reasoning>,
         "suggestion": {{
@@ -164,7 +164,7 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
             <variable_2>: <suggested_value_2>,
         }}
     }}
-    """
+    """)
 
     def example_output(self, reasoning, variables):
         """

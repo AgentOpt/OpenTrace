@@ -1,7 +1,7 @@
 import json
 from textwrap import dedent
 from dataclasses import dataclass, asdict
-from typing import Dict
+from typing import Dict, Optional
 
 from opto.optimizers.optoprime_v2 import OptoPrimeV2, OptimizerPromptSymbolSet
 
@@ -15,8 +15,8 @@ class OPROPromptSymbolSet(OptimizerPromptSymbolSet):
 
     Attributes
     ----------
-    problem_context_section_title : str
-        Title for the problem context section in prompts.
+    instruction_section_title : str
+        Title for the instruction section in prompts.
     variable_section_title : str
         Title for the variable/solution section in prompts.
     feedback_section_title : str
@@ -49,9 +49,10 @@ class OPROPromptSymbolSet(OptimizerPromptSymbolSet):
     more focused set of symbols specifically for OPRO optimization.
     """
 
-    problem_context_section_title = "# Problem Context"
+    instruction_section_title = "# Instruction"
     variable_section_title = "# Solution"
     feedback_section_title = "# Feedback"
+    context_section_title = "# Context"
 
     node_tag = "node"  # nodes that are constants in the graph
     variable_tag = "solution"  # nodes that can be changed
@@ -72,6 +73,7 @@ class OPROPromptSymbolSet(OptimizerPromptSymbolSet):
             "variables": self.variables_section_title,
             "feedback": self.feedback_section_title,
             "instruction": self.instruction_section_title,
+            "context": self.context_section_title
         }
 
 @dataclass
@@ -89,6 +91,9 @@ class ProblemInstance:
         The current proposed solution that can be modified.
     feedback : str
         Feedback about the current solution.
+    context: str
+        Optional context information that might be useful to solve the problem.
+
     optimizer_prompt_symbol_set : OPROPromptSymbolSet
         The symbol set used for formatting the problem.
     problem_template : str
@@ -107,12 +112,13 @@ class ProblemInstance:
     instruction: str
     variables: str
     feedback: str
+    context: Optional[str]
 
     optimizer_prompt_symbol_set: OPROPromptSymbolSet
 
     problem_template = dedent(
         """
-        # Problem Context
+        # Instruction
         {instruction}
 
         # Solution
@@ -124,11 +130,23 @@ class ProblemInstance:
     )
 
     def __repr__(self) -> str:
-        return self.problem_template.format(
+        optimization_query = self.problem_template.format(
             instruction=self.instruction,
             variables=self.variables,
             feedback=self.feedback,
         )
+
+        context_section = dedent("""
+
+               # Context
+               {context}
+               """)
+
+        if self.context is not None and self.context.strip() != "":
+            context_section.format(context=self.context)
+            optimization_query += context_section
+
+        return optimization_query
 
 class OPROv2(OptoPrimeV2):
     """OPRO (Optimization by PROmpting) optimizer version 2.
@@ -197,6 +215,7 @@ class OPROv2(OptoPrimeV2):
         - {instruction_section_title}: the instruction which describes the things you need to do or the question you should answer.
         - {variables_section_title}: the proposed solution that you can change/tweak (trainable).
         - {feedback_section_title}: the feedback about the solution.
+        - {context_section_title}: the context information that might be useful to solve the problem.
 
         If `data_type` is `code`, it means `{value_tag}` is the source code of a python code, which may include docstring and definitions.
         """
@@ -229,6 +248,14 @@ class OPROv2(OptoPrimeV2):
         """
     )
 
+    context_prompt = dedent(
+        """
+        Here is some additional **context** to solving this problem:
+
+        {context}
+        """
+    )
+
     final_prompt = dedent(
         """
         What are your revised solutions on {names}?
@@ -244,6 +271,7 @@ class OPROv2(OptoPrimeV2):
                  optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
                  include_example=False, # default example in OptoPrimeV2 does not work in OPRO
                  memory_size=5,
+                 problem_context: Optional[str] = None,
                  **kwargs):
         """Initialize the OPROv2 optimizer.
 
@@ -264,6 +292,7 @@ class OPROv2(OptoPrimeV2):
         optimizer_prompt_symbol_set = optimizer_prompt_symbol_set or OPROPromptSymbolSet()
         super().__init__(*args, optimizer_prompt_symbol_set=optimizer_prompt_symbol_set,
                          include_example=include_example, memory_size=memory_size,
+                         problem_context=problem_context,
                          **kwargs)
 
     def problem_instance(self, summary, mask=None):
@@ -328,6 +357,7 @@ class OPROv2(OptoPrimeV2):
             variables_section_title=self.optimizer_prompt_symbol_set.variables_section_title.replace(" ", ""),
             feedback_section_title=self.optimizer_prompt_symbol_set.feedback_section_title.replace(" ", ""),
             instruction_section_title=self.optimizer_prompt_symbol_set.instruction_section_title.replace(" ", ""),
+            context_section_title=self.optimizer_prompt_symbol_set.context_section_title.replace(" ", "")
         )
         self.output_format_prompt = self.output_format_prompt_template.format(
             output_format=self.optimizer_prompt_symbol_set.output_format,
@@ -336,4 +366,5 @@ class OPROv2(OptoPrimeV2):
             instruction_section_title=self.optimizer_prompt_symbol_set.instruction_section_title.replace(" ", ""),
             feedback_section_title=self.optimizer_prompt_symbol_set.feedback_section_title.replace(" ", ""),
             variables_section_title=self.optimizer_prompt_symbol_set.variables_section_title.replace(" ", ""),
+            context_section_title=self.optimizer_prompt_symbol_set.context_section_title.replace(" ", "")
         )
