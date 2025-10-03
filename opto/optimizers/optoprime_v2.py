@@ -267,7 +267,7 @@ class ProblemInstance:
     others: str
     outputs: str
     feedback: str
-    context: str
+    context: Optional[str]
 
     optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
 
@@ -296,14 +296,11 @@ class ProblemInstance:
 
         # Feedback
         {feedback}
-        
-        # Context
-        {context}
         """
     )
 
     def __repr__(self) -> str:
-        return self.problem_template.format(
+        optimization_query = self.problem_template.format(
             instruction=self.instruction,
             code=self.code,
             documentation=self.documentation,
@@ -314,6 +311,18 @@ class ProblemInstance:
             feedback=self.feedback,
             context=self.context
         )
+
+        context_section = dedent("""
+        
+        # Context
+        {context}
+        """)
+
+        if self.context is not None and self.context.strip() != "":
+            context_section.format(context=self.context)
+            optimization_query += context_section
+
+        return optimization_query
 
 
 @dataclass
