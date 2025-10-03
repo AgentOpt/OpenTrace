@@ -590,7 +590,7 @@ def set_update(x: Any, y: Any):
 
 
 @bundle(catch_execution_error=False)
-def call_llm(llm, system_prompt: str, *user_prompts: List[str], **kwargs) -> str:
+def call_llm(llm, system_prompt: str, *user_prompts, **kwargs) -> str:
     """Call the LLM model.
 
     Args:
