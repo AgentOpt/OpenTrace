@@ -67,6 +67,6 @@ jobs:
       run: pytest tests/unit_tests/
 
     # 9) Run basic tests for each optimizer (some will fail due to the small LLM model chosen for free GitHub CI)
-    - name: Run optimizers test suite
-      run: pytest tests/llm_optimizers_tests/test_optimizer.py || true 
-      continue-on-error: true
+#    - name: Run optimizers test suite
+#      run: pytest tests/llm_optimizers_tests/test_optimizer.py || true
+#      continue-on-error: true
