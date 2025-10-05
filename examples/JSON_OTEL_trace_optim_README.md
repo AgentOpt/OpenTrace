@@ -1,331 +1,504 @@
-# OTEL + Trace + OptoPrimeV2 Demo
+# LangGraph + OTEL Trace Optimization Demo
 
-**End-to-end optimization of research agent prompts using OpenTelemetry tracing, Trace framework, and OptoPrimeV2**
+**End-to-end optimization of LangGraph research agent prompts using OpenTelemetry tracing and OptoPrime**
 
 ## Quick Start
 
 ```bash
 # Install dependencies
-pip install wikipedia requests opentelemetry-sdk opentelemetry-api
+pip install wikipedia requests opentelemetry-sdk opentelemetry-api langgraph
 
-# Set LLM API key (use gpt-5-nano for cost-effective testing)
-# Run demo (10 optimization iterations by default)
-python examples/otel_trace_optoprime_demo.py
+# Set LLM API key
+export OPENAI_API_KEY=your_key_here  # or configure OAI_CONFIG_LIST
+
+# Run demo (3 optimization iterations by default)
+python examples/JSON_OTEL_trace_optim_demo_LANGGRAPH.py
 ```
 
 ## Overview
 
-This demo implements a **mini research graph** (`planner → executor → {Wikipedia, Wikidata} → synthesizer`) that demonstrates:
-- **Trainable prompts** via OTEL span attributes
-- **10 iterative optimization rounds** with progressive improvement tracking
-- **5-metric quality assessment** (relevance, groundedness, adherence, efficiency, consistency)
-- **Per-agent performance tracking** (planner, executor, retrieval, synthesizer, judge)
-- **Mode-B optimization** using OptoPrimeV2 with history-aware prompt generation
+This demo implements a **LangGraph-based research agent** using proper StateGraph architecture with Command-based flow control. It demonstrates:
+- **LangGraph StateGraph** with proper node registration and compilation
+- **Dual retrieval agents**: Wikipedia (web_researcher) + Wikidata (wikidata_researcher)
+- **OTEL tracing** with trainable prompt parameters
+- **Iterative optimization** using OptoPrime with best-iteration restoration
+- **Colored diff visualization** showing prompt evolution
+- **Sequential span linking** for proper trace graph connectivity
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Baseline  │────>│ Optimization │────>│   Results   │
-│   Run       │     │   Loop (10x) │     │   & Table   │
-└─────────────┘     └──────────────┘     └─────────────┘
-      │                     │                     │
-      v                     v                     v
- Capture OTEL          OTLP → TGJ           Display all
- Trainable Params      Backprop             metrics in
- Evaluate (5 metrics)  OptoPrimeV2          compact table
+User Query
+    ↓
+┌───────────────────────────────────────────────────────────────┐
+│  LANGGRAPH STATGRAPH                                           │
+│                                                                │
+│  START → planner → executor ⇄ web_researcher                  │
+│                        ↓   ⇄ wikidata_researcher              │
+│                        ↓                                       │
+│                   synthesizer → evaluator → END               │
+└───────────────────────────────────────────────────────────────┘
+    ↓ OTEL Spans
+    ↓ Extract trainable params
+    ↓ Convert OTLP → TraceJSON → Trace Nodes
+    ↓ Backpropagation feedback
+    ↓ OptoPrime optimization
+    ↓ Restore best iteration
+    ↓ Colored diffs (original vs optimized)
 ```
 
 **Flow:**
-1. **Baseline**: Run queries with initial prompts, capture OTEL traces, evaluate
-2. **Iterative Loop** (×10): Convert traces → Backprop feedback → Generate improved prompts → Validate
-3. **Results**: Display progression, final prompts, comprehensive metrics table
+1. **Baseline**: Run test queries with default prompts, capture OTEL traces
+2. **Optimization Loop** (×N): 
+   - Run queries with current prompts
+   - Track score and save if best
+   - Convert OTLP → TraceJSON → Trace nodes
+   - Backpropagate feedback to parameters
+   - Generate improved prompts via OptoPrime
+3. **Restoration**: Restore prompts from best-scoring iteration
+4. **Results**: Show progression, validate best score, display colored diffs
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Iterative Optimization** | 10 configurable rounds showing progressive improvement |
-| **Multi-Metric Tracking** | 5 quality metrics + LLM calls + execution time |
-| **Per-Agent Breakdown** | Track calls to planner, executor, retrieval, synthesizer, judge |
-| **Prompt Evolution** | Display COMPLETE initial vs final prompts (full text) |
-| **Comprehensive Table** | All metrics in one view with averages across queries |
-| **Per-Query Breakdown** | Individual query scores across all iterations |
-| **Per-Prompt Metrics** | Separate quality tracking for planner vs executor prompts |
+| **LangGraph StateGraph** | Proper Command-based flow control with node registration |
+| **Dual Retrieval** | Wikipedia (general knowledge) + Wikidata (structured entity data) |
+| **OTEL Tracing** | OpenTelemetry spans with trainable parameter attributes |
+| **OptoPrime** | Gradient-free optimization with memory |
+| **Best Iteration Tracking** | Automatically saves and restores best-performing prompts |
+| **Colored Diffs** | Visual comparison of original vs optimized prompts |
+| **Sequential Linking** | Proper span parent-child relationships for graph connectivity |
+| **Parameter Mapping** | Handles numeric indices → semantic names (0→planner_prompt, 1→executor_prompt) |
+| **Configurable** | Adjustable iterations, test queries, and optimizable components |
 | **Free APIs** | Wikipedia & Wikidata (only LLM requires credentials) |
-| **History-Aware** | OptoPrimeV2 uses memory for better candidates |
+
+## Key Components
+
+### Agents (LangGraph Nodes)
+1. **planner_node**: Analyzes query, creates multi-step execution plan
+2. **executor_node**: Routes to appropriate researcher or synthesizer
+3. **web_researcher_node**: Searches Wikipedia for general knowledge
+4. **wikidata_researcher_node**: Queries Wikidata for entity facts/IDs
+5. **synthesizer_node**: Combines contexts into final answer
+6. **evaluator_node**: Scores answer quality (0-1 scale)
+
+### Optimizable Parameters
+- **planner_prompt**: Instructions for the planning agent
+- **executor_prompt**: Instructions for the executor agent
+- Configured via `OPTIMIZABLE = ["planner", "executor", ""]`
+
+### Test Queries (Default)
+1. "Summarize the causes and key events of the French Revolution."
+2. "Give 3 factual relationships about Tesla, Inc. with entity IDs."
+3. "What is the Wikidata ID for CRISPR and list 2 related entities?"
 
 ## Sample Output
 
-### Baseline
+### Baseline Run
 ```
-Query 1: score=0.683 | LLM calls=4 | time=2.34s
-         Relevance=0.70 | Grounded=0.68 | Adherence=0.67
-         Agent calls: Plan=1 Exec=2 Retr=2 Synth=1 Judge=1
+================================================================================
+                                   BASELINE                                    
+================================================================================
+
+Baseline: 0.456
+  Q1: 0.400 | {'score': 0.4}
+  Q2: 0.500 | {'score': 0.5}
+  Q3: 0.467 | {'score': 0.467}
+```
+
+### Optimization Iterations
+```
+================================================================================
+                          Iteration 1/3                           
+================================================================================
+
+Current: 0.778
+
+   🌟 NEW BEST SCORE! (iteration 1)
+
+📊 OPTIMIZATION:
+================================================================================
+
+🔍 Run 1: score=0.800, metrics={'score': 0.8}
+   Reachability: param.planner_prompt=✅, param.executor_prompt=✅
+
+🔍 DEBUG: Parameter mapping:
+   param.planner_prompt:0 -> idx:0 -> semantic:planner_prompt
+   param.executor_prompt:1 -> idx:1 -> semantic:executor_prompt
+
+🔍 DEBUG: Updates dict keys: ['planner_prompt', 'executor_prompt']
+
+📝 DIFF for planner_prompt:
+================================================================================
+--- old
++++ new
+@@ -1,5 +1,5 @@
+-You are the Planner. Analyze the query and create...
++You are the Strategic Planner. Carefully analyze the query...
+================================================================================
+   ✅ Updated current_planner_tmpl
+   ✅ Updated current_executor_tmpl
+```
+
+### Best Iteration Restoration
+```
+================================================================================
+                           RESTORING BEST PARAMETERS                            
+================================================================================
+
+🏆 Best score: 0.778 from iteration 1
+   Restoring templates from iteration 1...
+
+🔄 Validating best parameters...
+   Validation score: 0.578
+   ⚠️  Warning: Validation score differs from recorded best by 0.200
 ```
 
 ### Final Results
 ```
-📈 Score Progression:
-   Baseline:      0.700
-   Iteration 1:   0.783  (Δ +0.083)
-   Iteration 2:   0.818  (Δ +0.035)
-   ...
-   Iteration 10:  0.871  (Δ +0.002)
+================================================================================
+                                    RESULTS                                     
+================================================================================
 
-🎯 Overall: +0.171 (+24.4%) improvement
+📈 Progression:
+   Baseline    : 0.456 
+   Iter 1      : 0.778 (Δ +0.322) 🌟 BEST
+   Iter 2      : 0.661 (Δ -0.117)
+   Iter 3      : 0.672 (Δ +0.011)
+
+🎯 Overall: 0.456 → 0.778 (+0.322, +70.7%)
+   Best iteration: 1
+   ✅ SUCCESS!
 ```
 
-### Comprehensive Metrics Table
-
-The demo outputs all metrics in a single table:
-
+### Colored Diffs (Final Optimized vs Original)
 ```
-====================================================================================================
-Iter    Score  Δ Score   LLM  Time(s)   Plan  Exec  Retr  Synth  Judge
-----------------------------------------------------------------------------------------------------
-Base    0.700             4.0     2.31    1.0   2.0   2.0    1.0    1.0
-1       0.783   +0.083    4.0     2.28    1.0   2.0   2.0    1.0    1.0
-2       0.818   +0.035    4.0     2.25    1.0   2.0   2.0    1.0    1.0
-3       0.835   +0.017    4.0     2.23    1.0   2.0   2.0    1.0    1.0
-4       0.846   +0.011    4.0     2.22    1.0   2.0   2.0    1.0    1.0
-5       0.854   +0.008    4.0     2.21    1.0   2.0   2.0    1.0    1.0
-6       0.859   +0.005    4.0     2.20    1.0   2.0   2.0    1.0    1.0
-7       0.863   +0.004    4.0     2.19    1.0   2.0   2.0    1.0    1.0
-8       0.867   +0.004    4.0     2.18    1.0   2.0   2.0    1.0    1.0
-9       0.869   +0.002    4.0     2.18    1.0   2.0   2.0    1.0    1.0
-10      0.871   +0.002    4.0     2.17    1.0   2.0   2.0    1.0    1.0
-====================================================================================================
+================================================================================
+                     FINAL OPTIMIZED PROMPTS (vs Original)                      
+================================================================================
 
-💡 Note: Plan/Exec/Retr/Synth/Judge columns show similar values across iterations because
-   the graph structure (which agents are called) remains constant. Only the prompt quality
-   improves through optimization, leading to better scores without changing the call pattern.
-```
+────────────────────────────────────────────────────────────────────────────────
+🔵 PLANNER PROMPT (Final Optimized vs Original)
+────────────────────────────────────────────────────────────────────────────────
 
-**Columns:**
-- **Iter**: Iteration number (Base = baseline)
-- **Score**: Average quality score (0-1) across 5 metrics (averaged across all queries)
-- **Δ Score**: Change from previous iteration
-- **LLM**: Total LLM API calls per query
-- **Time(s)**: Average execution time per query
-- **Plan/Exec/Retr/Synth/Judge**: Average calls per agent type (constant as graph structure doesn't change)
-
-### Per-Query Score Breakdown
-
-The demo also displays individual query progression:
-
-```
-📊 PER-QUERY SCORE BREAKDOWN
-====================================================================================================
-
-🔍 Query 1: Summarize the causes and key events of the French Revolu...
-Iter       Score        Δ  Relevance  Grounded  Adherence
---------------------------------------------------------------------------------
-Baseline    0.683              0.70      0.68      0.67
-Iter 1      0.765    +0.082     0.78      0.76      0.75
-Iter 2      0.802    +0.037     0.82      0.80      0.79
-...
-Iter 10     0.864    +0.002     0.88      0.86      0.85
+📝 DIFF for planner_prompt:
+================================================================================
+--- old
++++ new
+@@ -1,10 +1,12 @@
+-You are the Planner. Analyze the user query and create a step-by-step plan.
++You are the Strategic Planner. Thoroughly analyze the user query and create
++a comprehensive, step-by-step execution plan with clear goals.
+ 
+ Available agents:
+   • web_researcher - General knowledge from Wikipedia
+   • wikidata_researcher - Entity facts, IDs, and structured relationships
+ 
+-Return JSON: {{"1": {{"agent":"...", "action":"...", "goal":"..."}}...}}
++Return JSON with numbered steps:
++{{"1": {{"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"..."}}, "2": {{"agent":"synthesizer", "action":"...", "goal":"..."}}}}
+================================================================================
 ```
 
-This shows how each query improves independently across iterations, with 3 of the 5 quality metrics displayed.
+## Configuration Options
 
-### Per-Prompt Quality Metrics
-
-The demo tracks individual prompt contributions:
-
-```
-📊 PER-PROMPT QUALITY METRICS
-====================================================================================================
-
-This shows how each trainable prompt contributes to overall quality:
-  • Planner quality → measured by 'plan_adherence' metric
-  • Executor quality → measured by 'execution_efficiency' metric
-  • Overall quality → average of all 5 metrics
-
-Iter       Overall   Planner   Executor   Planner Δ   Executor Δ
-----------------------------------------------------------------------------------------------------
-Baseline     0.700     0.670      0.650
-Iter 1       0.783     0.750      0.720       +0.080       +0.070
-...
+### Iterations
+Edit `NUM_ITERATIONS` at the top of the file:
+```python
+NUM_ITERATIONS = 3  # Default
+# NUM_ITERATIONS = 5  # More refinement
+# NUM_ITERATIONS = 1  # Quick test
 ```
 
-This answers "which prompts are being optimized and how much do they contribute?"
+### Test Queries
+Edit `TEST_QUERIES` list:
+```python
+TEST_QUERIES = [
+    "Your custom query 1",
+    "Your custom query 2",
+    # Add more queries...
+]
+```
+
+### Optimizable Components
+Edit `OPTIMIZABLE` list to control which prompts are optimized:
+```python
+OPTIMIZABLE = ["planner", "executor", ""]  # Both prompts
+# OPTIMIZABLE = ["planner"]                # Only planner
+# OPTIMIZABLE = ["executor"]               # Only executor
+# OPTIMIZABLE = []                         # No optimization (baseline only)
+```
+
+### Debug Output
+The demo includes debug output showing:
+- Parameter name mapping (numeric indices → semantic names)
+- Updates dict keys (which prompts are being updated)
+- Template update confirmations
+
+To disable, remove or comment out the debug print statements in `optimize_iteration()` and the main loop.
 
 ## Key Metrics Tracked
 
-### Quality Metrics (per query, 0-1 scale)
-1. **Answer Relevance**: How well the answer addresses the query
-2. **Groundedness**: Factual accuracy based on retrieved context
-3. **Plan Adherence**: How well the execution followed the plan
-4. **Execution Efficiency**: Optimal use of agents and steps
-5. **Logical Consistency**: Internal coherence of the answer
+### Quality Metrics
+- **Score**: Overall evaluation score (0-1 scale) from evaluator_node
+- Stored per query, averaged across queries per iteration
 
-### Efficiency Metrics
-- **LLM Calls**: Total API calls (planner + executors + synthesizer + judge)
-- **Execution Time**: End-to-end latency per query
-- **Agent Breakdown**: Calls per agent type for optimization analysis
+### Output Data
+- **Final Answer**: Generated response from synthesizer
+- **Contexts**: Retrieved information from web/wikidata researchers
+- **Feedback**: Evaluation feedback text
+- **Plan**: Multi-step execution plan from planner
+- **Metrics**: Dictionary of evaluation metrics
 
 ## Files
 
 ```
 examples/
-├── otel_trace_optoprime_demo.py       # Main demo (10 iterations)
-├── README_OTEL_DEMO.md                # This file
-├── DEMO_OUTPUT_SAMPLE.txt             # Sample full output
-└── __init__.py                        # Module marker
-
-tests/
-└── test_otel_trace_optoprime_demo.py  # 20 comprehensive tests
+├── JSON_OTEL_trace_optim_demo_LANGGRAPH.py  # Main demo (LangGraph + OTEL)
+├── JSON_OTEL_trace_optim_README.md          # This file
+└── __init__.py                               # Module marker
 ```
 
 ## Running the Demo
 
 ### Standard Run
 ```bash
-python examples/otel_trace_optoprime_demo.py
+python examples/JSON_OTEL_trace_optim_demo_LANGGRAPH.py
 ```
 
 ### As Python Module
 ```bash
-python -m examples.otel_trace_optoprime_demo
+python -m examples.JSON_OTEL_trace_optim_demo_LANGGRAPH
 ```
 
-### Customize Iterations
-Edit `NUM_OPTIMIZATION_ITERATIONS` in `main()`:
-```python
-NUM_OPTIMIZATION_ITERATIONS = 5  # Fewer iterations
-# or
-NUM_OPTIMIZATION_ITERATIONS = 20  # More refinement
-```
-
-## Testing
-
-```bash
-# Run all 20 tests
-python -m pytest tests/test_otel_trace_optoprime_demo.py -v
-
-# Test specific component
-python -m pytest tests/test_otel_trace_optoprime_demo.py::TestOTLPToTraceConversion -v
-
-# With coverage
-python -m pytest tests/test_otel_trace_optoprime_demo.py --cov=examples.otel_trace_optoprime_demo
-```
-
-**Test Coverage:**
-- OTEL infrastructure (2 tests)
-- OTLP→TGJ→Trace conversion (3 tests)
-- Wikipedia/Wikidata tools (3 tests)
-- LLM wrappers (2 tests)
-- Prompt generation (2 tests)
-- Graph execution (1 test)
-- Optimization pipeline (2 tests)
-- Integration (1 test)
-- Edge cases (2 tests)
-- Metrics (2 tests)
-
-✅ **All 20 tests passing**
+### Expected Runtime
+- **3 queries × 4 iterations** (baseline + 3 optimization rounds)
+- **~2-5 seconds per query** (depends on LLM latency)
+- **Total: ~2-5 minutes**
 
 ## Technical Details
 
 ### Data Classes
 
-**RunOutput**
+**State** (LangGraph State)
 ```python
 @dataclass
-class RunOutput:
-    final_answer: str
+class State:
+    user_query: str
+    plan: Dict[str, Dict[str, Any]]
+    current_step: int
+    agent_query: str
     contexts: List[str]
-    otlp_payload: Dict[str, Any]
-    feedback_text: str
-    score: float                        # Average of 5 metrics
-    llm_calls: int                      # Total LLM API calls
-    execution_time: float               # Seconds
-    agent_metrics: Optional[AgentMetrics]  # Per-agent breakdown
+    final_answer: str
+    planner_template: str      # Current planner prompt
+    executor_template: str     # Current executor prompt
+    prev_span_id: Optional[str]  # For sequential span linking
 ```
 
-**AgentMetrics**
+**RunResult**
 ```python
 @dataclass
-class AgentMetrics:
-    planner_calls: int
-    executor_calls: int
-    retrieval_calls: int       # Wikipedia + Wikidata
-    synthesizer_calls: int
-    judge_calls: int
+class RunResult:
+    answer: str
+    otlp: Dict[str, Any]       # OTLP trace payload
+    feedback: str               # Evaluation feedback
+    score: float                # Evaluation score (0-1)
+    metrics: Dict[str, float]   # Additional metrics
+    plan: Dict[str, Any]        # Execution plan
 ```
 
 ### Key Functions
 
-- `run_graph_once()`: Execute research graph with tracing
-- `ingest_runs_as_trace()`: Convert OTLP → TGJ → Trace nodes
-- `mode_b_optimize()`: OptoPrimeV2 with history-aware generation
-- `print_metrics_table()`: Display comprehensive results table
+- `build_graph()`: Constructs LangGraph StateGraph with all nodes
+- `run_graph_with_otel()`: Executes graph and captures OTEL traces
+- `optimize_iteration()`: Converts OTLP → TraceJSON → Trace nodes, runs OptoPrime
+- `show_prompt_diff()`: Displays colored unified diff between prompts
+- `flush_otlp()`: Extracts OTLP payload from InMemorySpanExporter
 
 ### OTEL Span Attributes
 
 Trainable parameters are captured as:
 ```python
 span.set_attribute("param.planner_prompt", prompt_text)
-span.set_attribute("param.planner_prompt.trainable", "True")
+span.set_attribute("param.planner_prompt.trainable", "planner" in OPTIMIZABLE)
 ```
 
-The adapter extracts these into ParameterNodes for optimization.
+The opto adapter extracts these as ParameterNodes for optimization.
+
+### Parameter Name Mapping
+
+**Challenge**: Optimizer parameters have numeric indices (0, 1, 2...) but need semantic names (planner_prompt, executor_prompt).
+
+**Solution**: Mapping dict in `optimize_iteration()`:
+```python
+PARAM_INDEX_MAP = {
+    "0": "planner_prompt",
+    "1": "executor_prompt"
+}
+```
+
+This ensures `updates` dict has semantic keys for proper template updates.
 
 ## Optimization Strategy
 
-**Mode-B (History-Aware):**
-1. Generate 2 prompt candidates using OptoPrimeV2 memory
-2. Judge candidates against aggregated feedback (no re-execution)
-3. Select best via Pareto scoring across 5 metrics
-4. Validate on query batch
-5. Repeat for N iterations
+**OptoPrime with Best Iteration Tracking:**
+1. **Baseline**: Run with default prompts, establish baseline score
+2. **Iterative Loop**:
+   - Run queries with current prompts
+   - Calculate iteration score (average across queries)
+   - **If score improves**: Save current prompts as best
+   - Convert OTLP → TraceJSON → Trace nodes
+   - Backpropagate feedback to parameters
+   - Generate improved prompts via OptoPrime.step()
+   - Update current templates for next iteration
+3. **Restoration**: Restore templates from best-scoring iteration
+4. **Validation**: Re-run queries to validate best score
+5. **Display**: Show progression and colored diffs
 
 **Why it works:**
-- History prevents repeating failed attempts
-- Rich feedback (5 metrics + reasons) guides improvements
-- Pareto scoring balances trade-offs
-- Validation ensures real improvement
+- Tracks best across all iterations (handles score fluctuations)
+- Restores optimal prompts even if later iterations degrade
+- Validation catches non-reproducible scores
+- Colored diffs show actual prompt improvements
 
 ## Troubleshooting
 
-**Import Error**: Ensure you're in the repo root
+### Import Error
+Ensure you're in the repo root:
 ```bash
 cd /path/to/Trace
-python examples/otel_trace_optoprime_demo.py
+python examples/JSON_OTEL_trace_optim_demo_LANGGRAPH.py
 ```
 
-**LLM API Error**: Check credentials
+### LLM API Error
+Check credentials:
 ```bash
 echo $OPENAI_API_KEY  # Should print your key
+# OR
+cat OAI_CONFIG_LIST   # Should show valid config
 ```
 
-**Slow Execution**: Reduce iterations or queries
-```python
-NUM_OPTIMIZATION_ITERATIONS = 3
-subjects = subjects[:1]  # Only 1 query
+Configure if needed:
+```bash
+export OPENAI_API_KEY=sk-...
 ```
+
+### Missing Dependencies
+```bash
+pip install wikipedia requests opentelemetry-sdk opentelemetry-api langgraph
+```
+
+### Slow Execution
+Reduce iterations or queries:
+```python
+NUM_ITERATIONS = 1  # Quick test
+TEST_QUERIES = TEST_QUERIES[:1]  # Single query
+```
+
+### No Optimization Occurring
+Check `OPTIMIZABLE` configuration:
+```python
+OPTIMIZABLE = ["planner", "executor", ""]  # Should include agent names
+```
+
+### Validation Score Differs from Best
+This is **normal** and expected due to:
+- LLM non-determinism (even with same prompts)
+- Different test queries in validation
+- Small sample size (3 queries)
+- Score fluctuation typically <0.1
+
+**Warning threshold**: 0.05 (shown if diff > 5%)
+
+### "NO CHANGE" in Final Diffs
+This indicates prompts weren't actually updated. Check debug output:
+```
+🔍 DEBUG: Parameter mapping:  # Shows param names
+🔍 DEBUG: Updates dict keys:  # Shows which keys in updates
+   ✅ Updated current_planner_tmpl  # Confirms updates
+```
+
+If debug shows updates but diff shows no change, the mapping might be wrong.
+
+## Known Limitations
+
+### Score Variability
+- LLM responses are non-deterministic
+- Scores can fluctuate ±0.1-0.2 between runs
+- Best iteration tracking mitigates this
+- Validation score may differ from recorded best score
+
+### Evaluation Simplicity
+- Uses single overall score (not 5 detailed metrics like some demos)
+- Evaluator prompt is not optimized
+- No ground truth comparison
+- Score interpretation depends on evaluator LLM quality
+
+### Graph Structure
+- Fixed graph topology (can't optimize which agents to call)
+- All queries follow same agent sequence
+- No conditional branching based on query type
+
+### Optimization
+- Fresh optimizer per iteration (no cross-iteration memory)
+- No automatic hyperparameter tuning
+- Requires manual configuration of iterations/queries
+- No early stopping on convergence
+
+### Parameter Order Dependency
+- Mapping assumes fixed order: 0=planner, 1=executor
+- Adding more trainable parameters requires updating PARAM_INDEX_MAP
+- No automatic parameter discovery
+
+### Retrieval
+- Wikipedia: Simple search (no advanced ranking)
+- Wikidata: Basic entity search (no SPARQL queries)
+- No caching (repeated queries re-fetch)
+- Network errors cause iteration failures
 
 ## Performance Expectations
 
-**Baseline** (3 queries, no optimization):
-- Score: ~0.65-0.75
-- Time: ~2.3s per query
-- LLM calls: 4 per query
+**Baseline** (3 queries, default prompts):
+- Score: ~0.40-0.60 (depends on LLM and queries)
+- Time: ~2-4s per query
+- Varies significantly based on query complexity
 
-**After 10 iterations**:
-- Score: ~0.85-0.90 (+15-25% improvement)
-- Time: ~2.2s per query (slight speedup)
-- LLM calls: 4 per query (consistent)
+**After 3 iterations**:
+- Score: ~0.60-0.80 (+20-40% improvement typical)
+- Time: Similar or slightly faster
+- Best iteration usually 1-2 (not always the last)
 
-**Total runtime**: ~5-10 minutes (3 queries × 11 runs × ~2.5s + optimization overhead)
+**Score improvements vary widely** based on:
+- Initial prompt quality
+- Query difficulty
+- LLM capability
+- Random seed/temperature
+
+**Note**: High initial scores (>0.7) leave less room for improvement.
+
+## Differences from Other Demos
+
+This demo differs from other OTEL optimization examples in the repo:
+
+| Feature | This Demo | Other Demos |
+|---------|-----------|-------------|
+| **Framework** | LangGraph StateGraph | Custom graph or simpler flow |
+| **Flow Control** | Command-based routing | Direct function calls |
+| **Retrieval** | Wikipedia + Wikidata | Wikipedia only or none |
+| **Score Tracking** | Best iteration with restoration | Final iteration only |
+| **Diff Display** | Colored unified diff | Text comparison or none |
+| **Span Linking** | Sequential parent-child | Simple tracing |
+| **Iterations** | 3 (configurable) | 10 (various) |
+| **Metrics** | Single score | 5 detailed metrics |
 
 ## References
 
 - **Trace Framework**: https://github.com/microsoft/Trace
-- **OptoPrimeV2**: `opto/optimizers/optoprime_v2.py`
+- **OptoPrime**: `opto/optimizers/optoprime.py`
 - **OTEL Adapter**: `opto/trace/io/otel_adapter.py`
 - **TGJ Ingest**: `opto/trace/io/tgj_ingest.py`
+- **LangGraph**: https://langchain-ai.github.io/langgraph/
 - **OpenTelemetry**: https://opentelemetry.io/
 
 ## License
