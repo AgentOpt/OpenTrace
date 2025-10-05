@@ -92,9 +92,14 @@ def _convert_otel_profile(doc: Dict[str,Any]) -> Dict[str,Any]:
                 if isinstance(v, str):
                     if v.startswith("lit:"):
                         inputs[k] = {"literal": v.split(":",1)[1]}
+                    elif ":" in v:
+                        # treat as a ref if it looks like svc:16-hex-span-id or svc:param_*
+                        svc, _, rest = v.partition(":")
+                        is_span_like = len(rest) == 16 and all(c in "0123456789abcdef" for c in rest.lower())
+                        is_param_like = rest.startswith("param_")
+                        inputs[k] = {"ref": v} if (is_span_like or is_param_like) else {"literal": v}
                     else:
-                        ref = v.split(":",1)[1] if ":" in v else v
-                        inputs[k] = {"ref": ref}
+                        inputs[k] = {"literal": v}
                 else:
                     inputs[k] = v
             nodes_list.append({

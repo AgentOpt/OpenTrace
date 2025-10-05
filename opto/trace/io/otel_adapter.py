@@ -53,12 +53,24 @@ def _params(attrs: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             name = k.split(".", 1)[1]
             out[name] = {
                 "value": v,
-                "trainable": bool(attrs.get(f"param.{name}.trainable", False)),
+                "trainable": str(raw).strip().lower() in ("1", "true", "yes", "y", "on") if isinstance((raw := attrs.get(f"param.{name}.trainable", False)), str) else bool(raw),
             }
     return out
 
 
-def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "") -> List[Dict[str, Any]]:
+def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use_temporal_hierarchy: bool = False) -> List[Dict[str, Any]]:
+    """Convert OTLP traces to Trace-Graph JSON format.
+    
+    Args:
+        otlp: OTLP JSON payload
+        agent_id_hint: Optional service name hint
+        use_temporal_hierarchy: If True, create parent-child relationships based on temporal ordering
+                               (earlier spans become parents of later spans) when no explicit parent exists.
+                               This enables backward propagation across sequential agent calls.
+    
+    Returns:
+        List of TGJ documents
+    """
     docs = []
     for rs in otlp.get("resourceSpans", []):
         rattrs = _attrs(rs.get("resource", {}).get("attributes", []))
@@ -68,7 +80,19 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "") -> 
             scope_nm = ss.get("scope", {}).get("name", "scope")
             nodes = {}
             trace_id = None
+            
+            # First pass: collect all spans with their timestamps for temporal ordering
+            spans_with_time = []
             for sp in ss.get("spans", []):
+                spans_with_time.append((sp.get("startTimeUnixNano", 0), sp))
+            
+            # Sort by start time to establish temporal order
+            spans_with_time.sort(key=lambda x: x[0])
+            
+            # Track the most recent span for temporal parenting
+            prev_span_id = None
+            
+            for start_time, sp in spans_with_time:
                 trace_id = sp.get("traceId") or trace_id
                 sid = sp.get("spanId")
                 psid = sp.get("parentSpanId")
@@ -76,21 +100,33 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "") -> 
                 op = _op(attrs, sp)
                 name = _sanitize(sp.get("name") or sid)
                 params = _params(attrs)
+                
                 for pname, spec in params.items():
                     p_id = f"{svc}:param_{pname}"
                     nodes.setdefault(
                         p_id,
                         {
-                            "kind": "param",
+                            "kind": "parameter",
                             "name": pname,
-                            "data": spec["value"],
+                            "data": spec["value"],  # Use 'data' field for TGJ compatibility
                             "trainable": bool(spec["trainable"]),
                             "info": {"otel": {"span_id": sid}},
                         },
                     )
                 inputs = _lift_inputs(attrs)
+                
+                # Use temporal hierarchy: if no explicit parent and use_temporal_hierarchy is enabled,
+                # make the previous span the parent (sequential execution flow)
+                if use_temporal_hierarchy and not psid and prev_span_id:
+                    psid = prev_span_id
+                
                 if psid and "parent" not in inputs:
                     inputs["parent"] = f"{svc}:{psid}"
+                
+                # Connect parameters as inputs to the MessageNode
+                for pname in params.keys():
+                    inputs[f"param_{pname}"] = f"{svc}:param_{pname}"
+                
                 rec = {
                     "kind": "msg",
                     "name": name,
@@ -113,6 +149,10 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "") -> 
                         rec["inputs"][role] = ref if ":" in ref else f"{svc}:{ref}"
                 node_id = f"{svc}:{sid}"
                 nodes[node_id] = rec
+                
+                # Update prev_span_id for next iteration (temporal parenting)
+                prev_span_id = sid
+                
             docs.append(
                 {
                     "version": PROFILE_VERSION,
