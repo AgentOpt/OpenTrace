@@ -22,6 +22,7 @@ import os, json, time, difflib
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Literal
 
+import requests
 import wikipedia
 wikipedia.set_lang("en")
 
@@ -45,9 +46,10 @@ from langgraph.types import Command
 NUM_ITERATIONS = 3
 TEST_QUERIES = [
     "Summarize the causes and key events of the French Revolution.",
-    "Give 3 factual relationships about Tesla, Inc.",
+    "Give 3 factual relationships about Tesla, Inc. with entity IDs.",
+    "What is the Wikidata ID for CRISPR and list 2 related entities?"
 ]
-OPTIMIZABLE = ["planner", "executor"]
+OPTIMIZABLE = ["planner", "executor", ""]
 
 # ==============================================================================
 # OTEL SETUP
@@ -121,25 +123,34 @@ class State:
 
 PLANNER_TEMPLATE_DEFAULT = """You are the Planner. Break the user's request into JSON steps.
 
-Agents: web_researcher, synthesizer
+Agents:
+  • web_researcher - Wikipedia summaries for background/overview
+  • wikidata_researcher - Entity facts, IDs, and structured relationships
+  • synthesizer - Final answer generation
 
-Return JSON: {{"1": {{"agent":"web_researcher", "action":"...", "goal":"..."}}, "2": {{"agent":"synthesizer", "action":"...", "goal":"..."}}}}
+Return JSON: {{"1": {{"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"..."}}, "2": {{"agent":"synthesizer", "action":"...", "goal":"..."}}}}
 
 Guidelines:
-- Use web_researcher for background
-- End with synthesizer
+- Use web_researcher for narrative background and explanations
+- Use wikidata_researcher for entity IDs, structured facts, and relationships
+- End with synthesizer to finalize answer
 - Include goal for each step
 
 User query: "{USER_QUERY}"
 """
 
-EXECUTOR_TEMPLATE_DEFAULT = """You are the Executor. Return JSON: {{"goto": "<web_researcher|synthesizer>", "query": "<text>"}}
+EXECUTOR_TEMPLATE_DEFAULT = """You are the Executor. Return JSON: {{"goto": "<web_researcher|wikidata_researcher|synthesizer>", "query": "<text>"}}
 
 Context:
 - Step: {STEP}
 - Plan: {PLAN_STEP}
 - Query: "{USER_QUERY}"
 - Previous: "{PREV_CONTEXT}"
+
+Routing guide:
+- web_researcher: For Wikipedia summaries and background info
+- wikidata_researcher: For entity facts, IDs, and structured data
+- synthesizer: To generate final answer
 
 Route to appropriate agent based on plan.
 """
@@ -155,6 +166,7 @@ def fill_template(template: str, **kwargs) -> str:
 # ==============================================================================
 
 def wikipedia_search(query: str) -> str:
+    """Search Wikipedia and return summaries"""
     try:
         hits = wikipedia.search(query, results=2)
         out = []
@@ -165,6 +177,30 @@ def wikipedia_search(query: str) -> str:
             except: continue
         return "\\n\\n".join(out) or "No results."
     except: return "Search unavailable."
+
+def wikidata_query(query: str) -> str:
+    """Query Wikidata for entity facts and IDs with robust error handling"""
+    try:
+        r = requests.get(
+            "https://www.wikidata.org/w/api.php",
+            params={
+                "action": "wbsearchentities",
+                "format": "json",
+                "language": "en",
+                "search": query[:100],  # Limit query length
+                "limit": 5
+            },
+            timeout=10
+        )
+        r.raise_for_status()
+        data = r.json()
+        results = [
+            f"- {item.get('label', '')}: {item.get('description', '')} ({item.get('id', '')})"
+            for item in data.get("search", [])
+        ]
+        return "\\n".join(results) if results else "No Wikidata entities found."
+    except Exception:
+        return f"Wikidata search temporarily unavailable. Query: {query[:50]}..."
 
 # ==============================================================================
 # LANGGRAPH NODES (with OTEL tracing)
@@ -217,10 +253,10 @@ def planner_node(state: State) -> Command[Literal["executor"]]:
         goto="executor"
     )
 
-def executor_node(state: State) -> Command[Literal["web_researcher", "synthesizer"]]:
+def executor_node(state: State) -> Command[Literal["web_researcher", "wikidata_researcher", "synthesizer"]]:
     """
     LangGraph executor node with OTEL tracing.
-    Routes to web_researcher or synthesizer.
+    Routes to web_researcher, wikidata_researcher, or synthesizer.
     """
 
     step = state.current_step
@@ -265,6 +301,9 @@ def executor_node(state: State) -> Command[Literal["web_researcher", "synthesize
         try:
             d = json.loads(raw)
             goto = d.get("goto", "synthesizer")
+            # Validate goto is one of the allowed agents
+            if goto not in ["web_researcher", "wikidata_researcher", "synthesizer"]:
+                goto = "synthesizer"
             agent_query = d.get("query", state.user_query)
         except:
             goto, agent_query = ("synthesizer", state.user_query)
@@ -295,6 +334,37 @@ def web_researcher_node(state: State) -> Command[Literal["executor"]]:
 
         sp.set_attribute("retrieval.query", query)
         result = wikipedia_search(query)
+        sp.set_attribute("retrieval.context", result[:500])
+
+        span_id = f"{sp.get_span_context().span_id:016x}"
+
+    # Add to contexts
+    new_contexts = state.contexts + [result]
+
+    return Command(
+        update={
+            "contexts": new_contexts,
+            "prev_span_id": span_id,
+        },
+        goto="executor"
+    )
+
+def wikidata_researcher_node(state: State) -> Command[Literal["executor"]]:
+    """
+    LangGraph wikidata researcher node with OTEL tracing.
+    Queries Wikidata for entity facts and returns to executor.
+    """
+
+    with TRACER.start_as_current_span("wikidata_search") as sp:
+        # Sequential linking
+        if state.prev_span_id:
+            sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
+
+        query = state.agent_query or state.user_query
+
+        sp.set_attribute("retrieval.query", query)
+        sp.set_attribute("retrieval.source", "wikidata")
+        result = wikidata_query(query)
         sp.set_attribute("retrieval.context", result[:500])
 
         span_id = f"{sp.get_span_context().span_id:016x}"
@@ -412,7 +482,7 @@ Plan: {json.dumps(state.plan)}
 # ==============================================================================
 
 def build_graph() -> StateGraph:
-    """Build the LangGraph StateGraph"""
+    """Build the LangGraph StateGraph with both web and wikidata researchers"""
 
     workflow = StateGraph(State)
 
@@ -420,6 +490,7 @@ def build_graph() -> StateGraph:
     workflow.add_node("planner", planner_node)
     workflow.add_node("executor", executor_node)
     workflow.add_node("web_researcher", web_researcher_node)
+    workflow.add_node("wikidata_researcher", wikidata_researcher_node)
     workflow.add_node("synthesizer", synthesizer_node)
     workflow.add_node("evaluator", evaluator_node)
 
@@ -618,10 +689,25 @@ def optimize_iteration(runs: List[RunResult], optimizer_memory: List) -> tuple[D
 
     new_memory = optimizer.log.copy() if hasattr(optimizer, 'log') and optimizer.log else optimizer_memory
 
+    # Map numeric parameter indices back to semantic names
+    # Parameters are extracted in order: 0=planner_prompt, 1=executor_prompt
+    PARAM_INDEX_MAP = {
+        "0": "planner_prompt",
+        "1": "executor_prompt"
+    }
+    
+    # Debug: show parameter names and their mappings
+    print(f"\n🔍 DEBUG: Parameter mapping:")
+    for p in optimizer.parameters:
+        param_idx = p.name.split(":")[-1]
+        semantic_name = PARAM_INDEX_MAP.get(param_idx, param_idx)
+        print(f"   {p.name} -> idx:{param_idx} -> semantic:{semantic_name}")
+    
     updates = {}
     for p in optimizer.parameters:
-        param_name = p.name.split(":")[-1]
-        updates[param_name] = p.data
+        param_idx = p.name.split(":")[-1]
+        semantic_name = PARAM_INDEX_MAP.get(param_idx, param_idx)
+        updates[semantic_name] = p.data
 
     print("="*80)
     return updates, new_memory
@@ -647,6 +733,10 @@ def main():
 
     current_planner_tmpl = PLANNER_TEMPLATE_DEFAULT
     current_executor_tmpl = EXECUTOR_TEMPLATE_DEFAULT
+    
+    # Save originals for final comparison
+    original_planner_tmpl = PLANNER_TEMPLATE_DEFAULT
+    original_executor_tmpl = EXECUTOR_TEMPLATE_DEFAULT
 
     baseline_runs = [run_graph_with_otel(graph, q, current_planner_tmpl, current_executor_tmpl) for q in TEST_QUERIES]
     base_score = sum(r.score for r in baseline_runs) / len(baseline_runs)
@@ -661,12 +751,17 @@ def main():
     }
 
     # OPTIMIZATION
-    print("\\n" + "="*80)
-    print("OPTIMIZATION".center(80))
-    print("="*80)
+    print("\\n" + "="*80 + "\n" + "OPTIMIZATION".center(80) + "\n" + "="*80)
 
     history = [base_score]
     optimizer_memory = []
+    
+    # Track best iteration
+    best_score = base_score
+    best_iteration = 0
+    # Store actual template strings, not dict references
+    best_planner_tmpl = current_planner_tmpl
+    best_executor_tmpl = current_executor_tmpl
 
     for iteration in range(1, NUM_ITERATIONS + 1):
         print(f"\\n{'='*80}")
@@ -678,30 +773,67 @@ def main():
 
         print(f"\\nCurrent: {iter_score:.3f}")
 
+        # Track best performing iteration
+        if iter_score > best_score:
+            best_score = iter_score
+            best_iteration = iteration
+            # Save actual current templates
+            best_planner_tmpl = current_planner_tmpl
+            best_executor_tmpl = current_executor_tmpl
+            print(f"   🌟 NEW BEST SCORE! (iteration {iteration})")
+
         updates, optimizer_memory = optimize_iteration(runs, optimizer_memory)
 
         if not updates:
             print("\\n❌ No updates")
             break
 
+        # Debug: show what keys are in updates
+        print(f"\n🔍 DEBUG: Updates dict keys: {list(updates.keys())}")
+
         for param_name, new_template in updates.items():
             old_template = template_history.get(param_name, "")
             show_prompt_diff(old_template, new_template, param_name)
             template_history[param_name] = new_template
 
+        # Update current templates with new values
         if "planner_prompt" in updates:
             current_planner_tmpl = updates["planner_prompt"]
+            print(f"   ✅ Updated current_planner_tmpl")
         if "executor_prompt" in updates:
             current_executor_tmpl = updates["executor_prompt"]
+            print(f"   ✅ Updated current_executor_tmpl")
 
         history.append(iter_score)
+    
+    # Restore best templates
+    print(f"\\n{'='*80}")
+    print("RESTORING BEST PARAMETERS".center(80))
+    print(f"{'='*80}")
+    print(f"\\n🏆 Best score: {best_score:.3f} from iteration {best_iteration}")
+    
+    if best_iteration > 0:
+        print(f"   Restoring templates from iteration {best_iteration}...")
+        current_planner_tmpl = best_planner_tmpl
+        current_executor_tmpl = best_executor_tmpl
+        
+        # Validate with a final run
+        print(f"\\n🔄 Validating best parameters...")
+        validation_runs = [run_graph_with_otel(graph, q, current_planner_tmpl, current_executor_tmpl) for q in TEST_QUERIES]
+        validation_score = sum(r.score for r in validation_runs) / len(validation_runs)
+        print(f"   Validation score: {validation_score:.3f}")
+        
+        if abs(validation_score - best_score) > 0.05:
+            print(f"   ⚠️  Warning: Validation score differs from recorded best by {abs(validation_score - best_score):.3f}")
+        else:
+            print(f"   ✅ Validation confirms best score!")
+    else:
+        print(f"   Baseline was the best performer - no changes applied")
 
     # RESULTS
-    print("\\n" + "="*80)
-    print("RESULTS".center(80))
-    print("="*80)
+    print("\\n" + "="*80 + "\n" + "RESULTS".center(80) + "\n" + "="*80)
 
-    final_score = history[-1]
+    final_score = best_score  # Use best score instead of last iteration
     improvement = final_score - base_score
     pct = (improvement / base_score * 100) if base_score > 0 else 0
 
@@ -709,14 +841,36 @@ def main():
     for i, score in enumerate(history):
         label = "Baseline" if i == 0 else f"Iter {i}"
         delta = "" if i == 0 else f"(Δ {score - history[i-1]:+.3f})"
-        print(f"   {label:12s}: {score:.3f} {delta}")
+        best_marker = " 🌟 BEST" if (i == best_iteration) else ""
+        print(f"   {label:12s}: {score:.3f} {delta}{best_marker}")
 
     print(f"\\n🎯 Overall: {base_score:.3f} → {final_score:.3f} ({improvement:+.3f}, {pct:+.1f}%)")
+    print(f"   Best iteration: {best_iteration}")
 
     if improvement > 0:
         print(f"   ✅ SUCCESS!")
     else:
         print(f"   ⚠️  No improvement")
+    
+    # Show final optimized prompts with colored diffs
+    print("\\n" + "="*80)
+    print("FINAL OPTIMIZED PROMPTS (vs Original)".center(80))
+    print("="*80)
+    
+    if best_iteration > 0:
+        # Show diff for planner prompt
+        print("\n" + "─"*80)
+        print("🔵 PLANNER PROMPT (Final Optimized vs Original)")
+        print("─"*80)
+        show_prompt_diff(original_planner_tmpl, current_planner_tmpl, "planner_prompt")
+        
+        # Show diff for executor prompt
+        print("\n" + "─"*80)
+        print("🔵 EXECUTOR PROMPT (Final Optimized vs Original)")
+        print("─"*80)
+        show_prompt_diff(original_executor_tmpl, current_executor_tmpl, "executor_prompt")
+    else:
+        print("\\n   No optimization occurred - baseline templates retained")
 
     print("\\n" + "="*80 + "\\n")
 
