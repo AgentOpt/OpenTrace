@@ -14,12 +14,12 @@ def main():
     seed = 42
     num_epochs = 1
     batch_size = 3  # number of queries to sample from the training data
-    sub_batch_size = 2  # number of queries each optimizer sees
+    num_batches = 2  # number of queries each optimizer sees
     num_proposals = 3  # number of proposals to generate for each query
     num_candidates = 2  # number of candidates for exploration
     score_range = (0, 1)  # range of the score for the guide
-    eval_frequency = -1
-    num_eval_samples = 2
+    test_frequency = -1
+    num_test_samples = 2
     score_function = 'mean'
 
     num_threads = 10
@@ -43,22 +43,20 @@ def main():
         logger=logger
     )
 
-    alg.train(
-        guide,
-        train_dataset,
-        num_epochs=num_epochs,
-        batch_size=batch_size,
-        eval_frequency=eval_frequency,
-        test_dataset=train_dataset,
-        num_threads=num_threads,
-        sub_batch_size=sub_batch_size,
-        num_proposals=num_proposals,
-        num_candidates=num_candidates,
-        score_range=score_range,
-        num_eval_samples=num_eval_samples,
-        score_function=score_function,
-        verbose='output' if verbose else False
-    )
+    alg.train(guide,
+              train_dataset,
+              num_epochs=num_epochs,
+              batch_size=batch_size,
+              test_frequency=test_frequency,
+              test_dataset=test_dataset,
+              num_threads=num_threads,
+              num_batches=num_batches,
+              num_proposals=num_proposals,
+              num_candidates=num_candidates,
+              score_range=score_range,
+              num_test_samples=num_test_samples,
+              score_function=score_function,
+              verbose='output' if verbose else False)
 
 
 if __name__ == "__main__":

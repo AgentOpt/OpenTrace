@@ -3,6 +3,7 @@ import json
 import pickle
 import re
 import copy
+import os
 from opto.utils.llm import LLM, AbstractModel
 from opto.trainer.suggest import Suggest
 
@@ -57,16 +58,28 @@ class Guide:
         return copy.deepcopy(self)
 
     def save(self, path: str):
-        """ Save the guide to a file. """
+        """ Save the guide state to a file. """
+        # check if the directory exists
+        directory = os.path.dirname(path)
+        if directory != "":
+            os.makedirs(directory, exist_ok=True)
         with open(path, 'wb') as f:
-            pickle.dump(self.__dict__, f)
+            pickle.dump(self.__getstate__(), f)
 
     def load(self, path: str):
-        """ Load the guide from a file. """
+        """ Load the guide state from a file. """
         with open(path, 'rb') as f:
-            data = pickle.load(f)
-            for key, value in data.items():
-                setattr(self, key, value)
+            state = pickle.load(f)
+            self.__setstate__(state)
+
+    # NOTE: overload __getstate__ and __setstate__ in subclasses to customize pickling behavior
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
 
 
 class LLMJudge(Guide):
