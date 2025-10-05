@@ -6,7 +6,24 @@ This demo shows end-to-end optimization of research agent prompts using:
 - OpenTelemetry (OTEL) for span capture → OTLP JSON
 - Trace-Graph JSON (TGJ) ingestion → Trace nodes
 - GraphPropagator for backward propagation of rich feedback
-- OptoPrimeV2 with history-aware prompt generation
+- OptoPrimeV2 with h        _set_attr(sp, "inputs.gen_ai.prompt", judge_user)
+        raw = call_llm_json(system="Return JSON scores", user=judge_user)
+
+    # Close the root workflow span before flushing
+    # (the 'with' block ends here, so root_span context is exited)
+    
+    try:
+        j = json.loads(raw)
+    except Exception:
+        j = {"answer_relevance":0.5,"groundedness":0.5,"plan_adherence":0.5,"execution_efficiency":0.5,"logical_consistency":0.5,"reasons":"fallback"}
+
+    metrics = [float(j.get(k,0.0)) for k in JUDGE_METRICS]
+    score = sum(metrics)/len(metrics)
+    feedback_text = f"[Scores] {metrics} ;\nReasons:\n{j.get('reasons','')}".strip()
+    otlp = flush_otlp_json()
+    execution_time = time.time() - start_time
+
+    return RunOutput(final_answer=FINAL or "", contexts=messages, otlp_payload=otlp, feedback_text=feedback_text, score=score, llm_calls=llm_call_count, execution_time=execution_time, agent_metrics=agent_metrics)ompt generation
 
 FILE STRUCTURE:
 ==============
@@ -73,6 +90,7 @@ from __future__ import annotations
 import os, json, time, random, requests, traceback
 from dataclasses import dataclass
 from typing import Dict, Any, List, Tuple, Optional
+
 import wikipedia
 wikipedia.set_lang("en")
 from opentelemetry import trace as oteltrace
@@ -90,13 +108,13 @@ from opto.optimizers.optoprime_v2 import OptoPrimeV2
 # ==============================================================================
 
 # Optimization settings
-NUM_OPTIMIZATION_ITERATIONS = 10
+NUM_OPTIMIZATION_ITERATIONS = 5
 
 # Test queries for evaluation
 TEST_QUERIES = [
     "Summarize the causes and key events of the French Revolution.",
     "Give 3 factual relationships about the company Tesla, Inc. (entities & IDs).",
-    "Explain what CRISPR is and name 2 notable applications."
+#    "Explain what CRISPR is and name 2 notable applications."
 ]
 
 # Which agents' prompts to optimize
@@ -117,6 +135,12 @@ log_file = "examples/JSON_OTEL_trace_optim_sample_output.txt"
 # ==============================================================================
 # 2. IMPORTS & INFRASTRUCTURE
 # ==============================================================================
+
+# Parenting mode flag (demo switch):
+#   TRACE_PARENTING=declared  → rely on explicit parent/child (recommended)
+#   TRACE_PARENTING=temporal  → rely on time sequencing reconstruction
+TRACE_PARENTING = os.environ.get("TRACE_PARENTING", "declared").lower()
+USE_TEMPORAL_RECONSTRUCTION = TRACE_PARENTING == "temporal"
 
 class InMemorySpanExporter(SpanExporter):
     """Simple in-memory span exporter for demo/testing"""
@@ -147,7 +171,8 @@ LLM_CLIENT = LLM()
 
 def plan_prompt(user_query: str, enabled_agents: List[str]) -> str:
     """Planner prompt: Break query into steps"""
-    agent_list = [f"  • `{a}` – {{'wikidata_researcher':'entity facts/relations','web_researcher':'Wikipedia summaries','synthesizer':'finalize answer'}}" for a in enabled_agents if a in ('wikidata_researcher','web_researcher','synthesizer')]
+    _desc = {'wikidata_researcher':'entity facts/relations', 'web_researcher':'Wikipedia summaries', 'synthesizer':'finalize answer'}
+    agent_list = [f"  • `{a}` – {_desc[a]}" for a in enabled_agents if a in _desc]
     agent_enum = " | ".join([a for a in enabled_agents if a in ("web_researcher","wikidata_researcher","synthesizer")])
     return f"""You are the Planner. Break the user's request into JSON steps, one agent per step.
 Agents available:
@@ -300,14 +325,36 @@ class RunOutput:
 # ==============================================================================
 
 def run_graph_once(user_query: str, overrides: Dict[str,str]) -> RunOutput:
-    """Execute research graph once: planner → executor → tools → synthesizer → judge"""
+    """Execute research graph once: planner → executor → tools → synthesizer → judge
+    
+    NOTE: In the previous version the root 'workflow' span was closed
+    too early, causing spans to be orphaned and requiring temporal
+    reconstruction. This function now supports two modes:
+      • TRACE_PARENTING=declared  (default): explicit OTEL parent/child
+      • TRACE_PARENTING=temporal  : time-based reconstruction for demo
+    
+    In declared mode we keep a single root 'workflow' span active for
+    the whole run and start every child span with that root context so
+    the exporter emits proper parentSpanId, enabling clean backprop.
+    """
     enabled = ENABLED_AGENTS
     start_time = time.time()
     llm_call_count = 0
     agent_metrics = AgentMetrics()
 
+    # --- NEW: Create a single root span and keep its context for all children
+    root_span = TRACER.start_span("workflow")
+    _set_attr(root_span, "workflow.type", "agentic_research")
+    _set_attr(root_span, "workflow.query", user_query)
+    # Make a context that marks 'root_span' as the current parent
+    _root_ctx = oteltrace.set_span_in_context(root_span)
+
+    # helper to ensure every span is explicitly parented by root
+    def _child(name: str):
+        return TRACER.start_as_current_span(name, context=_root_ctx)
+
     # Planner LLM
-    with TRACER.start_as_current_span("planner_llm") as sp:
+    with _child("planner_llm") as sp:
         llm_call_count += 1
         agent_metrics.planner_calls += 1
         planner_txt = overrides.get("planner_prompt") or plan_prompt(user_query, enabled)
@@ -332,7 +379,7 @@ def run_graph_once(user_query: str, overrides: Dict[str,str]) -> RunOutput:
         plan_step = plan.get(str(step_idx), {}) or {}
 
         # Executor LLM
-        with TRACER.start_as_current_span("executor_llm") as sp:
+        with _child("executor_llm") as sp:
             llm_call_count += 1
             agent_metrics.executor_calls += 1
             exec_txt = overrides.get("executor_prompt") or executor_prompt(step_idx, plan_step, user_query, tail_context, enabled)
@@ -359,7 +406,7 @@ def run_graph_once(user_query: str, overrides: Dict[str,str]) -> RunOutput:
 
         # Route to tools/synthesizer
         if goto == "web_researcher":
-            with TRACER.start_as_current_span("web_research") as sp:
+            with _child("web_research") as sp:
                 agent_metrics.retrieval_calls += 1
                 _set_attr(sp, "retrieval.query", agent_query)
                 out = wikipedia_search(agent_query)
@@ -368,7 +415,7 @@ def run_graph_once(user_query: str, overrides: Dict[str,str]) -> RunOutput:
                 tail_context = out[-400:]
             step_idx += 1
         elif goto == "wikidata_researcher":
-            with TRACER.start_as_current_span("wikidata_research") as sp:
+            with _child("wikidata_research") as sp:
                 agent_metrics.retrieval_calls += 1
                 _set_attr(sp, "retrieval.query", agent_query)
                 out = wikidata_query(agent_query)
@@ -378,7 +425,7 @@ def run_graph_once(user_query: str, overrides: Dict[str,str]) -> RunOutput:
             step_idx += 1
         elif goto == "synthesizer":
             context_blob = "\n\n---\n\n".join(messages[-4:])
-            with TRACER.start_as_current_span("synthesizer_llm") as sp:
+            with _child("synthesizer_llm") as sp:
                 llm_call_count += 1
                 agent_metrics.synthesizer_calls += 1
                 sys = overrides.get("synthesizer_prompt") or synthesizer_prompt()
@@ -396,7 +443,7 @@ def run_graph_once(user_query: str, overrides: Dict[str,str]) -> RunOutput:
             step_idx += 1
 
     # Judge (rich feedback + scalar score)
-    with TRACER.start_as_current_span("judge_llm") as sp:
+    with _child("judge_llm") as sp:
         llm_call_count += 1
         agent_metrics.judge_calls += 1
         judge_sys = overrides.get("judge_prompt") or judge_prompt()
@@ -419,7 +466,12 @@ Context used: {context_blob}""".strip()
     metrics = [float(j.get(k,0.0)) for k in JUDGE_METRICS]
     score = sum(metrics)/len(metrics)
     feedback_text = f"[Scores] {metrics} ;\nReasons:\n{j.get('reasons','')}".strip()
-    otlp = flush_otlp_json()
+    
+    # End root *after* all children are finished so parenting is materialized
+    try:
+        root_span.end()
+    finally:
+        otlp = flush_otlp_json()
     execution_time = time.time() - start_time
 
     return RunOutput(final_answer=FINAL or "", contexts=messages, otlp_payload=otlp, feedback_text=feedback_text, score=score, llm_calls=llm_call_count, execution_time=execution_time, agent_metrics=agent_metrics)
@@ -433,47 +485,79 @@ def ingest_runs_as_trace(all_runs: List[RunOutput]) -> Tuple[Dict[str,Any], Dict
     per_run_nodes = []
     params: Dict[str, ParameterNode] = {}
     all_nodes: Dict[str, Any] = {}
+    
     for ridx, run in enumerate(all_runs):
-        docs = list(otlp_traces_to_trace_json(run.otlp_payload, agent_id_hint=f"demo-{ridx}"))
+        docs = list(otlp_traces_to_trace_json(
+            run.otlp_payload,
+            agent_id_hint=f"demo-{ridx}",
+            use_temporal_hierarchy=USE_TEMPORAL_RECONSTRUCTION))
+        port_index = {}  # share links across docs of the same run
+        run_nodes: Dict[str, Any] = {}
+        
         for d in docs:
-            nodes = ingest_tgj(d)
-            per_run_nodes.append(nodes)
-            all_nodes.update(nodes)
-            for name, n in nodes.items():
-                if isinstance(n, ParameterNode) and getattr(n, "trainable", True):
-                    params[name] = n
+            nodes = ingest_tgj(d, port_index=port_index)
+            run_nodes.update(nodes)           # stitch into a single graph per run
+        
+        per_run_nodes.append(run_nodes)
+        all_nodes.update(run_nodes)
+        
+        # Collect trainable parameters (use the last occurrence of each parameter name)
+        for name, n in run_nodes.items():
+            if isinstance(n, ParameterNode) and getattr(n, "trainable", True):
+                params[name] = n
+    
     return all_nodes, params, per_run_nodes
 
 def find_last_llm_node(nodes: Dict[str, Any]) -> Optional[MessageNode]:
-    """Find last LLM message node (prefer synthesizer)"""
+    """Find last LLM message node (prefer synthesizer or judge as final output)"""
     last = None
     for n in nodes.values():
         if isinstance(n, MessageNode):
             last = n
-            if "synthesizer" in (n.name or ""):
+            if "synthesizer" in (n.name or "") or "judge" in (n.name or ""):
                 return n
     return last
 
-def mode_b_optimize(params: Dict[str, ParameterNode], per_run_nodes: List[Dict[str,Any]], all_runs: List[RunOutput]) -> Dict[ParameterNode, Any]:
-    """OptoPrimeV2 Mode-B: Generate candidates with history, rank, return best"""
+def otel_optimize(params: Dict[str, ParameterNode], per_run_nodes: List[Dict[str,Any]], all_runs: List[RunOutput]) -> Dict[ParameterNode, Any]:
+    """OptoPrimeV2 Mode-B: Generate candidates with history, rank, return best.
+    
+    With temporal hierarchy enabled, backward from the last node will propagate through
+    the entire chain: judge -> synthesizer -> executor -> planner, reaching all parameters.
+    """
     prop = GraphPropagator()
     targets: List[MessageNode] = []
+    
+    # Collect all ParameterNodes that are actually connected in the graph
+    connected_params: Dict[str, ParameterNode] = {}
+    
     for nodes, run in zip(per_run_nodes, all_runs):
+        # Find the last (output) node - with temporal hierarchy, backward will reach all ancestors
         tgt = find_last_llm_node(nodes)
         if tgt is None: continue
-        prop.init_feedback(tgt, run.feedback_text)
-        tgt.backward(run.feedback_text, propagator=prop, retain_graph=True)
-        targets.append(tgt)
+        
+        # Collect trainable parameters from this run's nodes
+        for name, node in nodes.items():
+            if isinstance(node, ParameterNode) and getattr(node, "trainable", True):
+                param_base_name = name.split(":")[-1]
+                if param_base_name in params or any(param_base_name == f"{a}_prompt" for a in ["planner", "executor", "synthesizer", "judge"]):
+                    connected_params[param_base_name] = node
+        
+        try:
+            prop.init_feedback(tgt, run.feedback_text)
+            tgt.backward(run.feedback_text, propagator=prop, retain_graph=True)
+            targets.append(tgt)
+        except Exception as e:
+            print(f"   ⚠️  Backward propagation error: {e}")
+            continue
 
-    trainables = list(params.values())
+    trainables = list(connected_params.values())
     if not trainables:
         print("⚠️  No trainable parameters found in trace.")
         return {}
 
+    # Feedback has already been propagated to parameters via tgt.backward() above
+    # No need to call opt.zero_feedback() or opt.backward() again
     opt = OptoPrimeV2(parameters=trainables, llm=LLM_CLIENT, memory_size=3, max_tokens=700)
-    opt.zero_feedback()
-    for t in targets:
-        opt.backward(t, "see attached")
 
     cand1 = opt.step(bypassing=True)
     cand2 = opt.step(bypassing=True)
@@ -607,7 +691,7 @@ def main():
         f.write(f"JSON OTEL Trace Optimization Demo - Run Log\n{'='*80}\nOPTIMIZABLE AGENTS:\n{OPTIMIZABLE_AGENTS}\n\nTEST QUERIES:\n{len(subjects)}\n\nITERATIONS:\n{NUM_OPTIMIZATION_ITERATIONS}\n{'='*80}\n")
 
     print_section_header("JSON OTEL + Trace + OptoPrimeV2 Demo")
-    print(f"\n📋 Configuration:\n   • Test queries: {len(subjects)}\n   • Optimization iterations: {NUM_OPTIMIZATION_ITERATIONS}\n   • Enabled agents: {', '.join(enabled_agents)}\n   • Optimizable agents: {', '.join(OPTIMIZABLE_AGENTS)}")
+    print(f"\n📋 Configuration:\n   • Test queries: {len(subjects)}\n   • Optimization iterations: {NUM_OPTIMIZATION_ITERATIONS}\n   • Enabled agents: {', '.join(enabled_agents)}\n   • Optimizable agents: {', '.join(OPTIMIZABLE_AGENTS)}\n   • Trace parenting mode: {TRACE_PARENTING} ({'temporal reconstruction' if USE_TEMPORAL_RECONSTRUCTION else 'explicit parent/child'})")
 
     # BASELINE RUN
     print_section_header("BASELINE (Initial Prompts)")
@@ -647,12 +731,16 @@ def main():
         if not trainables: raise ValueError("   ⚠️  No trainable parameters found; stopping optimization.")
 
         # Log JSON traces and params
-        tgj_docs = [otlp_traces_to_trace_json(run.otlp_payload, agent_id_hint=f"demo-{i}") for i, run in enumerate(current_runs)]
+        tgj_docs = [
+            otlp_traces_to_trace_json(
+                run.otlp_payload,
+                agent_id_hint=f"demo-{i}",
+                use_temporal_hierarchy=USE_TEMPORAL_RECONSTRUCTION) for i, run in enumerate(current_runs)]
         log_json_traces(iteration, [doc for docs in tgj_docs for doc in docs], trainables, log_file)
 
         print(f"   📈 Optimizing {OPTIMIZABLE_AGENTS} / {len(trainables)} trainable parameters: {list(trainables.keys())}")
 
-        update = mode_b_optimize(trainables, per_run_nodes, current_runs)
+        update = otel_optimize(trainables, per_run_nodes, current_runs)
 
         if not update:
             print("   ⚠️  No updates generated; stopping optimization.")
