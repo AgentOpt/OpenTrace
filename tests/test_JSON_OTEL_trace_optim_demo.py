@@ -613,10 +613,10 @@ class TestEdgeCases:
 
     def test_empty_trainables(self):
         """Test optimization with no trainable parameters"""
-        from examples.JSON_OTEL_trace_optim_demo import mode_b_optimize
+        from examples.JSON_OTEL_trace_optim_demo import otel_optimize
 
         # Empty parameters should return empty update
-        result = mode_b_optimize({}, [], [])
+        result = otel_optimize({}, [], [])
 
         assert result == {} or result is None or len(result) == 0
 
