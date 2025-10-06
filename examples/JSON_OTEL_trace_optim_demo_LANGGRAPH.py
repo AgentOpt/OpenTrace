@@ -629,6 +629,45 @@ def check_reachability(target: MessageNode, params: List[ParameterNode]) -> Dict
             reachable.add(node.name)
     return {p.name: p.name in reachable for p in params}
 
+def _remap_params_in_graph(node: Any, param_mapping: Dict[int, ParameterNode], visited=None):
+    """
+    Recursively remap parameter nodes in a graph to use optimizer's params.
+    
+    Args:
+        node: Current node being visited
+        param_mapping: Dict mapping id(new_param) -> optimizer_param
+        visited: Set of already visited node IDs to avoid cycles
+    """
+    if visited is None:
+        visited = set()
+    
+    node_id = id(node)
+    if node_id in visited:
+        return
+    visited.add(node_id)
+    
+    # If this node is a parameter that needs remapping, stop here
+    if isinstance(node, ParameterNode) and node_id in param_mapping:
+        return
+    
+    # Remap in _inputs dict (not inputs property which returns a copy!)
+    if hasattr(node, '_inputs') and isinstance(node._inputs, dict):
+        for key, input_node in list(node._inputs.items()):
+            input_id = id(input_node)
+            if input_id in param_mapping:
+                node._inputs[key] = param_mapping[input_id]
+            else:
+                _remap_params_in_graph(input_node, param_mapping, visited)
+    
+    # Remap in parents list
+    if hasattr(node, 'parents') and isinstance(node.parents, list):
+        for i, parent in enumerate(node.parents):
+            parent_id = id(parent)
+            if parent_id in param_mapping:
+                node.parents[i] = param_mapping[parent_id]
+            else:
+                _remap_params_in_graph(parent, param_mapping, visited)
+
 def show_prompt_diff(old: str, new: str, name: str):
     if old == new:
         print(f"\\n🔴 NO CHANGE in {name}")
@@ -690,12 +729,29 @@ def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2]) 
 
     # Create optimizer ONCE on first call, reuse thereafter
     if optimizer is None:
-        print(f"\\n🔧 Creating optimizer with {len(first_params)} params (memory_size=5)")
+        print(f"\n🔧 Creating optimizer with {len(first_params)} params (memory_size=5)")
         optimizer = OptoPrimeV2(first_params, llm=LLM_CLIENT, memory_size=5, log=True)
     else:
-        print(f"\\n♻️  Reusing optimizer (log has {len(optimizer.log)} entries)")
+        print(f"\n♻️  Reusing optimizer (log has {len(optimizer.log)} entries) & Syncing parameter data and remapping graphs...")
+        
+        # Build mapping from new params to optimizer params
+        param_mapping = {}
+        for new_param in first_params:
+            new_semantic = new_param.name.split(":")[0].split("/")[-1]
+            for opt_param in optimizer.parameters:
+                opt_semantic = opt_param.name.split(":")[0].split("/")[-1]
+                if new_semantic == opt_semantic:
+                    # Sync data from new param to optimizer's param
+                    opt_param._data = new_param._data
+                    # Map new param ID to optimizer param for graph remapping
+                    param_mapping[id(new_param)] = opt_param
+                    break
+        
+        # Remap targets to use optimizer's params (not the new params from OTEL)
+        for target, _, params in all_targets_and_feedback:
+            _remap_params_in_graph(target, param_mapping)
 
-    print(f"\\n⬅️  BACKWARD:")
+    print(f"\n⬅️  BACKWARD:")
     optimizer.zero_feedback()
 
     for idx, (target, feedback, _) in enumerate(all_targets_and_feedback):
