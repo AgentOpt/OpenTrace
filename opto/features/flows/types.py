@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import re
 import json
 from opto.optimizers.utils import encode_image_to_base64
-
+from opto import trace
 
 class TraceObject:
     def __str__(self):
@@ -45,13 +45,16 @@ class QueryModel(BaseModel):
         if not isinstance(data, dict):
             raise TypeError("QueryModel input must be a dict")
 
-        raw_query: str = data.get("query")
+        raw_query: Any = data.get("query")
+        if isinstance(raw_query, trace.Node):
+            assert isinstance(raw_query.data, (str, list)), "If using trace.Node, its data must be str"
+            raw_query = raw_query.data
 
         # 1) Start with the text part
         if isinstance(raw_query, str):
             out: List[Dict[str, Any]] = [{"type": "text", "text": raw_query}]
         else:
-            raise TypeError("`query` must be a string or a list of dicts")
+            raise TypeError("`query` must be a string")
 
         # 2) If we have an image, append an image block
         payload = data.get("multimodal_payload")

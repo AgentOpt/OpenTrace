@@ -208,11 +208,10 @@ class TracedLLM:
         response = self.llm(messages=messages)
 
         @trace.bundle(output_name=f"{self.model_name}_response")
-        def call_llm(*args) -> str:
+        def call_llm(*messages) -> str:
             """Call the LLM model.
             Args:
-                All the conversation history so far, starting from system prompt, to alternating user/assistant messages, ending with the current user query.
-
+                messages: All the conversation history so far, starting from system prompt, to alternating user/assistant messages, ending with the current user query.
             Returns:
                 response from the LLM
             """
