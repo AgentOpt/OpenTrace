@@ -530,6 +530,10 @@ class OptoPrimeV2(OptoPrime):
     def add_image_context(self, image_path: str, context: str = ""):
         if self.problem_context is None:
             self.problem_context = ""
+
+        if context == "":
+            context = "The attached image is given to the workflow. You should use the image to help you understand the problem and provide better suggestions. You can refer to the image when providing your suggestions."
+
         self.problem_context += f"{context}\n\n"
 
         # we load in the image and convert to base64

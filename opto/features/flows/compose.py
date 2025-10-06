@@ -158,6 +158,7 @@ class TracedLLM:
             system_prompt: The system prompt to use for LLM calls. If None and the class has a docstring, the docstring will be used.
             llm: The LLM model to use for inference
             chat_history_on: if on, maintain chat history for multi-turn conversations
+            model_name: override the default name of the model
         """
         if system_prompt is None:
             system_prompt = "You are a helpful assistant."
@@ -176,11 +177,12 @@ class TracedLLM:
         self.chat_history_on = chat_history_on
 
         current_llm_sessions = USED_TracedLLM.get()
-        self.model_name = model_name if model_name else f"TracedLLM{len(current_llm_sessions)}"
+        self.model_name = model_name if model_name else f"{self.__class__.__name__}{len(current_llm_sessions)}"
         current_llm_sessions.append(1)  # just a marker
 
-    def forward(self, user_query: str, chat_history_on: Optional[bool] = None,
-                payload: Optional[MultiModalPayload] = None) -> str:
+    def forward(self, user_query: str,
+                payload: Optional[MultiModalPayload] = None,
+                chat_history_on: Optional[bool] = None) -> str:
         """This function takes user_query as input, and returns the response from the LLM, with the system prompt prepended.
         This method will always save chat history.
 
@@ -205,7 +207,7 @@ class TracedLLM:
 
         response = self.llm(messages=messages)
 
-        @trace.bundle(output_name="TracedLLM_response")
+        @trace.bundle(output_name=f"{self.model_name}_response")
         def call_llm(*args) -> str:
             """Call the LLM model.
             Args:
@@ -230,8 +232,7 @@ class TracedLLM:
 
         return response_node
 
-    def chat(self, user_query: str, chat_history_on: Optional[bool] = None,
-             payload: Optional[MultiModalPayload] = None) -> str:
+    def chat(self, user_query: str, payload: Optional[MultiModalPayload] = None, chat_history_on: Optional[bool] = None) -> str:
         """Note that chat/forward always assumes it's a single turn of the conversation. History/context management will be accomplished
            through other APIs"""
-        return self.forward(user_query, chat_history_on, payload)
+        return self.forward(user_query, payload, chat_history_on)
