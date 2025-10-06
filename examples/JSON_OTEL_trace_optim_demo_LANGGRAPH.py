@@ -11,8 +11,24 @@ PROPER LANGGRAPH STRUCTURE:
 OTEL OPTIMIZATION:
 - OTEL tracing within each node
 - Template-based prompts stored as parameters
-- Fresh optimizer per iteration
+- Optimizer persists across iterations (no recreation)
 - Graph connectivity visualization
+- Dynamic parameter discovery (no hardcoded mappings)
+
+OPTIMIZATION FEATURES:
+1. Prompt Optimization: Automatically discovers and optimizes all trainable prompts
+   - Store: sp.set_attribute("param.<name>_prompt", template)
+   - Mark trainable: sp.set_attribute("param.<name>_prompt.trainable", "true")
+
+2. Code Optimization (Experimental): Can optimize function implementations
+   - Store: sp.set_attribute("param.__code_<name>", source_code)
+   - Mark trainable: sp.set_attribute("param.__code_<name>.trainable", "true")
+   - Enable via: ENABLE_CODE_OPTIMIZATION = True
+
+3. Dynamic Parameter Mapping: No hardcoded parameter lists needed
+   - Automatically discovers all trainable parameters from OTEL spans
+   - Extracts semantic names from parameter node names
+   - Works with any agent configuration
 
 This is the CORRECT architecture combining LangGraph + OTEL + Trace optimization.
 """
@@ -34,7 +50,7 @@ from opto.utils.llm import LLM
 from opto.trace.io.otel_adapter import otlp_traces_to_trace_json
 from opto.trace.io.tgj_ingest import ingest_tgj
 from opto.trace.nodes import MessageNode, ParameterNode
-from opto.optimizers import OptoPrime
+from opto.optimizers import OptoPrimeV2
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
@@ -49,7 +65,17 @@ TEST_QUERIES = [
     "Give 3 factual relationships about Tesla, Inc. with entity IDs.",
     "What is the Wikidata ID for CRISPR and list 2 related entities?"
 ]
+
+# Which components to optimize:
+# - Prompts: Include agent names like "planner", "executor", "synthesizer"
+# - Code: Include "__code" to optimize function implementations
+# - Empty string "" matches everything
 OPTIMIZABLE = ["planner", "executor", ""]
+
+# Enable code optimization (experimental):
+# When True, node implementations can be stored as trainable parameters
+# using sp.set_attribute("param.__code_<name>", source_code)
+ENABLE_CODE_OPTIMIZATION = False  # Set to True to optimize function implementations
 
 # ==============================================================================
 # OTEL SETUP
@@ -624,7 +650,7 @@ def show_prompt_diff(old: str, new: str, name: str):
             print(line)
     print("="*80)
 
-def optimize_iteration(runs: List[RunResult], optimizer_memory: List) -> tuple[Dict[str, str], List]:
+def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2]) -> tuple[Dict[str, str], OptoPrimeV2]:
     print("\\n📊 OPTIMIZATION:")
     print("="*80)
 
@@ -656,18 +682,18 @@ def optimize_iteration(runs: List[RunResult], optimizer_memory: List) -> tuple[D
         all_targets_and_feedback.append((target, run.feedback, params))
 
     if not all_targets_and_feedback:
-        return {}, optimizer_memory
+        return {}, optimizer
 
     _, _, first_params = all_targets_and_feedback[0]
     if not first_params:
-        return {}, optimizer_memory
+        return {}, optimizer
 
-    print(f"\\n🔧 Creating optimizer with {len(first_params)} params")
-    optimizer = OptoPrime(first_params, llm=LLM_CLIENT, memory_size=5)
-
-    if optimizer_memory:
-        optimizer.log = optimizer_memory.copy()
-        print(f"   ✓ Restored {len(optimizer.log)} steps")
+    # Create optimizer ONCE on first call, reuse thereafter
+    if optimizer is None:
+        print(f"\\n🔧 Creating optimizer with {len(first_params)} params (memory_size=5)")
+        optimizer = OptoPrimeV2(first_params, llm=LLM_CLIENT, memory_size=5, log=True)
+    else:
+        print(f"\\n♻️  Reusing optimizer (log has {len(optimizer.log)} entries)")
 
     print(f"\\n⬅️  BACKWARD:")
     optimizer.zero_feedback()
@@ -682,35 +708,26 @@ def optimize_iteration(runs: List[RunResult], optimizer_memory: List) -> tuple[D
     print(f"\\n➡️  STEP:")
     try:
         optimizer.step(verbose=False)
-        print(f"   ✓ Completed")
+        print(f"   ✓ Completed (log now has {len(optimizer.log)} entries)")
     except Exception as e:
         print(f"   ❌ {e}")
-        return {}, optimizer_memory
+        return {}, optimizer
 
-    new_memory = optimizer.log.copy() if hasattr(optimizer, 'log') and optimizer.log else optimizer_memory
-
-    # Map numeric parameter indices back to semantic names
-    # Parameters are extracted in order: 0=planner_prompt, 1=executor_prompt
-    PARAM_INDEX_MAP = {
-        "0": "planner_prompt",
-        "1": "executor_prompt"
-    }
-    
-    # Debug: show parameter names and their mappings
-    print(f"\n🔍 DEBUG: Parameter mapping:")
-    for p in optimizer.parameters:
-        param_idx = p.name.split(":")[-1]
-        semantic_name = PARAM_INDEX_MAP.get(param_idx, param_idx)
-        print(f"   {p.name} -> idx:{param_idx} -> semantic:{semantic_name}")
-    
+    # DYNAMIC PARAMETER MAPPING
+    # Extract semantic names from parameter names
+    # Format: "scope/semantic_name:index" (e.g., "run0/planner_prompt:0")
+    # This automatically discovers all trainable parameters, no hardcoding needed!
+    print(f"\\n🔍 DYNAMIC Parameter mapping:")
     updates = {}
     for p in optimizer.parameters:
-        param_idx = p.name.split(":")[-1]
-        semantic_name = PARAM_INDEX_MAP.get(param_idx, param_idx)
+        # Remove :index suffix, then get last component after /
+        full_name = p.name.split(":")[0]  # "run0/planner_prompt"
+        semantic_name = full_name.split("/")[-1]  # "planner_prompt"
         updates[semantic_name] = p.data
+        print(f"   {p.name} -> {semantic_name}")
 
     print("="*80)
-    return updates, new_memory
+    return updates, optimizer
 
 # ==============================================================================
 # MAIN
@@ -754,7 +771,7 @@ def main():
     print("\\n" + "="*80 + "\n" + "OPTIMIZATION".center(80) + "\n" + "="*80)
 
     history = [base_score]
-    optimizer_memory = []
+    optimizer = None  # Will be created on first iteration, reused thereafter
     
     # Track best iteration
     best_score = base_score
@@ -782,7 +799,7 @@ def main():
             best_executor_tmpl = current_executor_tmpl
             print(f"   🌟 NEW BEST SCORE! (iteration {iteration})")
 
-        updates, optimizer_memory = optimize_iteration(runs, optimizer_memory)
+        updates, optimizer = optimize_iteration(runs, optimizer)
 
         if not updates:
             print("\\n❌ No updates")
