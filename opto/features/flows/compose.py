@@ -175,7 +175,7 @@ class TracedLLM:
         self.chat_history_on = chat_history_on
 
         current_llm_sessions = USED_TracedLLM.get()
-        self.model_name = model_name if model_name else f"TracedLLM{len(current_llm_sessions)}"
+        self.model_name = model_name if model_name else f"{self.__class__.__name__}{len(current_llm_sessions)}"
         current_llm_sessions.append(1)  # just a marker
 
     def forward(self, user_query: str, chat_history_on: Optional[bool] = None) -> str:
@@ -201,12 +201,11 @@ class TracedLLM:
 
         response = self.llm(messages=messages)
 
-        @trace.bundle(output_name="TracedLLM_response")
-        def call_llm(*args) -> str:
+        @trace.bundle(output_name=f"{self.model_name}_response")
+        def call_llm(*messages) -> str:
             """Call the LLM model.
             Args:
-                All the conversation history so far, starting from system prompt, to alternating user/assistant messages, ending with the current user query.
-
+                messages: All the conversation history so far, starting from system prompt, to alternating user/assistant messages, ending with the current user query.
             Returns:
                 response from the LLM
             """
