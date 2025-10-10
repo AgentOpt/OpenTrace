@@ -59,9 +59,10 @@ class StreamingPrioritySearch(PrioritySearch):
         # We use the top K to improve over, where K is determined by exploration_ratio.
 
         # ensure it is possible to select K>=1 such that K * num_proposals <= num_candidates * exploration_ratio
-        if self.num_proposals > self.num_candidates * self._exploration_ratio:
-            print(f"Warning: num_proposals {self.num_proposals} is greater than num_candidates {self.num_candidates * self._exploration_ratio}. Setting num_proposals to num_candidates * exploration_ratio.")
-            self.num_proposals = int(self.num_candidates * self._exploration_ratio)
+        max_proposals = self.num_candidates * self._exploration_ratio
+        if self.num_proposals > max_proposals:
+            print(f"Warning: num_proposals {self.num_proposals} is greater than num_candidates {max_proposals}. Setting num_proposals to num_candidates * exploration_ratio.")
+            self.num_proposals = int(max_proposals)
 
         currently_available = len(self._exploration_candidates) + len(self.memory)
         K = max(int(self.num_candidates * self._exploration_ratio / self.num_proposals), 1)  # K>=1
