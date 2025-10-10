@@ -69,7 +69,8 @@ class StreamingPrioritySearch(PrioritySearch):
         # make sure we have enough candidates to explore
         if K * self.num_proposals + currently_available < self.num_candidates:
             # Increase K to ensure we have enough candidates
-            K += int((self.num_candidates - (K * self.num_proposals + currently_available)) / self.num_proposals)
+            additional_candidates_needed = int((self.num_candidates - (K * self.num_proposals + currently_available)) / self.num_proposals)
+            K += additional_candidates_needed
         # make sure K * self.num_proposals <= self.num_candidates
         K = min(K, int(self.num_candidates / self.num_proposals))
 
