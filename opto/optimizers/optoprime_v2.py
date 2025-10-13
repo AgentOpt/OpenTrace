@@ -390,7 +390,7 @@ class OptoPrimeV2(OptoPrime):
             max_tokens=8192,
             log=True,
             initial_var_char_limit=2000,
-            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = None,
+            optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
             **kwargs,
