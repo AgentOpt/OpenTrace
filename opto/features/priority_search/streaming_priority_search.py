@@ -57,8 +57,23 @@ class StreamingPrioritySearch(PrioritySearch):
         scores = [self.compute_exploration_priority(c) for c, _ in candidate_batchrollouts_list]
 
         # We use the top K to improve over, where K is determined by exploration_ratio.
-        K = int(self.num_candidates * self._exploration_ratio)
-        K += max(0, self.num_candidates - len(self._exploration_candidates) - K  - len(self.memory))  # ensure we have enough candidates to explore
+
+        # ensure it is possible to select K>=1 such that K * num_proposals <= num_candidates * exploration_ratio
+        max_proposals = self.num_candidates * self._exploration_ratio
+        if self.num_proposals > max_proposals:
+            print(f"Warning: num_proposals {self.num_proposals} is greater than num_candidates {max_proposals}. Setting num_proposals to num_candidates * exploration_ratio.")
+            self.num_proposals = int(max_proposals)
+
+        currently_available = len(self._exploration_candidates) + len(self.memory)
+        K = max(int(self.num_candidates * self._exploration_ratio / self.num_proposals), 1)  # K>=1
+        # make sure we have enough candidates to explore
+        if K * self.num_proposals + currently_available < self.num_candidates:
+            # Increase K to ensure we have enough candidates
+            additional_candidates_needed = int((self.num_candidates - (K * self.num_proposals + currently_available)) / self.num_proposals)
+            K += additional_candidates_needed
+        # make sure K * self.num_proposals <= self.num_candidates
+        K = min(K, int(self.num_candidates / self.num_proposals))
+
         # Randomly sample K candidates from the pool
         if len(candidate_batchrollouts_list) <= K:
             return matched_candidates_and_samples
@@ -85,7 +100,7 @@ class StreamingPrioritySearch(PrioritySearch):
         assert self._exploration_candidates is not None, "exploration_candidates must be set before calling validate."
         results = {c: []  for c in (exploration_candidates + candidates)}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         print(f'Adding {len(exploration_candidates)} exploration candidates and {len(candidates)} proposed candidates to validate results.')
-        assert len(candidates) <= self.num_candidates, f"Number of proposed candidates {len(candidates)} must be less than num_candidates {self.num_candidates}."
+        assert len(candidates) <= self.num_candidates, f"Number of proposed candidates {len(candidates)} must be no larger than num_candidates {self.num_candidates}."
         if len(candidates) == self.num_candidates:
             print("Warning: Number of proposed candidates is equal to num_candidates. Running in pure exploration mode.")
         # remove this assertion since some candidates might be duplicates
