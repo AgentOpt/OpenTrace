@@ -8,6 +8,7 @@ import traceback
 import asyncio
 
 from typing import List, Dict, Callable, Union, Any
+from collections.abc import Mapping
 
 from opto.trace.broadcast import recursive_conversion
 from opto.trace.errors import ExecutionError, TraceMissingInputsError
@@ -136,8 +137,8 @@ class FunModule(Module):
     ):
 
         assert _ldict is None or isinstance(
-            _ldict, dict
-        ), "_ldict must be a dictionary. or None"
+            _ldict, Mapping
+        ), "_ldict must be a dictionary or None."
         self._ldict = {} if _ldict is None else _ldict.copy()
 
         assert callable(fun), "fun must be a callable."
