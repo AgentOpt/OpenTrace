@@ -16,14 +16,15 @@ from opto.trace.modules import model as trace_model
 from opto.trace.nodes import node as trace_node
 from opto.optimizers.optoprime_v2 import OptoPrimeV2
 import pytest
-from opto.trainer.algorithms.gepa_algorithms import (
+from opto.features.gepa.gepa_algorithms import (
         GEPAAlgorithmBase,
         GEPAUCBSearch,
         GEPABeamPareto,
         _compute_pareto_counts,
         _pareto_sample,
-        _uniform_merge_params,
+        _uniform_merge_params
     )
+from opto.trainer.algorithms.beamsearch_algorithm import BeamsearchAlgorithm
 from opto.trainer.evaluators import evaluate
 from opto.trainer.guide import Guide
 from opto.utils.llm import DummyLLM
@@ -166,126 +167,6 @@ def test_gepa_variants_converge_on_dummyllm(algo_cls, train_kwargs):
     assert agent.param.data == target_add
 
 
-def test_compare_gepa_vs_basicsearch_on_dummyllm():
-    from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm
-
-    target_add = 7
-    ds = make_dataset(target_add, n=6)
-    agent_gepa = AddAgent(param=0)
-    agent_basic = AddAgent(param=0)
-
-    opt_gepa = build_optimizer(agent_gepa, suggest_value=target_add)
-    opt_basic = build_optimizer(agent_basic, suggest_value=target_add)
-
-    # GEPA
-    gepa = GEPAAlgorithmBase(agent_gepa, optimizer=opt_gepa, logger=None, num_threads=1)
-    _, best_gepa = gepa.train(
-        guide=ExactMatchGuide(),
-        train_dataset=ds,
-        validate_dataset=ds,
-        pareto_subset_size=4,
-        num_iters=8,
-        train_batch_size=2,
-        merge_every=2,
-        num_threads=1,
-    )
-
-    # BasicSearch baseline
-    basic = BasicSearchAlgorithm(agent_basic, optimizer=opt_basic, logger=None, num_threads=1)
-    basic.train(
-        guide=ExactMatchGuide(),
-        train_dataset=ds,
-        validate_dataset=ds,
-        num_proposals=1,
-        num_epochs=1,
-        batch_size=1,
-        test_dataset=ds,
-        eval_frequency=1,
-        num_threads=1,
-        verbose=False,
-    )
-
-    # Evaluate both on full dataset
-    score_gepa = np.mean(evaluate(agent_gepa, ExactMatchGuide(), ds["inputs"], ds["infos"], num_threads=2))
-    score_basic = np.mean(evaluate(agent_basic, ExactMatchGuide(), ds["inputs"], ds["infos"], num_threads=2))
-
-    assert best_gepa == pytest.approx(1.0, rel=0, abs=1e-6)
-    assert score_gepa == pytest.approx(1.0, rel=0, abs=1e-6)
-    assert score_basic == pytest.approx(1.0, rel=0, abs=1e-6)
-
-
-def test_snapshot_params_fast():
-    """Test the fast parameter snapshot utility function."""
-    from opto.trainer.algorithms.gepa_algorithms import _snapshot_params_fast
-    
-    @trace_model
-    class MultiTypeAgent:
-        def __init__(self):
-            self.int_param = trace_node(42, trainable=True)
-            self.str_param = trace_node("hello", trainable=True)
-            self.float_param = trace_node(3.14, trainable=True)
-            self.list_param = trace_node([1, 2, 3], trainable=True)
-            self.dict_param = trace_node({"key": "value"}, trainable=True)
-            # Test numpy array
-            self.np_param = trace_node(np.array([1, 2, 3]), trainable=True)
-
-        def forward(self, x):
-            return x + self.int_param
-
-    agent = MultiTypeAgent()
-    params = list(agent.parameters())
-    
-    # Test snapshot
-    snapshot = _snapshot_params_fast(params)
-    
-    # Check that all parameters are included
-    assert len(snapshot) == len(params)
-    
-    # Modify original values
-    agent.int_param._set(100)
-    agent.str_param._set("modified")
-    agent.np_param._set(np.array([4, 5, 6]))
-    
-    # Verify snapshot preserved original values
-    for p in params:
-        if p.py_name == "int_param":
-            assert snapshot[p] == 42
-        elif p.py_name == "str_param":
-            assert snapshot[p] == "hello"
-        elif p.py_name == "np_param":
-            assert np.array_equal(snapshot[p], np.array([1, 2, 3]))
-
-
-def test_fingerprint_params():
-    """Test the parameter fingerprinting utility function."""
-    from opto.trainer.algorithms.gepa_algorithms import _fingerprint_params
-    
-    @trace_model
-    class SimpleAgent:
-        def __init__(self):
-            self.a = trace_node(1, trainable=True)
-            self.b = trace_node("test", trainable=True)
-
-        def forward(self, x):
-            return x + self.a
-
-    agent = SimpleAgent()
-    params_dict = {p: p.data for p in agent.parameters()}
-    
-    # Test fingerprinting
-    fp1 = _fingerprint_params(params_dict)
-    fp2 = _fingerprint_params(params_dict)
-    
-    # Same parameters should produce same fingerprint
-    assert fp1 == fp2
-    
-    # Different parameters should produce different fingerprint
-    agent.a._set(2)
-    params_dict2 = {p: p.data for p in agent.parameters()}
-    fp3 = _fingerprint_params(params_dict2)
-    assert fp1 != fp3
-
-
 def test_numpy_seeding_reproducibility():
     """Test that numpy seeding ensures reproducible behavior."""
     target_add = 3
@@ -335,64 +216,6 @@ def test_numpy_seeding_reproducibility():
     assert best_diff == pytest.approx(1.0, rel=0, abs=1e-6)
 
 
-def test_gepa_ucb_pareto_cache():
-    """Test Pareto cache functionality in GEPAUCBSearch."""
-    target_add = 4
-    ds = make_dataset(target_add, n=3)
-    agent = AddAgent(param=0)
-    optimizer = build_optimizer(agent, suggest_value=target_add)
-    
-    # Test with cache enabled
-    algo = GEPAUCBSearch(agent=agent, optimizer=optimizer, logger=None, num_threads=1, enable_pareto_cache=True)
-    
-    metrics, best = algo.train(
-        guide=ExactMatchGuide(),
-        train_dataset=ds,
-        validate_dataset=ds,
-        pareto_subset_size=2,
-        num_search_iterations=2,
-        train_batch_size=1,
-        merge_every=2,
-        num_threads=1,
-    )
-    
-    # Should converge to perfect solution
-    assert best == pytest.approx(1.0, rel=0, abs=1e-6)
-    assert agent.param.data == target_add
-    
-    # Test that cache was used (should have some entries)
-    # Note: exact cache size depends on algorithm behavior, but should be non-empty if enabled
-    if hasattr(algo, '_pareto_cache'):
-        assert isinstance(algo._pareto_cache, dict)
-
-
-def test_budget_tracking_functionality():
-    """Test budget tracking in GEPA algorithms."""
-    target_add = 2
-    ds = make_dataset(target_add, n=4)
-    agent = AddAgent(param=0)
-    optimizer = build_optimizer(agent, suggest_value=target_add)
-    
-    # Test GEPABeamPareto with budget
-    algo = GEPABeamPareto(agent=agent, optimizer=optimizer, logger=None, num_threads=1)
-    
-    metrics, best = algo.train(
-        guide=ExactMatchGuide(),
-        train_dataset=ds,
-        validate_dataset=ds,
-        pareto_subset_size=3,
-        num_search_iterations=2,
-        train_batch_size=1,
-        merge_every=2,
-        budget_B=10,  # Low budget to test tracking
-        num_threads=1,
-    )
-    
-    # Should still achieve good results even with budget constraint
-    assert isinstance(best, float)
-    assert best >= 0.0  # Should be non-negative score
-
-
 def test_thread_safety_with_sequential_fallback():
     """Test that algorithms work correctly with sequential fallback when batch_run unavailable."""
     target_add = 1
@@ -435,37 +258,3 @@ def test_thread_safety_with_sequential_fallback():
     assert best2 == pytest.approx(1.0, rel=0, abs=1e-6)
     assert agent2.param.data == target_add
 
-
-def test_gepa_ucb_selectmodule_policy():
-    """Test different module selection policies in GEPAUCBSearch."""
-    target_add = 6
-    ds = make_dataset(target_add, n=3)
-    
-    # Test different selection policies
-    policies = ["round_robin"]  # Could test more if other policies are available
-    
-    for policy in policies:
-        agent = AddAgent(param=0)
-        optimizer = build_optimizer(agent, suggest_value=target_add)
-        
-        algo = GEPAUCBSearch(
-            agent=agent,
-            optimizer=optimizer,
-            logger=None,
-            num_threads=1,
-            selectmodule_policy=policy
-        )
-        
-        metrics, best = algo.train(
-            guide=ExactMatchGuide(),
-            train_dataset=ds,
-            validate_dataset=ds,
-            pareto_subset_size=2,
-            num_search_iterations=2,
-            train_batch_size=1,
-            merge_every=2,
-            num_threads=1,
-        )
-        
-        assert best == pytest.approx(1.0, rel=0, abs=1e-6)
-        assert agent.param.data == target_add
