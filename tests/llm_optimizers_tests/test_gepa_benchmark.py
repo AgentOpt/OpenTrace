@@ -4,13 +4,13 @@ import numpy as np
 
 from opto import trace
 from opto.optimizers.optoprime_v2 import OptoPrimeV2
-from opto.trainer.algorithms.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
+from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
 from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm
 from opto.trainer.guide import LLMJudge
 from opto.utils.llm import LLM
 
 
-RUN_BENCH = "1"
+RUN_BENCH = os.getenv("RUN_GEPA_BENCH") == "1"
 
 
 def _datasets_or_skip():
@@ -51,8 +51,11 @@ class Learner:
         return self.model(self.system_prompt, self.user_prompt_template, message)
 
 
-@pytest.mark.skipif(not RUN_BENCH, reason="Set RUN_GEPA_BENCH=1 to run this optional benchmark test.")
+@pytest.mark.slow
 def test_gepa_benchmark_gsm8k_real_llm():
+    if not RUN_BENCH:
+        pytest.skip("Set RUN_GEPA_BENCH=1 to run this optional benchmark test.")
+
     _datasets_or_skip()
     _llm_env_or_skip()
 
@@ -66,18 +69,14 @@ def test_gepa_benchmark_gsm8k_real_llm():
     # Teacher/judge with a low-cost profile
     guide = LLMJudge(llm=LLM(profile="cheap"))
 
-    # Set a budget constraint for algorithms that support it (e.g., GEPABeamPareto)
-    budget_limit = 5
-
     # Agent and optimizer (low-cost profile)
     agent = Learner(llm=LLM(profile="cheap"))
     optimizer = OptoPrimeV2(agent.parameters(), llm=LLM(profile="cheap"))
 
     algos = [
         ("GEPA-Base", GEPAAlgorithmBase(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_iters=2, train_batch_size=1, merge_every=2)),
-        (f"GEPA-BeamPareto-Budget{budget_limit}", GEPABeamPareto(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_search_iterations=2, train_batch_size=1, merge_every=2, budget_B=budget_limit)),
-        ("GEPA-BeamPareto", GEPABeamPareto(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_search_iterations=2, train_batch_size=1, merge_every=2)),
         ("GEPA-UCB", GEPAUCBSearch(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_search_iterations=2, train_batch_size=1, merge_every=2)),
+        ("GEPA-Beam", GEPABeamPareto(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_search_iterations=2, train_batch_size=1, merge_every=2)),
         ("BasicSearch", BasicSearchAlgorithm(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_epochs=1, batch_size=1, num_proposals=2)),
     ]
 
@@ -88,7 +87,7 @@ def test_gepa_benchmark_gsm8k_real_llm():
             algo.train(guide=guide, train_dataset=train_dataset, validate_dataset=train_dataset, test_dataset=train_dataset, eval_frequency=1, num_threads=2, verbose=False, **kwargs)
             results[name] = 0.0  # placeholder; evaluation is heavy and non-deterministic
         else:
-            _, best = algo.train(guide=guide, train_dataset=train_dataset, validate_dataset=train_dataset, pareto_subset_size=4, num_threads=2, **kwargs)
+            _, best = algo.train(guide=guide, train_dataset=train_dataset, validate_dataset=train_dataset, pareto_subset_size=4, num_threads=2, verbose=False, **kwargs)
             results[name] = float(best)
 
     # Sanity check that we produced some floats for each algorithm

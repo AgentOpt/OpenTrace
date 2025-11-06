@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Any
 import importlib
 
 from opto import trace
@@ -13,6 +13,40 @@ def dataset_check(dataset):
     assert isinstance(dataset, dict), "Dataset must be a dictionary"
     assert 'inputs' in dataset and 'infos' in dataset, "Dataset must contain 'inputs' and 'infos' keys"
     assert len(dataset['inputs'])==len(dataset['infos']), "Inputs and infos must have the same length"
+
+
+# TODO finish implementing resume function
+# def resume(
+#     save_path: str,
+#     *,
+#     algorithm: Union[Trainer, str] = 'MinibatchAlgorithm',
+#     model: trace.Module,
+#     train_dataset: dict,
+#     validate_dataset = None,
+#         test_dataset = None,
+#         **kwargs):
+#     """ Resume training from a checkpoint.
+
+#     Args:
+#         model: the model to be trained
+#         train_dataset: the training dataset
+#         resume_training: path to the checkpoint
+#         validate_dataset: the validation dataset
+#         test_dataset: the test dataset
+#         **kwargs: additional keyword arguments for the training method. If not provided, the same parameters as the last training call are used.
+#     """
+#     dataset_check(train_dataset)
+#     trainer_class = load_trainer_class(algorithm)
+#     assert issubclass(trainer_class, Trainer)
+#     assert isinstance(save_path, str), "resume_training must be a path string."
+#     assert hasattr(trainer_class, 'resume'), f"{trainer_class} does not support resume."
+#     assert hasattr(trainer_class, 'load'), f"{trainer_class} does not support load."
+#     algo = trainer_class.load(save_path)  # load the saved state
+#     return algo.resume(model=model,
+#                         train_dataset=train_dataset,
+#                         validate_dataset=validate_dataset,
+#                         test_dataset=test_dataset,
+#                         **kwargs)
 
 
 def train(
@@ -30,7 +64,7 @@ def train(
     logger_kwargs: Union[dict, None] = None,
     # The rest is treated as trainer config
     **trainer_kwargs,
-) -> None:
+) -> Any:
     """High-level training function for Trace models using optimization algorithms.
 
     Provides a unified interface for training Trace models by combining an optimizer,
@@ -118,12 +152,17 @@ def train(
     Optimizer : Parameter optimization interface
     Guide : Evaluation and feedback interface
     """
+
     optimizer_kwargs = optimizer_kwargs or {}  # this can be used to pass extra optimizer configs, like llm object explictly
     guide_kwargs = guide_kwargs or {}
     logger_kwargs = logger_kwargs or {}
 
     #  TODO check eligible optimizer, trainer
     dataset_check(train_dataset)
+
+
+    trainer_class = load_trainer_class(algorithm)
+    assert issubclass(trainer_class, Trainer)
 
     if optimizer is None:
         optimizer = "OPROv2" if isinstance(model, ParameterNode) else "OptoPrimeV2"
@@ -143,15 +182,19 @@ def train(
     parameters = model.parameters()
     assert len(parameters) >0, "Model must have non-empty parameters."
 
-    optimizer = load_optimizer(optimizer, model, **optimizer_kwargs)
-    guide = load_guide(guide, **guide_kwargs)
-    logger = load_logger(logger, **logger_kwargs)
-    trainer_class = load_trainer_class(algorithm)
+    if isinstance(optimizer_kwargs, list):  # support multiple optimizers
+        assert all(isinstance(d, dict) for d in optimizer_kwargs), "optimizer_kwargs must be a list of dictionaries."
+        optimizer = [load_optimizer(optimizer, model, **d) for d in optimizer_kwargs ]
+        assert all(isinstance(o, Optimizer) for o in optimizer)
+    else:
+        optimizer = load_optimizer(optimizer, model, **optimizer_kwargs)
+        assert isinstance(optimizer, Optimizer)
 
-    assert isinstance(optimizer, Optimizer)
+    guide = load_guide(guide, **guide_kwargs)
     assert isinstance(guide, Guide)
+
+    logger = load_logger(logger, **logger_kwargs)
     assert isinstance(logger, BaseLogger)
-    assert issubclass(trainer_class, Trainer)
 
     algo = trainer_class(
         model,
@@ -204,8 +247,13 @@ def load_logger(logger: Union[BaseLogger, str], **kwargs) -> BaseLogger:
 
 def load_trainer_class(trainer: Union[Trainer, str]) -> Trainer:
     if isinstance(trainer, str):
-        trainers_module = importlib.import_module("opto.trainer.algorithms")
-        trainer_class = getattr(trainers_module, trainer)
+        if trainer.lower() == 'PrioritySearch'.lower():
+            print('Warning: You are using PrioritySearch trainer, which is an experimental feature. Please report any issues you encounter.')
+            trainers_module = importlib.import_module("opto.features.priority_search")
+            trainer_class = getattr(trainers_module, trainer)
+        else:
+            trainers_module = importlib.import_module("opto.trainer.algorithms")
+            trainer_class = getattr(trainers_module, trainer)
     elif issubclass(trainer, Trainer):
         trainer_class = trainer
     else:

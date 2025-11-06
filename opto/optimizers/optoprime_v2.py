@@ -172,65 +172,9 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
         }
         return json.dumps(output, indent=2)
 
-    def output_response_extractor(self, response: str) -> Dict[str, Any]:
-        reasoning = ""
-        suggestion_tag = "suggestion"
-
-        if "```" in response:
-            response = response.replace("```", "").strip()
-
-        suggestion = {}
-        attempt_n = 0
-        while attempt_n < 2:
-            try:
-                suggestion = json.loads(response)[suggestion_tag]
-                reasoning = json.loads(response)[self.reasoning_tag]
-                break
-            except json.JSONDecodeError:
-                # Remove things outside the brackets
-                response = re.findall(r"{.*}", response, re.DOTALL)
-                if len(response) > 0:
-                    response = response[0]
-                attempt_n += 1
-            except Exception:
-                attempt_n += 1
-
-        if not isinstance(suggestion, dict):
-            suggestion = {}
-
-        if len(suggestion) == 0:
-            # we try to extract key/value separately and return it as a dictionary
-            pattern = rf'"{suggestion_tag}"\s*:\s*\{{(.*?)\}}'
-            suggestion_match = re.search(pattern, str(response), re.DOTALL)
-            if suggestion_match:
-                suggestion = {}
-                # Extract the entire content of the suggestion dictionary
-                suggestion_content = suggestion_match.group(1)
-                # Regex to extract each key-value pair;
-                # This scheme assumes double quotes but is robust to missing commas at the end of the line
-                pair_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"(.*)"'
-                # Find all matches of key-value pairs
-                pairs = re.findall(pair_pattern, suggestion_content, re.DOTALL)
-                for key, value in pairs:
-                    suggestion[key] = value
-
-        if len(suggestion) == 0:
-            print(f"Cannot extract suggestion from LLM's response:")
-            print(response)
-
-        # if the suggested value is a code, and the entire code body is empty (i.e., not even function signature is present)
-        # then we remove such suggestion
-        keys_to_remove = []
-        for key, value in suggestion.items():
-            if "__code" in key and value.strip() == "":
-                keys_to_remove.append(key)
-        for key in keys_to_remove:
-            del suggestion[key]
-
-        extracted_data = {"reasoning": reasoning,
-                          "variables": suggestion}
-
-        return extracted_data
+    def output_response_extractor(self, response: str, suggestion_tag = "suggestion") -> Dict[str, Any]:
+        # Use extract_llm_suggestion from OptoPrime => it could be implemented the other way around (OptoPrime would uses this helper but it should be moved out of OptoPrimev2)
+        return OptoPrime.extract_llm_suggestion(self, response, suggestion_tag=suggestion_tag, reasoning_tag="reasoning", return_only_suggestion=False)
 
 
 class OptimizerPromptSymbolSet2(OptimizerPromptSymbolSet):
@@ -443,15 +387,18 @@ class OptoPrimeV2(OptoPrime):
             # ignore the type conversion error when extracting updated values from LLM's suggestion
             include_example=False,
             memory_size=0,  # Memory size to store the past feedback
-            max_tokens=4096,
+            max_tokens=8192,
             log=True,
-            initial_var_char_limit=100,
+            initial_var_char_limit=2000,
             optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
             **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
+
+        if optimizer_prompt_symbol_set is None:
+            optimizer_prompt_symbol_set = OptimizerPromptSymbolSet()
 
         self.truncate_expression = truncate_expression
 
@@ -731,40 +678,3 @@ class OptoPrimeV2(OptoPrime):
         if verbose:
             print("LLM response:\n", response)
         return response
-
-    def save(self, path: str):
-        """Save the optimizer state to a file."""
-        with open(path, 'wb') as f:
-            pickle.dump({
-                "truncate_expression": self.truncate_expression,
-                "use_json_object_format": self.use_json_object_format,
-                "ignore_extraction_error": self.ignore_extraction_error,
-                "objective": self.objective,
-                "initial_var_char_limit": self.initial_var_char_limit,
-                "optimizer_prompt_symbol_set": self.optimizer_prompt_symbol_set,
-                "include_example": self.include_example,
-                "max_tokens": self.max_tokens,
-                "memory": self.memory,
-                "default_prompt_symbols": self.default_prompt_symbols,
-                "prompt_symbols": self.prompt_symbols,
-                "representation_prompt": self.representation_prompt,
-                "output_format_prompt": self.output_format_prompt,
-            }, f)
-
-    def load(self, path: str):
-        """Load the optimizer state from a file."""
-        with open(path, 'rb') as f:
-            state = pickle.load(f)
-            self.truncate_expression = state["truncate_expression"]
-            self.use_json_object_format = state["use_json_object_format"]
-            self.ignore_extraction_error = state["ignore_extraction_error"]
-            self.objective = state["objective"]
-            self.initial_var_char_limit = state["initial_var_char_limit"]
-            self.optimizer_prompt_symbol_set = state["optimizer_prompt_symbol_set"]
-            self.include_example = state["include_example"]
-            self.max_tokens = state["max_tokens"]
-            self.memory = state["memory"]
-            self.default_prompt_symbols = state["default_prompt_symbols"]
-            self.prompt_symbols = state["prompt_symbols"]
-            self.representation_prompt = state["representation_prompt"]
-            self.output_format_prompt = state["output_format_prompt"]

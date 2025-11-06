@@ -1,10 +1,11 @@
 from __future__ import annotations
 import trace
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Union, List
 
 if TYPE_CHECKING:  # to prevent circular import
     from opto.trace.nodes import Node
 from opto.trace.bundle import bundle
+from opto.utils.llm import AbstractModel
 import copy
 
 
@@ -589,15 +590,21 @@ def set_update(x: Any, y: Any):
 
 
 @bundle(catch_execution_error=False)
-def call_llm(system_prompt, *user_prompts, **kwargs):
-    """Query the language model of system_prompt with user_prompts."""
+def call_llm(llm, system_prompt: str, *user_prompts, **kwargs) -> str:
+    """Call the LLM model.
+
+    Args:
+        llm: The language model to use for generating responses.
+        system_prompt: the system prompt to the agent. By tuning this prompt, we can control the behavior of the agent. For example, it can be used to provide instructions to the agent (such as how to reason about the problem, how to use tools, how to answer the question), or provide in-context examples of how to solve the problem.
+        user_prompt: the input to the agent. It can be a query, a task, a code, etc.
+    Returns:
+        The response from the agent.
+    """
+    messages = []
     if system_prompt is not None:
-        messages = [{"role": "system", "content": system_prompt}]
-    else:
-        messages = [{"role": "system", "content": "You are a helpful assistant.\n"}]
+        messages.append({"role": "system", "content": system_prompt})
     for user_prompt in user_prompts:
         messages.append({"role": "user", "content": user_prompt})
-    from opto.utils.llm import LLM
-    llm = LLM()
+    # TODO auto-parsing results
     response = llm(messages=messages, **kwargs)
     return response.choices[0].message.content

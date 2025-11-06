@@ -24,26 +24,40 @@ class DataLoader:
         self.randomize = randomize
         self.replacement = replacement
         self.shuffle = shuffle
-        self._indices = self._update_indices()
-        self.n_epochs = 0
+        self.n_epochs = -1
         self._i = 0
+        self._indices = [ i for i in range(len(self.dataset['inputs'])) ]
+        self._exhausted = False
+        self._start_new_epoch()  # self.n_epochs will be set to 0
+
+    def _start_new_epoch(self):
+        if self.shuffle:
+            self._indices = self._update_indices()
+        self._i = 0
+        self.n_epochs += 1
+        self._exhausted = False
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        """ Get the next batch of data """
-        if self._i >= len(self._indices):
-            if self.shuffle:
-                self._indices = self._update_indices()
-            # Reset the index for the next epoch
-            self._i = 0
-            self.n_epochs += 1
+        """Get the next batch of data, always of batch_size. If the dataset is smaller or at the end, the batch will include data from the next epoch after shuffling."""
+        self._exhausted = self._exhausted or (self._i >= len(self._indices))
+        if self._exhausted:
+            self._start_new_epoch()
             raise StopIteration
-        indices = self._indices[self._i: min(self._i + self.batch_size, len(self._indices))]
-        xs = [self.dataset['inputs'][ind] for ind in indices]
-        infos = [self.dataset['infos'][ind] for ind in indices]
-        self._i += self.batch_size
+        xs = []
+        infos = []
+        while len(xs) < self.batch_size:
+            if self._i >= len(self._indices):
+                self._start_new_epoch()
+                self._exhausted = True  # Mark as exhausted to stop further sampling in this epoch
+            remaining = self.batch_size - len(xs)
+            end = min(self._i + remaining, len(self._indices))
+            indices = self._indices[self._i:end]
+            xs.extend([self.dataset['inputs'][ind] for ind in indices])
+            infos.extend([self.dataset['infos'][ind] for ind in indices])
+            self._i += len(indices)
         return xs, infos
 
     def _update_indices(self):
@@ -57,31 +71,19 @@ class DataLoader:
         """ Sample a batch of data from the dataset """
         try:
             xs, infos = next(self)
-            return xs, infos
         except StopIteration:
-            return self.sample()
+            xs, infos = self.sample()  # make sure to get a batch after resetting
+        self._exhausted = False  # calling next() again should not raise StopIteration immediately
+        return xs, infos
 
-    def save(self, path):
-        """Save the dataset to a file."""
-        with open(path, 'wb') as f:
-            pickle.dump(
-                {'_indices': self._indices,
-                 '_i': self._i,
-                 'batch_size': self.batch_size,
-                 'replacement': self.replacement,
-                 'shuffle': self.shuffle,
-                 'dataset': self.dataset},
-                f
-            )
+    def __getstate__(self):
+        """Get the state of the dataset for pickling."""
+        state = self.__dict__.copy()
+        state.pop('dataset', None)  # Remove dataset to avoid pickling issues
+        return state
 
-    def load(self, path):
-        """Load the dataset from a file."""
-        import pickle
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-            self._indices = data['_indices']
-            self._i = data['_i']
-            self.batch_size = data['batch_size']
-            self.replacement = data['replacement']
-            self.shuffle = data['shuffle']
-            self.dataset = data['dataset']
+    def __setstate__(self, state):
+        """Set the state of the dataset from pickling."""
+        self.__dict__.update(state)
+        # Note: dataset needs to be set manually after unpickling
+        print("Warning: dataset needs to be set manually after unpickling.")

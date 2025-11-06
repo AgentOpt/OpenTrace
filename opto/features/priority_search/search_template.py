@@ -1,45 +1,52 @@
 import numpy as np
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
-from opto.trainer.algorithms.basic_algorithms import Minibatch
+from opto.optimizers.optimizer import Optimizer
+from opto.trainer.loggers import BaseLogger
+from opto.trainer.algorithms.basic_algorithms import Trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler, RolloutsGraph
-
+from opto.features.priority_search.sampler import Sampler, BatchRollout
+from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
+from opto.trainer.utils import safe_mean
+from dataclasses import dataclass
+import pickle, copy, os
 # TODO save and load SearchTemplate
 # TODO async version???
 # TODO create SYNC and ASYNC versions of the base class; add an attribute to the class to indicate
 
-
+@dataclass
 class Samples:
-    """ A container for samples collected during the search algorithm. It contains a list of RolloutsGraph objects
-    and a dataset with inputs and infos which created the list of RolloutsGraph. """
+    """ A container for samples collected during the search algorithm. It contains a list of BatchRollout objects
+    and a dataset with inputs and infos which created the list of BatchRollout. """
 
-    samples: List[RolloutsGraph]
-    dataset: Dict[str, List[Any]]  # contains 'inputs' and 'infos' keys
+    samples: List[BatchRollout]
+    dataset: Dict[str, List[Any]]  # contains 'inputs' and 'infos' keys  # TODO do we need this?
 
-    def __init__(self, samples: List[RolloutsGraph], dataset: Dict[str, List[Any]]):
-        assert isinstance(samples, list), "samples must be a list of RolloutsGraph objects."
-        assert all(isinstance(s, RolloutsGraph) for s in samples), "All samples must be RolloutsGraph objects."
+    def __init__(self, samples: List[BatchRollout], dataset: Dict[str, List[Any]]):
+        assert isinstance(samples, list), "samples must be a list of BatchRollout objects."
+        assert all(isinstance(s, BatchRollout) for s in samples), "All samples must be BatchRollout objects."
         assert isinstance(dataset, dict), "dataset must be a dict."
         assert 'inputs' in dataset and 'infos' in dataset, "dataset must contain 'inputs' and 'infos' keys."
 
         self.samples = samples
-        self.dataset = dataset  # NOTE this cannot be extracted from the samples in general?
+
+        # TODO drop this
+        self._dataset = dataset  # NOTE this cannot be extracted from the samples in general?
 
     def add_samples(self, samples):
         """ Add samples to the Samples object. """
         assert isinstance(samples, Samples), "samples must be an instance of Samples."
         samples = samples.samples  # extract the samples from the Samples object
-        assert isinstance(samples, list), "samples must be a list of RolloutsGraph objects."
-        assert all(isinstance(s, RolloutsGraph) for s in samples), "All samples must be RolloutsGraph objects."
+        assert isinstance(samples, list), "samples must be a list of BatchRollout objects."
+        assert all(isinstance(s, BatchRollout) for s in samples), "All samples must be BatchRollout objects."
 
         # TODO assert xs and infos are in self.minibatch
         # add a function to extract unique inputs and infos from the samples
 
         self.samples.extend(samples)
 
-    def get_batch(self):
-        return self.dataset #['inputs'], self.minibatch['infos']
+    # def get_batch(self):
+    #     return self.dataset
 
     def __iter__(self):
         """ Iterate over the samples. """
@@ -49,87 +56,150 @@ class Samples:
         return sum(len(s) for s in self.samples)
 
     @property
-    def n_sub_batches(self) -> int:
+    def n_batchrollouts(self) -> int:
         """ Number of sub-batches in the samples. """
         return len(self.samples)
 
 
+def check_optimizer_parameters(optimizer: Optimizer, agent: trace.Module):
+    """ Check if the optimizer's parameters are the same as the agent's parameters. """
+    assert isinstance(optimizer, Optimizer), "optimizer must be an instance of Optimizer."
+    agent_params = set(agent.parameters())
+    optimizer_params = set(optimizer.parameters)
+    assert agent_params == optimizer_params, "Optimizer parameters do not match agent parameters."
 
-class SearchTemplate(Minibatch):
+
+def save_train_config(function):
+    """ Decorator to save the inputs of a class method. """
+    def wrapper(self, **kwargs):
+        _kwargs = kwargs.copy()
+        del _kwargs['train_dataset']  # remove train_dataset from the saved kwargs
+        if _kwargs.get('validate_dataset') is not None:
+            del _kwargs['validate_dataset'] # remove validate_dataset from the saved kwargs
+        if _kwargs.get('test_dataset') is not None:
+            del _kwargs['test_dataset']  # remove test_dataset from the saved kwargs
+        setattr(self, f'_train_last_kwargs', _kwargs)
+        return function(self, **kwargs)
+    return wrapper
+
+class SearchTemplate(Trainer):
     # This only uses __init__ and evaluate of Minibatch class.
     """ This implements a generic template for search algorithm. """
 
+    def __init__(self,
+                agent: trace.Module,
+                optimizer : Union[Optimizer, List[Optimizer]],
+                num_threads: int = None,   # maximum number of threads to use for parallel execution
+                logger: Union[BaseLogger, None] =None,
+                *args,
+                **kwargs,
+                ):
+        super().__init__(agent, num_threads=num_threads, logger=logger, *args, **kwargs)
+
+        # TODO assert agent parameters are the same as optimizer.parameters
+        if isinstance(optimizer, list):
+            assert len(optimizer) > 0, "Optimizers list is empty."
+            for opt in optimizer:
+                check_optimizer_parameters(opt, agent)
+            self._optimizers = optimizer
+        else:
+            check_optimizer_parameters(optimizer, agent)
+            self._optimizers = [optimizer]
+
+        self.n_iters = 0  # number of iterations
+        self.n_epochs = 0  # number of epochs (full passes over the dataset) performed by the algorithm (This is incremented in sample)
+        self.n_samples = 0  # number of training samples processed by the algorithm (This is incremented in sample)
+        self._optimizer_index = -1  # index of the current optimizer to use
+        self.train_sampler = None  # will be initialized in train
+        self.validate_sampler = None  # will be initialized in train
+
+    @property
+    def optimizer(self):
+        self._optimizer_index += 1
+        return self._optimizers[self._optimizer_index % len(self._optimizers)]  # return the current optimizer
+
     def train(self,
+              *,
               guide, # guide to provide feedback
               train_dataset,  # dataset of (x, info) pairs to train the agent
-              *,
               # validation
               validate_dataset = None, # same format as train_dataset; if None use the current batch.
               validate_guide = None,  #  to provide scores for the validation set
               # training loop
               batch_size = 1,  # batch size for updating the agent
-              sub_batch_size = None,  # sub-batch size for broadcasting the agents
+              num_batches = 1,  # number of batches to use from the dataset in each iteration
               score_range = None,  # minimum score to update the agent
-              num_epochs = 1,  # number of training epochs
+              num_epochs = 1,  # number of training epochs (int or None)
+              num_steps = None,  # number of training steps (int or None)
               num_threads = None,  # maximum number of threads to use
               verbose = False,  # whether to print the output of the agent
               # evaluation
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent; if None, use train_dataset
               test_guide = None, # guide to provide scores for the test set; if None, use guide
-              eval_frequency: Union[int, None] = 1,  # frequency of evaluation
-              num_eval_samples: int = 1,  # number of samples to use to evaluate each input
+              test_frequency: Union[int, None] = 1,  # frequency of evaluation NOTE set test_frequency < 0 to skip first evaluation
+              num_test_samples: int = 1,  # number of samples to use to evaluate each input
               # logging
               log_frequency = None,  # frequency of logging
               save_frequency: Union[int, None] = None,  # frequency of saving the agent
-              save_path: str = "checkpoints/agent.pkl",  # path to save the agent
+              save_path: str = "search_checkpoints/",  # path to save the agent
               **kwargs
               ):
+        assert 'subbatch_size' not in kwargs, "subbatch_size should not be provided in kwargs."
 
         ## Setup
-        test_frequency = eval_frequency  # use eval_frequency as test_frequency  # NOTE legacy notation
         log_frequency = log_frequency or test_frequency  # frequency of logging (default to test_frequency)
         self.num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         test_dataset = test_dataset or train_dataset  # default to train_dataset if test_dataset is not provided
         test_guide = test_guide or guide
-        self.num_eval_samples = num_eval_samples  # number of samples to use to evaluate each input
+        self.num_test_samples = num_test_samples  # number of samples to use to evaluate each input
         if score_range is None:
             score_range = (-np.inf, np.inf)
         assert len(score_range) == 2, "score_range must be a tuple (min_score, max_score)."
         assert score_range[1] >= score_range[0], "score_range must be a tuple (min_score, max_score) with min_score <= max_score."
         self._score_range = score_range  # range of the score for the guide
 
-        self.train_sampler = Sampler(
-            DataLoader(train_dataset, batch_size=batch_size),
-            guide,
-            num_threads=self.num_threads,
-            sub_batch_size=sub_batch_size,
-            score_range=self._score_range
-        )
-        self._validate_dataset = validate_dataset  # if None, the current batch will be used for validation
-        self.validate_sampler = Sampler(
-            DataLoader(validate_dataset if validate_dataset else {'inputs':[],'infos':[]}, batch_size=batch_size),
-            validate_guide or guide,
-            num_threads=self.num_threads,
-            sub_batch_size=None,  # no sub-batch size for validation
-            score_range=self._score_range
-        )
+        subbatch_size, batch_size = batch_size, batch_size*num_batches
 
-        # Evaluate the agent before learning
-        # NOTE set test_frequency < 0 to skip first evaluation
-        if (test_frequency is not None) and test_frequency > 0:
-            info_test = self.test(test_dataset, test_guide)  # test self.agent
-            self.log(info_test)
+        if self.train_sampler is None:
+            self.train_sampler = Sampler(
+                DataLoader(train_dataset, batch_size=batch_size),
+                guide,
+                num_threads=self.num_threads,
+                subbatch_size=subbatch_size,
+                score_range=self._score_range
+        )
+        else:
+            self.train_sampler.loader.dataset = train_dataset  # update the train dataset in the sampler
+
+        self.use_prev_batch = validate_dataset is None  # whether to use the current batch for validation
+        if self.validate_sampler is None:
+            if not self.use_prev_batch:
+                self.validate_sampler = Sampler(
+                    DataLoader(validate_dataset, batch_size=batch_size),
+                    validate_guide or guide,
+                    num_threads=self.num_threads,
+                    subbatch_size=None,  # no sub-batch size for validation
+                    score_range=self._score_range
+                )
+            else:
+                self.validate_sampler = self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
+        else:
+            if not self.use_prev_batch:
+                self.validate_sampler.loader.dataset = validate_dataset  # update the validate dataset in the sampler
+            else:
+                assert self.validate_sampler == self.train_sampler, "Expected validate_sampler to be train_sampler if no validate_dataset is provided."
 
         # Save the agent before learning if save_frequency > 0
         if (save_frequency is not None) and save_frequency > 0:
             self.save(save_path)
 
         samples = None
-        self.n_epochs = 0 # number of epochs (full passes over the dataset) performed by the algorithm (This is incremented in sample)
-        self.n_samples = 0 # number of training samples processed by the algorithm (This is incremented in sample)
         train_scores = []  # to store the scores of the agent during training
-
-        while self.n_epochs < num_epochs :
+        train_num_samples = []  # to store the number of samples used to compute each score
+        num_steps = num_steps if num_steps is not None else 0
+        num_epochs = num_epochs if num_epochs is not None else 0
+        # Train the agent at least for num_epochs or num_steps
+        while self.n_epochs < num_epochs or self.n_iters < num_steps:
 
             print(f"Epoch: {self.n_epochs}. Iteration: {self.n_iters}")
 
@@ -144,8 +214,11 @@ class SearchTemplate(Minibatch):
 
             # Evaluate the agent after update
             if (test_frequency is not None) and (self.n_iters % test_frequency == 0):
-                info_test = self.test(test_dataset, test_guide)  # test self.agent
-                self.log(info_test, prefix="Test: ")
+                if self.n_iters == 0 and test_frequency < 0:
+                    print("Skipping first evaluation.")
+                else:
+                    info_test = self.test(test_dataset, test_guide)  # test self.agent
+                    self.log(info_test, prefix="Test/")
 
             # Save the algorithm state
             if (save_frequency is not None and save_frequency > 0) and self.n_iters % save_frequency == 0:
@@ -153,21 +226,24 @@ class SearchTemplate(Minibatch):
 
             # Log information
             assert 'mean_score' in info_sample, "info_sample must contain 'mean_score'."
-            assert 'n_epochs' in info_sample, "info_sample must contain 'n_epochs'."
+            assert 'self.n_epochs' in info_sample, "info_sample must contain 'self.n_epochs'."
 
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
+            train_num_samples.append(info_sample['num_samples'])
+
             if self.n_iters % log_frequency == 0:
-                self.logger.log('Average train score', np.mean(train_scores), self.n_iters, color='blue')
-                self.log(info_update, prefix="Update: ")
-                self.log(info_sample, prefix="Sample: ")
+                avg_train_score = np.sum(np.array(train_scores) * np.array(train_num_samples)) / np.sum(train_num_samples)
+                self.logger.log('Algo/Average train score', avg_train_score, self.n_iters, color='blue')
+                self.log(info_update, prefix="Update/")
+                self.log(info_sample, prefix="Sample/")
                 self.n_samples += len(samples)  # update the number of samples processed
-                self.logger.log('Number of samples', self.n_samples, self.n_iters, color='blue')
+                self.logger.log('Algo/Number of training samples', self.n_samples, self.n_iters, color='blue')
                 # Log parameters
                 for p in self.agent.parameters():
-                    self.logger.log(f"Parameter: {p.name}", p.data, self.n_iters, color='red')
+                    self.logger.log(f"Parameter/{p.name}", p.data, self.n_iters, color='red')
 
             # Update counters
-            self.n_epochs = info_sample['n_epochs']  # update the number of epochs completed
+            self.n_epochs = info_sample['self.n_epochs']  # update the number of epochs completed
             self.n_iters += 1
         return
 
@@ -191,11 +267,12 @@ class SearchTemplate(Minibatch):
         """
         samples = Samples(*self.train_sampler.sample(agents, description_prefix='Sampling training minibatch: '))  # create a Samples object to store the samples and the minibatch
         # Log information about the sampling
-        scores = [ g.get_scores() for g in samples.samples]  # list of list of scores for each RolloutsGraph
-        scores = [item for sublist in scores for item in sublist]  # flatten the list of scores
+        scores = [ g.get_scores() for g in samples.samples]  # list of list of scores for each BatchRollout
+        scores = [item for sublist in scores for item in sublist if item is not None]  # flatten the list of scores
         log_info = {
-            'mean_score': np.mean(scores),
-            'n_epochs': self.train_sampler.n_epochs,
+            'mean_score': safe_mean(scores, 0),  # return 0, if num_samples == 0 so that the weighted mean can be computed
+            'num_samples': len(scores),
+            'self.n_epochs': self.train_sampler.n_epochs,
         }
         # check if the scores are within the score range
         if not (self.min_score <= log_info['mean_score'] <= self.max_score):
@@ -216,16 +293,70 @@ class SearchTemplate(Minibatch):
         min_score = self.min_score
         # Test the agent's performance
         test_score = self.evaluate(self.agent, guide, test_dataset['inputs'], test_dataset['infos'],
-                          min_score=min_score, num_threads=self.num_threads,
+                          min_score=min_score, num_threads=self.num_threads,num_samples=self.num_test_samples,
                           description=f"Evaluating agent")  # and log
         # check if the test_score is within the score range
         if not (self.min_score <= test_score <= self.max_score):
             print(f"Warning: Test score {test_score} is out of the range {self._score_range}.")
         return {'test_score': test_score}
 
+    def evaluate(self, agent, guide, xs, infos, min_score=None, num_samples=1, num_threads=None, description=None):
+        """ Evaluate the agent on the given dataset. """
+        num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
+        test_scores = evaluate(agent, guide, xs, infos, min_score=min_score, num_threads=num_threads,
+                               num_samples=num_samples, description=description)
+        return safe_mean(test_scores)
+
     def save(self, save_path):
-        self.save_agent(save_path, self.n_iters)
-        # TODO save full state of self
+        print(f"Saving algorithm state to {save_path} at iteration {self.n_iters}.")
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        obj = copy.deepcopy(self)  # to detach nodes from the computation graph
+        with open(save_path+'/algo.pkl', 'wb') as f:
+            pickle.dump(obj, f)
+
+    @classmethod
+    def load(cls, load_path: str):
+        with open(load_path+'/algo.pkl', 'rb') as f:
+            algo = pickle.load(f)
+        assert isinstance(algo, cls), f"Loaded object is not an instance of {cls.__name__}."
+        return algo
+
+
+    def resume(self, *,
+               model: trace.Module,
+               train_dataset: dict ,
+               validate_dataset = None,
+               test_dataset = None,
+               **kwargs):
+        """ Resume training from a saved state.
+
+        Args:
+            model: The model to be trained.
+            train_dataset: Dataset to resume training.
+            validate_dataset: Dataset for validation. If None, use the current batch.
+            test_dataset: Dataset for testing. If None, use train_dataset.
+            **kwargs: Additional keyword arguments for the training method. If not provided, the same parameters as the last training call are used.
+        """
+        # Set the state of the model to the provided model
+        assert isinstance(model, trace.Module), "model must be an instance of trace.Module."
+        state = self.agent.__getstate__()
+        model.__setstate__(state)  # load the state into the provided model
+        self.agent = model  # replace the model with the provided model
+
+        # Resume training with the same parameters as before
+        last_train_kwargs = getattr(self, '_train_last_kwargs', {}).copy()
+        if self.use_prev_batch:
+            assert validate_dataset is None, "Loaded algo has use_prev_batch enabled. validate_dataset must be None when use_prev_batch is True."
+            assert self.validate_sampler == self.train_sampler  # use the train_sampler for validation if no validation dataset is provided
+
+        last_train_kwargs.update(kwargs)  # update with any new parameters provided
+        last_train_kwargs['train_dataset'] = train_dataset
+        last_train_kwargs['validate_dataset'] = validate_dataset
+        last_train_kwargs['test_dataset'] = test_dataset
+        print(f"Resuming training with parameters: {last_train_kwargs}")
+        return self.train(**last_train_kwargs)
+
 
     # Unimplemented methods that should be implemented by subclasses
     def update(self, samples=None, verbose=False, **kwargs):
