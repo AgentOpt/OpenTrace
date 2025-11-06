@@ -51,6 +51,8 @@ from opto.trace.io.otel_adapter import otlp_traces_to_trace_json
 from opto.trace.io.tgj_ingest import ingest_tgj
 from opto.trace.nodes import MessageNode, ParameterNode
 from opto.optimizers import OptoPrimeV2
+from opto.optimizers.optoprime_v2 import OptimizerPromptSymbolSetJSON
+from opto.trainer.algorithms.basic_algorithms import batchify
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
@@ -59,7 +61,7 @@ from langgraph.types import Command
 # CONFIGURATION
 # ==============================================================================
 
-NUM_ITERATIONS = 3
+NUM_ITERATIONS = 5
 TEST_QUERIES = [
     "Summarize the causes and key events of the French Revolution.",
     "Give 3 factual relationships about Tesla, Inc. with entity IDs.",
@@ -75,7 +77,168 @@ OPTIMIZABLE = ["planner", "executor", ""]
 # Enable code optimization (experimental):
 # When True, node implementations can be stored as trainable parameters
 # using sp.set_attribute("param.__code_<name>", source_code)
-ENABLE_CODE_OPTIMIZATION = False  # Set to True to optimize function implementations
+ENABLE_CODE_OPTIMIZATION = True  # Set to True to optimize function implementations
+
+# ==============================================================================
+# LOGGING HELPERS
+# ==============================================================================
+
+LOG_DIR: str | None = None
+AGGREGATE_MD: str | None = None  # path to the aggregated log, LLM-friendly markdown context
+
+def _init_log_dir() -> str:
+    """Create a timestamped root log directory."""
+    root = os.path.join("logs", "otlp_langgraph", time.strftime("%Y%m%d_%H%M%S"))
+    os.makedirs(root, exist_ok=True)
+    return root
+
+def _safe_dump_json(path: str, obj: dict | list) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+def _safe_dump_text(path: str, text: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+def _extract_prompts_from_otlp(otlp: Dict[str, Any]) -> list[Dict[str, str]]:
+    """Pull all inputs.gen_ai.prompt values from spans."""
+    out: list[Dict[str, str]] = []
+    for rs in otlp.get("resourceSpans", []):
+        for ss in rs.get("scopeSpans", []):
+            for sp in ss.get("spans", []):
+                prompt = None
+                for a in sp.get("attributes", []):
+                    if a.get("key") == "inputs.gen_ai.prompt":
+                        v = a.get("value", {})
+                        prompt = v.get("stringValue") or str(v)
+                        break
+                if prompt:
+                    out.append({
+                        "spanId": sp.get("spanId", ""),
+                        "name": sp.get("name", ""),
+                        "prompt": prompt
+                    })
+    return out
+
+def _save_run_logs(phase: str, iteration: int, idx: int, run: "RunResult") -> None:
+    """
+    Save OTLP, TGJ, prompts, and a simple graph view for a single run.
+    phase: 'baseline' or 'iter_XX'
+    """
+    assert LOG_DIR is not None
+    run_dir = os.path.join(LOG_DIR, phase, f"run_{idx:02d}")
+    # 1) Raw OTLP
+    _safe_dump_json(os.path.join(run_dir, "otlp.json"), run.otlp)
+    # 2) Prompts extracted from spans
+    prompts = {"prompts": _extract_prompts_from_otlp(run.otlp)}
+    _safe_dump_json(os.path.join(run_dir, "prompts.json"), prompts)
+    # 3) TGJ conversion and 4) Graph view
+    try:
+        tgj_docs = list(otlp_traces_to_trace_json(
+            run.otlp,
+            agent_id_hint=f"{phase}_run{idx}",
+            use_temporal_hierarchy=True,
+        ))
+        _safe_dump_json(os.path.join(run_dir, "tgj.json"), tgj_docs)
+        # Graph view (best-effort)
+        try:
+            nodes = ingest_tgj(tgj_docs[0])
+            graph_txt = visualize_graph(nodes)
+        except Exception as e:
+            graph_txt = f"[graph error] {e}"
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "graph.txt"), "w", encoding="utf-8") as f:
+            f.write(graph_txt)
+    except Exception as e:
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "tgj_error.txt"), "w", encoding="utf-8") as f:
+            f.write(str(e))
+
+def _save_optimizer_log(iteration: int, optimizer: OptoPrimeV2 | None) -> None:
+    """Dump the optimizer's internal log (includes step-level info) and refresh the aggregate markdown."""
+    if optimizer is None:
+        return
+    assert LOG_DIR is not None
+    iter_dir = os.path.join(LOG_DIR, f"iter_{iteration:02d}")
+    _safe_dump_json(os.path.join(iter_dir, "optimizer_log.json"), optimizer.log)
+    _rebuild_aggregate_markdown()
+
+def _truncate(s: str, n: int = 8000) -> str:
+    """Truncate long text safely for markdown."""
+    if len(s) <= n:
+        return s
+    return s[:n] + "\n...[truncated]...\n"
+
+def _read_json_if(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return ""
+
+def _rebuild_aggregate_markdown() -> None:
+    """Aggregate all saved artifacts into one markdown file for LLM context."""
+    assert LOG_DIR is not None
+    global AGGREGATE_MD
+    AGGREGATE_MD = os.path.join(LOG_DIR, "context_bundle.md")
+    lines = []
+    lines.append(f"# OTLP → TGJ LangGraph Optimization Bundle\n")
+    lines.append(f"_root: {LOG_DIR}_\n")
+
+    # Baseline
+    base_dir = os.path.join(LOG_DIR, "baseline")
+    if os.path.isdir(base_dir):
+        lines.append("\n## Baseline\n")
+        for run_name in sorted(os.listdir(base_dir)):
+            run_dir = os.path.join(base_dir, run_name)
+            if not os.path.isdir(run_dir):
+                continue
+            lines.append(f"\n### {run_name}\n")
+            prompts = _read_json_if(os.path.join(run_dir, "prompts.json"))
+            tgj = _read_json_if(os.path.join(run_dir, "tgj.json"))
+            otlp = _read_json_if(os.path.join(run_dir, "otlp.json"))
+            graph = _read_json_if(os.path.join(run_dir, "graph.txt"))
+            lines.append("**prompts.json**\n\n```json\n" + _truncate(prompts) + "\n```\n")
+            lines.append("**tgj.json**\n\n```json\n" + _truncate(tgj) + "\n```\n")
+            lines.append("**otlp.json** (snippet)\n\n```json\n" + _truncate(otlp, 4000) + "\n```\n")
+            lines.append("**graph.txt**\n\n```text\n" + _truncate(graph, 4000) + "\n```\n")
+
+    # Iterations
+    for name in sorted(os.listdir(LOG_DIR)):
+        if not name.startswith("iter_"):
+            continue
+        iter_dir = os.path.join(LOG_DIR, name)
+        if not os.path.isdir(iter_dir):
+            continue
+        lines.append(f"\n## {name}\n")
+        # optimizer log
+        opt_log = _read_json_if(os.path.join(iter_dir, "optimizer_log.json"))
+        if opt_log:
+            lines.append("**optimizer_log.json**\n\n```json\n" + _truncate(opt_log) + "\n```\n")
+        # batched feedback (if present)
+        bf_path = os.path.join(iter_dir, "batched_feedback.txt")
+        if os.path.exists(bf_path):
+            bf = _read_json_if(bf_path)
+            lines.append("**batched_feedback.txt**\n\n```text\n" + _truncate(bf) + "\n```\n")
+        # runs
+        for run_name in sorted(os.listdir(iter_dir)):
+            run_dir = os.path.join(iter_dir, run_name)
+            if not (os.path.isdir(run_dir) and run_name.startswith("run_")):
+                continue
+            lines.append(f"\n### {run_name}\n")
+            prompts = _read_json_if(os.path.join(run_dir, "prompts.json"))
+            tgj = _read_json_if(os.path.join(run_dir, "tgj.json"))
+            otlp = _read_json_if(os.path.join(run_dir, "otlp.json"))
+            graph = _read_json_if(os.path.join(run_dir, "graph.txt"))
+            lines.append("**prompts.json**\n\n```json\n" + _truncate(prompts) + "\n```\n")
+            lines.append("**tgj.json**\n\n```json\n" + _truncate(tgj) + "\n```\n")
+            lines.append("**otlp.json** (snippet)\n\n```json\n" + _truncate(otlp, 4000) + "\n```\n")
+            lines.append("**graph.txt**\n\n```text\n" + _truncate(graph, 4000) + "\n```\n")
+
+    _safe_dump_text(AGGREGATE_MD, "\n".join(lines))
+    if AGGREGATE_MD: print(f"\n📦 Aggregate context markdown → {AGGREGATE_MD}")
 
 # ==============================================================================
 # OTEL SETUP
@@ -260,7 +423,8 @@ def planner_node(state: State) -> Command[Literal["executor"]]:
         raw = LLM_CLIENT(
             messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}],
             response_format={"type":"json_object"},
-            max_tokens=400
+            max_tokens=400,
+            temperature=0,
         ).choices[0].message.content
 
         try:
@@ -321,7 +485,8 @@ def executor_node(state: State) -> Command[Literal["web_researcher", "wikidata_r
         raw = LLM_CLIENT(
             messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}],
             response_format={"type":"json_object"},
-            max_tokens=300
+            max_tokens=300,
+            temperature=0,
         ).choices[0].message.content
 
         try:
@@ -433,7 +598,8 @@ Provide a direct, factual answer."""
 
         answer = LLM_CLIENT(
             messages=[{"role":"system","content":"Answer concisely"}, {"role":"user","content":prompt}],
-            max_tokens=400
+            max_tokens=400,
+            temperature=0,
         ).choices[0].message.content
 
         span_id = f"{sp.get_span_context().span_id:016x}"
@@ -470,7 +636,8 @@ Plan: {json.dumps(state.plan)}
         raw = LLM_CLIENT(
             messages=[{"role":"system","content":"Eval expert. JSON only."}, {"role":"user","content":eval_prompt}],
             response_format={"type":"json_object"},
-            max_tokens=400
+            max_tokens=400,
+            temperature=0,
         ).choices[0].message.content
 
         try:
@@ -491,6 +658,7 @@ Plan: {json.dumps(state.plan)}
         for k, v in metrics.items():
             sp.set_attribute(f"eval.{k}", str(v))
         sp.set_attribute("eval.score", str(score))
+        sp.set_attribute("eval.reasons", reasons)
 
         span_id = f"{sp.get_span_context().span_id:016x}"
 
@@ -566,6 +734,7 @@ def run_graph_with_otel(
     score = 0.5
     metrics = {}
     feedback = "Evaluation completed"
+    reasons = ""
 
     for rs in otlp.get("resourceSpans", []):
         for ss in rs.get("scopeSpans", []):
@@ -573,12 +742,13 @@ def run_graph_with_otel(
                 if sp.get("name") == "evaluator":
                     attrs = {a["key"]: a["value"].get("stringValue", "") for a in sp.get("attributes", [])}
                     score = float(attrs.get("eval.score", "0.5"))
+                    reasons = attrs.get("eval.reasons", "")
                     metrics = {
                         "answer_relevance": float(attrs.get("eval.answer_relevance", "0.5")),
                         "groundedness": float(attrs.get("eval.groundedness", "0.5")),
                         "plan_quality": float(attrs.get("eval.plan_quality", "0.5"))
                     }
-                    feedback = f"[Metrics] {list(metrics.values())}"
+                    feedback = json.dumps({"metrics": metrics, "score": score, "reasons": reasons})
 
     # Access final_state as dict (LangGraph returns dict, not State object)
     return RunResult(
@@ -689,7 +859,29 @@ def show_prompt_diff(old: str, new: str, name: str):
             print(line)
     print("="*80)
 
-def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2]) -> tuple[Dict[str, str], OptoPrimeV2]:
+def compute_change_stats(original: str, updated: str) -> tuple[int, int]:
+    """Return (line_changes, char_changes) between two parameter versions."""
+
+    original = original or ""
+    updated = updated or ""
+
+    line_changes = 0
+    for line in difflib.unified_diff(original.splitlines(), updated.splitlines(), lineterm=""):
+        if line.startswith(("+++", "---", "@@")):
+            continue
+        if line.startswith(("+", "-")):
+            line_changes += 1
+
+    char_changes = 0
+    sequence = difflib.SequenceMatcher(None, original, updated)
+    for tag, i1, i2, j1, j2 in sequence.get_opcodes():
+        if tag == "equal":
+            continue
+        char_changes += (i2 - i1) + (j2 - j1)
+
+    return line_changes, char_changes
+
+def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2], iteration: int | None = None) -> tuple[Dict[str, str], OptoPrimeV2]:
     print("\\n📊 OPTIMIZATION:")
     print("="*80)
 
@@ -698,7 +890,13 @@ def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2]) 
     for idx, run in enumerate(runs):
         print(f"\\n🔍 Run {idx+1}: score={run.score:.3f}, metrics={run.metrics}")
 
-        tgj_docs = list(otlp_traces_to_trace_json(run.otlp, agent_id_hint=f"run{idx}"))
+        tgj_docs = list(
+            otlp_traces_to_trace_json(
+                run.otlp,
+                agent_id_hint=f"run{idx}",
+                use_temporal_hierarchy=True,
+            )
+        )
         nodes = ingest_tgj(tgj_docs[0])
 
         target = find_target(nodes)
@@ -728,38 +926,73 @@ def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2]) 
         return {}, optimizer
 
     # Create optimizer ONCE on first call, reuse thereafter
+    created_optimizer = False
     if optimizer is None:
-        print(f"\n🔧 Creating optimizer with {len(first_params)} params (memory_size=5)")
-        optimizer = OptoPrimeV2(first_params, llm=LLM_CLIENT, memory_size=5, log=True)
+        mem = max(12, len(all_targets_and_feedback) * 4)
+        print(f"\n🔧 Creating optimizer with {len(first_params)} params (memory_size={mem})")
+        optimizer = OptoPrimeV2(
+            first_params,
+            llm=LLM_CLIENT,
+            memory_size=mem,
+            log=True,
+            optimizer_prompt_symbol_set=OptimizerPromptSymbolSetJSON(),
+            objective=(
+                "Maximize eval.score = mean(answer_relevance, groundedness, plan_quality). "
+                "Keep templates generic (placeholders intact); improve routing clarity and step structure."
+            ),
+        )
+        created_optimizer = True
     else:
         print(f"\n♻️  Reusing optimizer (log has {len(optimizer.log)} entries) & Syncing parameter data and remapping graphs...")
-        
-        # Build mapping from new params to optimizer params
-        param_mapping = {}
-        for new_param in first_params:
-            new_semantic = new_param.name.split(":")[0].split("/")[-1]
+
+    # Build mapping from current iteration params to optimizer params so all runs share nodes
+    param_mapping: Dict[int, ParameterNode] = {}
+
+    def map_params(params: List[ParameterNode], sync_data: bool = False) -> None:
+        for param in params:
+            if id(param) in param_mapping:
+                continue
+            semantic = param.name.split(":")[0].split("/")[-1]
             for opt_param in optimizer.parameters:
                 opt_semantic = opt_param.name.split(":")[0].split("/")[-1]
-                if new_semantic == opt_semantic:
-                    # Sync data from new param to optimizer's param
-                    opt_param._data = new_param._data
-                    # Map new param ID to optimizer param for graph remapping
-                    param_mapping[id(new_param)] = opt_param
+                if semantic == opt_semantic:
+                    if sync_data:
+                        opt_param._data = param._data
+                    param_mapping[id(param)] = opt_param
                     break
-        
-        # Remap targets to use optimizer's params (not the new params from OTEL)
-        for target, _, params in all_targets_and_feedback:
-            _remap_params_in_graph(target, param_mapping)
 
-    print(f"\n⬅️  BACKWARD:")
+    # Always sync the first run's params when reusing the optimizer to refresh data
+    map_params(first_params, sync_data=not created_optimizer)
+
+    for _, _, params in all_targets_and_feedback:
+        map_params(params)
+
+    # Remap targets to use optimizer's params (not the newly created params from OTEL)
+    for target, _, _ in all_targets_and_feedback:
+        _remap_params_in_graph(target, param_mapping)
+
+    # ---- Batch like trainers do: build one composite target + one composite feedback ----
+    # Preserve per-item trace in the target bundle AND include each run's score explicitly in feedback.
+    batched_target = batchify(*[t for (t, _, _) in all_targets_and_feedback])  # Trace node
+    # Combine score + feedback per item (feedback itself may already contain metrics/score JSON; we make it explicit)
+    batched_feedback_items = []
+    for i, ((_, fb, _), run) in enumerate(zip(all_targets_and_feedback, runs)):
+        # Example line format: ID [0]: score=0.734 // feedback: {"metrics": {...}, "score": 0.734, "reasons": "..."}
+        item = f"ID [{i}]: score={run.score:.3f}\nfeedback: {fb}"
+        batched_feedback_items.append(item)
+    batched_feedback = batchify(*batched_feedback_items).data  # plain str
+    # Log the exact batched feedback used for this step (per iteration)
+    if LOG_DIR is not None and iteration is not None:
+        iter_dir = os.path.join(LOG_DIR, f"iter_{iteration:02d}")
+        _safe_dump_text(os.path.join(iter_dir, "batched_feedback.txt"), batched_feedback)
+
+    print(f"\n⬅️  BACKWARD (batched):")
     optimizer.zero_feedback()
-
-    for idx, (target, feedback, _) in enumerate(all_targets_and_feedback):
-        try:
-            optimizer.backward(target, feedback)
-            print(f"   Run {idx+1}: ✓")
-        except Exception as e:
-            print(f"   Run {idx+1}: ❌ {e}")
+    try:
+        optimizer.backward(batched_target, batched_feedback)
+        print(f"   Batched: ✓ ({len(all_targets_and_feedback)} runs)")
+    except Exception as e:
+        print(f"   ❌ {e}")
 
     print(f"\\n➡️  STEP:")
     try:
@@ -795,6 +1028,11 @@ def main():
     print("="*80)
     print(f"\\nConfig: {len(TEST_QUERIES)} queries, {NUM_ITERATIONS} iterations")
 
+    # Init log directory once
+    global LOG_DIR
+    LOG_DIR = _init_log_dir()
+    print(f"Logs → {LOG_DIR}")
+
     # Build graph once
     graph = build_graph()
     print("✓ LangGraph compiled")
@@ -813,21 +1051,25 @@ def main():
 
     baseline_runs = [run_graph_with_otel(graph, q, current_planner_tmpl, current_executor_tmpl) for q in TEST_QUERIES]
     base_score = sum(r.score for r in baseline_runs) / len(baseline_runs)
-
     print(f"\\nBaseline: {base_score:.3f}")
     for i, r in enumerate(baseline_runs, 1):
         print(f"  Q{i}: {r.score:.3f} | {r.metrics}")
+        # Save baseline artifacts
+        _save_run_logs("baseline", 0, i, r)
 
     template_history = {
         "planner_prompt": PLANNER_TEMPLATE_DEFAULT,
         "executor_prompt": EXECUTOR_TEMPLATE_DEFAULT
     }
+    baseline_param_snapshots = dict(template_history)
 
     # OPTIMIZATION
     print("\\n" + "="*80 + "\n" + "OPTIMIZATION".center(80) + "\n" + "="*80)
 
     history = [base_score]
     optimizer = None  # Will be created on first iteration, reused thereafter
+    
+    final_runs: List[RunResult] = baseline_runs
     
     # Track best iteration
     best_score = base_score
@@ -845,6 +1087,9 @@ def main():
         iter_score = sum(r.score for r in runs) / len(runs)
 
         print(f"\\nCurrent: {iter_score:.3f}")
+        # Logs per-run artifacts for this iteration
+        for i, r in enumerate(runs, 1):
+            _save_run_logs(f"iter_{iteration:02d}", iteration, i, r)
 
         # Track best performing iteration
         if iter_score > best_score:
@@ -855,7 +1100,8 @@ def main():
             best_executor_tmpl = current_executor_tmpl
             print(f"   🌟 NEW BEST SCORE! (iteration {iteration})")
 
-        updates, optimizer = optimize_iteration(runs, optimizer)
+        updates, optimizer = optimize_iteration(runs, optimizer, iteration=iteration)
+        _save_optimizer_log(iteration, optimizer) # Dump optimizer-level log for this iteration
 
         if not updates:
             print("\\n❌ No updates")
@@ -866,6 +1112,8 @@ def main():
 
         for param_name, new_template in updates.items():
             old_template = template_history.get(param_name, "")
+            if param_name not in baseline_param_snapshots:
+                baseline_param_snapshots[param_name] = old_template or new_template
             show_prompt_diff(old_template, new_template, param_name)
             template_history[param_name] = new_template
 
@@ -889,10 +1137,13 @@ def main():
         print(f"   Restoring templates from iteration {best_iteration}...")
         current_planner_tmpl = best_planner_tmpl
         current_executor_tmpl = best_executor_tmpl
+        template_history["planner_prompt"] = current_planner_tmpl
+        template_history["executor_prompt"] = current_executor_tmpl
         
         # Validate with a final run
         print(f"\\n🔄 Validating best parameters...")
         validation_runs = [run_graph_with_otel(graph, q, current_planner_tmpl, current_executor_tmpl) for q in TEST_QUERIES]
+        final_runs = validation_runs
         validation_score = sum(r.score for r in validation_runs) / len(validation_runs)
         print(f"   Validation score: {validation_score:.3f}")
         
@@ -919,12 +1170,34 @@ def main():
 
     print(f"\\n🎯 Overall: {base_score:.3f} → {final_score:.3f} ({improvement:+.3f}, {pct:+.1f}%)")
     print(f"   Best iteration: {best_iteration}")
+    print(f"   ✅ Improvement SUCCESS!" if improvement > 0 else f"   ⚠️  No improvement")
 
-    if improvement > 0:
-        print(f"   ✅ SUCCESS!")
-    else:
-        print(f"   ⚠️  No improvement")
-    
+    change_map = {}
+    for name, original_value in baseline_param_snapshots.items():
+        final_value = template_history.get(name, "")
+        change_map[name] = compute_change_stats(original_value, final_value)
+
+    change_display = ", ".join(
+        f"{name}:ΔL={lines} ΔC={chars}" for name, (lines, chars) in change_map.items()
+    ) or "no parameter changes"
+
+    print("\n🧪 Final run breakdown:")
+    for idx, run in enumerate(final_runs, 1):
+        metrics_str = ", ".join(f"{k}={v:.3f}" for k, v in run.metrics.items()) if run.metrics else "n/a"
+        plan = run.plan or {}
+        if plan:
+            try:
+                ordered = sorted(plan.items(), key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else str(kv[0]))
+            except Exception:
+                ordered = list(plan.items())
+            agents = [str(step.get("agent", "?")) for _, step in ordered if isinstance(step, dict)]
+            agents_repr = " → ".join(agents) if agents else "n/a"
+        else:
+            agents_repr = "n/a"
+        print(
+            f"  Run {idx}: score={run.score:.3f} [{metrics_str}] | agents: {agents_repr} | {change_display}"
+        )
+
     # Show final optimized prompts with colored diffs
     print("\\n" + "="*80)
     print("FINAL OPTIMIZED PROMPTS (vs Original)".center(80))
@@ -946,6 +1219,9 @@ def main():
         print("\\n   No optimization occurred - baseline templates retained")
 
     print("\\n" + "="*80 + "\\n")
+
+    # Final rebuild to ensure aggregate file is up to date
+    _rebuild_aggregate_markdown()
 
 if __name__ == "__main__":
     try:
