@@ -34,7 +34,7 @@ This is the CORRECT architecture combining LangGraph + OTEL + Trace optimization
 """
 
 from __future__ import annotations
-import os, json, time, difflib
+import os, json, time, difflib, inspect, re
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Literal
 
@@ -77,7 +77,7 @@ OPTIMIZABLE = ["planner", "executor", ""]
 # Enable code optimization (experimental):
 # When True, node implementations can be stored as trainable parameters
 # using sp.set_attribute("param.__code_<name>", source_code)
-ENABLE_CODE_OPTIMIZATION = True  # Set to True to optimize function implementations
+ENABLE_CODE_OPTIMIZATION = True # Set to True to optimize function implementations
 
 # ==============================================================================
 # LOGGING HELPERS
@@ -881,6 +881,39 @@ def compute_change_stats(original: str, updated: str) -> tuple[int, int]:
 
     return line_changes, char_changes
 
+CODE_TARGETS = {
+    "planner": "planner_node",
+    "executor": "executor_node",
+    "web_researcher": "web_researcher_node",
+    "wikidata_researcher": "wikidata_researcher_node",
+    "synthesizer": "synthesizer_node",
+    "evaluator": "evaluator_node",
+}
+
+def _signature_line(fn) -> str:
+    try:
+        src = inspect.getsource(fn)
+        m = re.search(r"^\s*def\s.+?:", src, re.M)
+        return m.group(0) if m else f"def {fn.__name__}(...):"
+    except Exception:
+        return f"def {getattr(fn, '__name__', 'fn')}(...) :"
+
+def _ensure_code_desc_on_optimizer(optimizer) -> None:
+    """Ensure all __code_* params in optimizer have the signature description expected by OptoPrimeV2."""
+    for p in getattr(optimizer, "parameters", []):
+        if "__code_" not in p.name:
+            continue
+        if getattr(p, "description", None):
+            continue
+        semantic = p.name.split(":")[0].split("/")[-1].replace("__code_", "")
+        fn_name = CODE_TARGETS.get(semantic, f"{semantic}_node")
+        fn = globals().get(fn_name)
+        sig = _signature_line(fn) if callable(fn) else f"def {fn_name}(...):"
+        desc = f"[Parameter] The code should start with:\\n{sig}"
+        try: p.description = desc
+        except Exception: pass
+        p._description = desc
+
 def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2], iteration: int | None = None) -> tuple[Dict[str, str], OptoPrimeV2]:
     print("\\n📊 OPTIMIZATION:")
     print("="*80)
@@ -970,6 +1003,8 @@ def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2], 
     # Remap targets to use optimizer's params (not the newly created params from OTEL)
     for target, _, _ in all_targets_and_feedback:
         _remap_params_in_graph(target, param_mapping)
+    # Make sure optimizer-side __code_* params have a proper description
+    _ensure_code_desc_on_optimizer(optimizer)
 
     # ---- Batch like trainers do: build one composite target + one composite feedback ----
     # Preserve per-item trace in the target bundle AND include each run's score explicitly in feedback.
@@ -995,6 +1030,9 @@ def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2], 
         print(f"   ❌ {e}")
 
     print(f"\\n➡️  STEP:")
+    # sanity check: list any __code_* with missing description
+    missing = [p.name for p in optimizer.parameters if "__code_" in p.name and not getattr(p, "description", None)]
+    if missing: print(f"   ⚠️ Missing description on: {missing}")
     try:
         optimizer.step(verbose=False)
         print(f"   ✓ Completed (log now has {len(optimizer.log)} entries)")
@@ -1105,7 +1143,7 @@ def main():
 
         if not updates:
             print("\\n❌ No updates")
-            break
+            continue
 
         # Debug: show what keys are in updates
         print(f"\n🔍 DEBUG: Updates dict keys: {list(updates.keys())}")
