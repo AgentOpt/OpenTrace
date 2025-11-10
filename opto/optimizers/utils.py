@@ -1,6 +1,12 @@
 import base64
 import mimetypes
-from typing import Dict, Any
+import io
+from typing import Dict, Any, Union, Optional
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 
 
 def print_color(message, color=None, logger=None):
@@ -140,6 +146,7 @@ def extract_xml_like_data(text: str, reasoning_tag: str = "reasoning",
 
 
 def encode_image_to_base64(path: str) -> str:
+    """Encode a local image file to base64 data URL."""
     # Read binary
     with open(path, "rb") as f:
         image_bytes = f.read()
@@ -150,4 +157,55 @@ def encode_image_to_base64(path: str) -> str:
         mime_type = "image/jpeg"
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     data_url = f"data:{mime_type};base64,{b64}"
+    return data_url
+
+
+def encode_numpy_to_base64(array, format: str = "PNG") -> str:
+    """
+    Encode a numpy array to base64 data URL.
+    
+    Args:
+        array: numpy array representing an image (H, W, C) with values in [0, 255] or [0, 1]
+        format: Image format (PNG, JPEG, etc.)
+    
+    Returns:
+        Base64 encoded data URL string
+    """
+    if not NUMPY_AVAILABLE:
+        raise ImportError("numpy is required to encode numpy arrays. Install it with: pip install numpy")
+    
+    try:
+        from PIL import Image
+    except ImportError:
+        raise ImportError("Pillow is required to encode numpy arrays. Install it with: pip install Pillow")
+    
+    # Convert to numpy array if not already
+    if not isinstance(array, np.ndarray):
+        array = np.array(array)
+    
+    # Normalize to [0, 255] if needed
+    if array.dtype == np.float32 or array.dtype == np.float64:
+        if array.max() <= 1.0:
+            array = (array * 255).astype(np.uint8)
+        else:
+            array = array.astype(np.uint8)
+    elif array.dtype != np.uint8:
+        array = array.astype(np.uint8)
+    
+    # Convert to PIL Image
+    image = Image.fromarray(array)
+    
+    # Save to bytes buffer
+    buffer = io.BytesIO()
+    image.save(buffer, format=format.upper())
+    buffer.seek(0)
+    
+    # Encode to base64
+    image_bytes = buffer.getvalue()
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    
+    # Determine MIME type
+    mime_type = f"image/{format.lower()}"
+    data_url = f"data:{mime_type};base64,{b64}"
+    
     return data_url

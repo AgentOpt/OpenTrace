@@ -5,7 +5,7 @@ from typing import Any, Optional, Callable, Dict, Union, Type, List
 from dataclasses import dataclass
 import re
 import json
-from opto.optimizers.utils import encode_image_to_base64
+from opto.optimizers.utils import encode_image_to_base64, encode_numpy_to_base64
 from opto import trace
 
 class TraceObject:
@@ -15,17 +15,77 @@ class TraceObject:
 
 
 class MultiModalPayload(BaseModel):
-    image_bytes: Optional[str] = None  # base64-encoded data URL
+    """
+    A payload for multimodal content, particularly images.
+    
+    Supports three types of image inputs:
+    1. URL (string starting with 'http://' or 'https://')
+    2. Local file path (string path to image file)
+    3. Numpy array (RGB image array)
+    """
+    image_bytes: Optional[str] = None  # Can be URL or base64-encoded data URL
 
     @classmethod
     def from_path(cls, path: str) -> "MultiModalPayload":
         """Create a payload by loading an image from a local file path."""
         data_url = encode_image_to_base64(path)
         return cls(image_bytes=data_url)
+    
+    @classmethod
+    def from_url(cls, url: str) -> "MultiModalPayload":
+        """Create a payload from an image URL."""
+        return cls(image_bytes=url)
+    
+    @classmethod
+    def from_array(cls, array: Any, format: str = "PNG") -> "MultiModalPayload":
+        """Create a payload from a numpy array or array-like RGB image."""
+        data_url = encode_numpy_to_base64(array, format=format)
+        return cls(image_bytes=data_url)
 
     def load_image(self, path: str) -> None:
-        """Mutate the current payload to include a new image."""
+        """Mutate the current payload to include a new image from a file path."""
         self.image_bytes = encode_image_to_base64(path)
+    
+    def set_image(self, image: Union[str, Any], format: str = "PNG") -> None:
+        """
+        Set the image from various input formats.
+        
+        Args:
+            image: Can be:
+                - URL string (starting with 'http://' or 'https://')
+                - Local file path (string)
+                - Numpy array or array-like RGB image
+            format: Image format for numpy arrays (PNG, JPEG, etc.). Default: PNG
+        """
+        if isinstance(image, str):
+            # Check if it's a URL
+            if image.startswith('http://') or image.startswith('https://'):
+                # Direct URL - litellm supports this
+                self.image_bytes = image
+            else:
+                # Assume it's a local file path
+                self.image_bytes = encode_image_to_base64(image)
+        else:
+            # Assume it's a numpy array or array-like object
+            self.image_bytes = encode_numpy_to_base64(image, format=format)
+    
+    def get_content_block(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the content block for the image in litellm format.
+        
+        Returns:
+            Dict with format: {"type": "image_url", "image_url": {"url": ...}}
+            or None if no image data is set
+        """
+        if self.image_bytes is None:
+            return None
+        
+        return {
+            "type": "image_url",
+            "image_url": {
+                "url": self.image_bytes
+            }
+        }
 
 class QueryModel(BaseModel):
     # Expose "query" as already-normalized: always a List[Dict[str, Any]]
