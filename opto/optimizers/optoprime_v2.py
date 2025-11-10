@@ -373,7 +373,7 @@ class ProblemInstance:
         """)
 
         if self.context is not None and self.context.strip() != "":
-            context_section.format(context=self.context)
+            context_section = context_section.format(context=self.context)
             optimization_query += context_section
 
         return optimization_query
