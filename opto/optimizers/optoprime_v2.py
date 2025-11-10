@@ -520,9 +520,9 @@ class OptoPrimeV2(OptoPrime):
             # ignore the type conversion error when extracting updated values from LLM's suggestion
             include_example=False,
             memory_size=0,  # Memory size to store the past feedback
-            max_tokens=4096,
+            max_tokens=8192,
             log=True,
-            initial_var_char_limit=100,
+            initial_var_char_limit=2000,
             optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
