@@ -27,13 +27,16 @@ project_root = Path(__file__).parent.parent
 
 image = (
     modal.Image.debian_slim()
-    .pip_install("jupyter")
+    .pip_install("jupyter", "graphviz")
     .apt_install("openssh-server")
     .env({
         "PYTHONPATH": "/root/Trace"  # add KernelBench to python path
     })
     .run_commands("mkdir /run/sshd")
     .add_local_file(str(ssh_key_path), "/root/.ssh/authorized_keys", copy=True)
+    .add_local_file(str(project_root / "setup.py"), "/root/Trace/setup.py", copy=True)
+    .add_local_file(str(project_root / "pyproject.toml"), "/root/Trace/pyproject.toml", copy=True)
+    .add_local_file(str(project_root / "README.md"), "/root/Trace/README.md", copy=True)
     .add_local_dir(str(project_root / "opto"), "/root/Trace/opto", copy=True)
     .add_local_dir(str(project_root / "tests"), "/root/Trace/tests", copy=True)
 )
@@ -41,6 +44,9 @@ app = modal.App("Trace-dev-jupyter", image=image)
 
 @app.function(volumes={"/vol/trace-dev-home/": volume}, timeout=24 * HOURS)
 def run_jupyter():
+
+    # set up Trace env
+    subprocess.run(["pip", "install", "-e", "/root/Trace"])
 
     # a nested setup to start SSH connection and Jupyter
 
@@ -56,7 +62,7 @@ def run_jupyter():
 
         with modal.forward(8888) as tunnel:
             url = tunnel.url + "/?token=" + token
-            print(f"Starting Jupyter at {url}")
+            print(f"\033[91mStarting Jupyter at {url}\033[0m")
             subprocess.run(
                 [
                     "jupyter",
