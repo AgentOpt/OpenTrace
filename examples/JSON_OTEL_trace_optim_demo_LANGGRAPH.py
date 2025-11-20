@@ -34,7 +34,7 @@ This is the CORRECT architecture combining LangGraph + OTEL + Trace optimization
 """
 
 from __future__ import annotations
-import os, json, time, difflib, inspect, re
+import os, json, time, difflib, inspect, re, traceback
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Literal
 
@@ -86,6 +86,11 @@ ENABLE_CODE_OPTIMIZATION = True # Set to True to optimize function implementatio
 LOG_DIR: str | None = None
 AGGREGATE_MD: str | None = None  # path to the aggregated log, LLM-friendly markdown context
 
+# Code snapshots for diff/restoration
+BASELINE_CODE_SNAPSHOTS: dict[str, str] = {}
+CURRENT_CODE: dict[str, str] = {}
+BEST_CODE_SNAPSHOT: dict[str, str] = {}
+
 def _init_log_dir() -> str:
     """Create a timestamped root log directory."""
     root = os.path.join("logs", "otlp_langgraph", time.strftime("%Y%m%d_%H%M%S"))
@@ -101,6 +106,24 @@ def _safe_dump_text(path: str, text: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
+
+def _save_param_delta(iteration: int, name: str, old: str, new: str, ext: str = ".txt") -> None:
+    """Log all parameter changes (prompt/code): JSONL + diff + applied content."""
+    if LOG_DIR is None: return
+    iter_dir = os.path.join(LOG_DIR, f"iter_{iteration:02d}")
+    os.makedirs(iter_dir, exist_ok=True)
+    # JSONL (append)
+    rec = {"param": name, "iteration": iteration, "changed": old != new, "old_len": len(old), "new_len": len(new)}
+    with open(os.path.join(iter_dir, "param_changes.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    # Unified diff
+    diff_path = os.path.join(iter_dir, "diffs", f"{name}.diff")
+    os.makedirs(os.path.dirname(diff_path), exist_ok=True)
+    diff = "\n".join(difflib.unified_diff(old.splitlines(), new.splitlines(), fromfile="old", tofile="new", lineterm=""))
+    _safe_dump_text(diff_path, diff)
+    # Applied content copy (useful for __code_* and long prompts)
+    applied_path = os.path.join(iter_dir, "applied", f"{name}{ext}")
+    _safe_dump_text(applied_path, new)
 
 def _extract_prompts_from_otlp(otlp: Dict[str, Any]) -> list[Dict[str, str]]:
     """Pull all inputs.gen_ai.prompt values from spans."""
@@ -222,6 +245,10 @@ def _rebuild_aggregate_markdown() -> None:
         if os.path.exists(bf_path):
             bf = _read_json_if(bf_path)
             lines.append("**batched_feedback.txt**\n\n```text\n" + _truncate(bf) + "\n```\n")
+        # param deltas (if present)
+        pc_path = os.path.join(iter_dir, "param_changes.jsonl")
+        if os.path.exists(pc_path):
+            lines.append("**param_changes.jsonl** (tail)\n\n```text\n" + _truncate(_read_json_if(pc_path), 2000) + "\n```\n")
         # runs
         for run_name in sorted(os.listdir(iter_dir)):
             run_dir = os.path.join(iter_dir, run_name)
@@ -415,6 +442,8 @@ def planner_node(state: State) -> Command[Literal["executor"]]:
         # CRITICAL: Store TEMPLATE as parameter (not filled prompt!)
         sp.set_attribute("param.planner_prompt", template)
         sp.set_attribute("param.planner_prompt.trainable", "planner" in OPTIMIZABLE)
+        # Emit trainable code param for this node
+        _emit_code_param(sp, "planner", planner_node)
         sp.set_attribute("gen_ai.model", "llm")
         sp.set_attribute("inputs.gen_ai.prompt", prompt)
         sp.set_attribute("inputs.user_query", state.user_query)
@@ -476,6 +505,7 @@ def executor_node(state: State) -> Command[Literal["web_researcher", "wikidata_r
         # Store TEMPLATE as parameter
         sp.set_attribute("param.executor_prompt", template)
         sp.set_attribute("param.executor_prompt.trainable", "executor" in OPTIMIZABLE)
+        _emit_code_param(sp, "executor", executor_node)
         sp.set_attribute("gen_ai.model", "llm")
         sp.set_attribute("inputs.gen_ai.prompt", prompt)
         sp.set_attribute("inputs.step", str(step))
@@ -526,6 +556,7 @@ def web_researcher_node(state: State) -> Command[Literal["executor"]]:
         sp.set_attribute("retrieval.query", query)
         result = wikipedia_search(query)
         sp.set_attribute("retrieval.context", result[:500])
+        _emit_code_param(sp, "web_researcher", web_researcher_node)
 
         span_id = f"{sp.get_span_context().span_id:016x}"
 
@@ -557,6 +588,7 @@ def wikidata_researcher_node(state: State) -> Command[Literal["executor"]]:
         sp.set_attribute("retrieval.source", "wikidata")
         result = wikidata_query(query)
         sp.set_attribute("retrieval.context", result[:500])
+        _emit_code_param(sp, "wikidata_researcher", wikidata_researcher_node)
 
         span_id = f"{sp.get_span_context().span_id:016x}"
 
@@ -595,6 +627,7 @@ Provide a direct, factual answer."""
 
         sp.set_attribute("gen_ai.model", "llm")
         sp.set_attribute("inputs.gen_ai.prompt", prompt)
+        _emit_code_param(sp, "synthesizer", synthesizer_node)
 
         answer = LLM_CLIENT(
             messages=[{"role":"system","content":"Answer concisely"}, {"role":"user","content":prompt}],
@@ -659,6 +692,7 @@ Plan: {json.dumps(state.plan)}
             sp.set_attribute(f"eval.{k}", str(v))
         sp.set_attribute("eval.score", str(score))
         sp.set_attribute("eval.reasons", reasons)
+        _emit_code_param(sp, "evaluator", evaluator_node)
 
         span_id = f"{sp.get_span_context().span_id:016x}"
 
@@ -676,7 +710,7 @@ Plan: {json.dumps(state.plan)}
 # ==============================================================================
 
 def build_graph() -> StateGraph:
-    """Build the LangGraph StateGraph with both web and wikidata researchers"""
+    """Build the LangGraph StateGraph"""
 
     workflow = StateGraph(State)
 
@@ -914,6 +948,44 @@ def _ensure_code_desc_on_optimizer(optimizer) -> None:
         except Exception: pass
         p._description = desc
 
+def _emit_code_param(sp, key: str, fn) -> None:
+    """Emit trainable code parameter in OTEL span for <key>."""
+    if not ENABLE_CODE_OPTIMIZATION: return
+    if not (key in OPTIMIZABLE or "" in OPTIMIZABLE): return
+    try:
+        src = inspect.getsource(fn)
+    except Exception:
+        src = ""
+    sp.set_attribute(f"param.__code_{key}", src)
+    sp.set_attribute(f"param.__code_{key}.trainable", "true")
+
+def _apply_code_update(key: str, new_src: str) -> tuple[bool, str]:
+    """Compile & hot-patch target function; returns (ok, message)."""
+    fn_name = CODE_TARGETS.get(key, f"{key}_node")
+    glb = globals()
+    try:
+        # Preserve baseline snapshot on first pass
+        if key not in BASELINE_CODE_SNAPSHOTS:
+            try: BASELINE_CODE_SNAPSHOTS[key] = inspect.getsource(glb[fn_name])
+            except Exception: BASELINE_CODE_SNAPSHOTS[key] = glb.get(fn_name, "").__doc__ or ""
+        # Compile in isolated namespace but with module globals (access State/Command/etc.)
+        ns = {}
+        exec(new_src, glb, ns)
+        cand = ns.get(fn_name)
+        if callable(cand):
+            glb[fn_name] = cand  # patch
+            CURRENT_CODE[key] = new_src
+            return True, "patched"
+        # fallback: if optimizer returns 'def <other_name>', try to find a unique function
+        fns = [v for v in ns.values() if callable(v)]
+        if len(fns) == 1:
+            glb[fn_name] = fns[0]
+            CURRENT_CODE[key] = new_src
+            return True, f"patched (renamed:{fns[0].__name__})"
+        return False, "no callable function compiled"
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+
 def optimize_iteration(runs: List[RunResult], optimizer: Optional[OptoPrimeV2], iteration: int | None = None) -> tuple[Dict[str, str], OptoPrimeV2]:
     print("\\n📊 OPTIMIZATION:")
     print("="*80)
@@ -1087,6 +1159,18 @@ def main():
     original_planner_tmpl = PLANNER_TEMPLATE_DEFAULT
     original_executor_tmpl = EXECUTOR_TEMPLATE_DEFAULT
 
+    # Baseline code snapshots (for optimizable nodes)
+    for key, fn_name in CODE_TARGETS.items():
+        if key in OPTIMIZABLE or "" in OPTIMIZABLE:
+            fn = globals().get(fn_name)
+            if callable(fn):
+                try:
+                    src = inspect.getsource(fn)
+                except Exception:
+                    src = ""
+                BASELINE_CODE_SNAPSHOTS[key] = src
+                CURRENT_CODE[key] = src
+
     baseline_runs = [run_graph_with_otel(graph, q, current_planner_tmpl, current_executor_tmpl) for q in TEST_QUERIES]
     base_score = sum(r.score for r in baseline_runs) / len(baseline_runs)
     print(f"\\nBaseline: {base_score:.3f}")
@@ -1137,6 +1221,9 @@ def main():
             best_planner_tmpl = current_planner_tmpl
             best_executor_tmpl = current_executor_tmpl
             print(f"   🌟 NEW BEST SCORE! (iteration {iteration})")
+            # Snapshot best code
+            BEST_CODE_SNAPSHOT.clear()
+            BEST_CODE_SNAPSHOT.update(CURRENT_CODE)
 
         updates, optimizer = optimize_iteration(runs, optimizer, iteration=iteration)
         _save_optimizer_log(iteration, optimizer) # Dump optimizer-level log for this iteration
@@ -1148,12 +1235,23 @@ def main():
         # Debug: show what keys are in updates
         print(f"\n🔍 DEBUG: Updates dict keys: {list(updates.keys())}")
 
-        for param_name, new_template in updates.items():
+        for param_name, new_value in updates.items():
+            # 1) code?
+            if param_name.startswith("__code_"):
+                key = param_name[len("__code_"):]
+                old_code = CURRENT_CODE.get(key, "")
+                if new_value and new_value != old_code:
+                    ok, msg = _apply_code_update(key, new_value)
+                    print(f"   ⤷ apply {param_name}: {msg}" if ok else f"   ⤷ apply {param_name}: ❌ {msg}")
+                    _save_param_delta(iteration, param_name, old_code, new_value, ext=".py")
+                continue
+            # 2) otherwise: prompt
             old_template = template_history.get(param_name, "")
             if param_name not in baseline_param_snapshots:
-                baseline_param_snapshots[param_name] = old_template or new_template
-            show_prompt_diff(old_template, new_template, param_name)
-            template_history[param_name] = new_template
+                baseline_param_snapshots[param_name] = old_template or new_value
+            show_prompt_diff(old_template, new_value, param_name)
+            template_history[param_name] = new_value
+            _save_param_delta(iteration, param_name, old_template, new_value, ext=".txt")
 
         # Update current templates with new values
         if "planner_prompt" in updates:
@@ -1177,6 +1275,11 @@ def main():
         current_executor_tmpl = best_executor_tmpl
         template_history["planner_prompt"] = current_planner_tmpl
         template_history["executor_prompt"] = current_executor_tmpl
+        # Restore best code
+        if BEST_CODE_SNAPSHOT:
+            for key, code in BEST_CODE_SNAPSHOT.items():
+                ok, msg = _apply_code_update(key, code)
+                print(f"   ↩ restored __code_{key}: {msg}" if ok else f"   ↩ restored __code_{key}: ❌ {msg}")
         
         # Validate with a final run
         print(f"\\n🔄 Validating best parameters...")
@@ -1255,6 +1358,21 @@ def main():
         show_prompt_diff(original_executor_tmpl, current_executor_tmpl, "executor_prompt")
     else:
         print("\\n   No optimization occurred - baseline templates retained")
+
+    # Show final optimized CODE with diffs
+    if BASELINE_CODE_SNAPSHOTS:
+        print("\\n" + "="*80)
+        print("FINAL OPTIMIZED CODE (vs Original)".center(80))
+        print("="*80)
+        for key, base_src in BASELINE_CODE_SNAPSHOTS.items():
+            final_src = CURRENT_CODE.get(key, base_src)
+            if final_src != base_src:
+                print("\\n" + "─"*80)
+                print(f"🔵 __code_{key} (Final vs Original)")
+                print("─"*80)
+                show_prompt_diff(base_src, final_src, f"__code_{key}")
+            else:
+                print(f"\\n🔸 __code_{key}: no change")
 
     print("\\n" + "="*80 + "\\n")
 
