@@ -72,7 +72,7 @@ TEST_QUERIES = [
 # - Prompts: Include agent names like "planner", "executor", "synthesizer"
 # - Code: Include "__code" to optimize function implementations
 # - Empty string "" matches everything
-OPTIMIZABLE = ["planner", "executor", ""]
+OPTIMIZABLE = ["planner", "executor", "synthesizer", ""]
 
 # Enable code optimization (experimental):
 # When True, node implementations can be stored as trainable parameters
@@ -329,6 +329,7 @@ class State:
     # Template storage (shared across iterations)
     planner_template: str = ""
     executor_template: str = ""
+    synthesizer_template: str = ""
 
     # Track previous span for sequential linking
     prev_span_id: Optional[str] = None
@@ -603,6 +604,15 @@ def wikidata_researcher_node(state: State) -> Command[Literal["executor"]]:
         goto="executor"
     )
 
+SYNTH_TEMPLATE_DEFAULT = """Answer concisely using only the context.
+
+Question: {USER_QUERY}
+
+Context:
+{CONTEXT}
+
+Provide a direct, factual answer."""
+
 def synthesizer_node(state: State) -> Command[Literal[END]]:
     """
     LangGraph synthesizer node with OTEL tracing.
@@ -614,17 +624,14 @@ def synthesizer_node(state: State) -> Command[Literal[END]]:
         if state.prev_span_id:
             sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
 
+        template = state.synthesizer_template or SYNTH_TEMPLATE_DEFAULT
+
         context_blob = "\\n\\n".join(state.contexts[-3:])
 
-        prompt = f"""Answer concisely using only the context.
+        prompt = fill_template(template, USER_QUERY=state.user_query, CONTEXT=context_blob)
 
-Question: {state.user_query}
-
-Context:
-{context_blob}
-
-Provide a direct, factual answer."""
-
+        sp.set_attribute("param.synthesizer_prompt", template)
+        sp.set_attribute("param.synthesizer_prompt.trainable", "synthesizer" in OPTIMIZABLE)
         sp.set_attribute("gen_ai.model", "llm")
         sp.set_attribute("inputs.gen_ai.prompt", prompt)
         _emit_code_param(sp, "synthesizer", synthesizer_node)
@@ -745,7 +752,8 @@ def run_graph_with_otel(
     graph,
     query: str,
     planner_template: str = None,
-    executor_template: str = None
+    executor_template: str = None,
+    synthesizer_template: str = None,
 ) -> RunResult:
     """
     Run the LangGraph and capture OTEL traces.
@@ -756,6 +764,7 @@ def run_graph_with_otel(
         user_query=query,
         planner_template=planner_template or PLANNER_TEMPLATE_DEFAULT,
         executor_template=executor_template or EXECUTOR_TEMPLATE_DEFAULT,
+        synthesizer_template=synthesizer_template or SYNTH_TEMPLATE_DEFAULT,
     )
 
     # Invoke graph (returns dict, not State object)
@@ -924,16 +933,16 @@ CODE_TARGETS = {
     "evaluator": "evaluator_node",
 }
 
-def _signature_line(fn) -> str:
-    try:
-        src = inspect.getsource(fn)
-        m = re.search(r"^\s*def\s.+?:", src, re.M)
-        return m.group(0) if m else f"def {fn.__name__}(...):"
-    except Exception:
-        return f"def {getattr(fn, '__name__', 'fn')}(...) :"
-
 def _ensure_code_desc_on_optimizer(optimizer) -> None:
     """Ensure all __code_* params in optimizer have the signature description expected by OptoPrimeV2."""
+    def _signature_line(fn) -> str:
+        try:
+            src = inspect.getsource(fn)
+            m = re.search(r"^\s*def\s.+?:", src, re.M)
+            return m.group(0) if m else f"def {fn.__name__}(...):"
+        except Exception:
+            return f"def {getattr(fn, '__name__', 'fn')}(...) :"
+
     for p in getattr(optimizer, "parameters", []):
         if "__code_" not in p.name:
             continue
@@ -1154,10 +1163,12 @@ def main():
 
     current_planner_tmpl = PLANNER_TEMPLATE_DEFAULT
     current_executor_tmpl = EXECUTOR_TEMPLATE_DEFAULT
+    current_synthesizer_tmpl = SYNTH_TEMPLATE_DEFAULT
     
     # Save originals for final comparison
     original_planner_tmpl = PLANNER_TEMPLATE_DEFAULT
     original_executor_tmpl = EXECUTOR_TEMPLATE_DEFAULT
+    original_synthesizer_tmpl = SYNTH_TEMPLATE_DEFAULT
 
     # Baseline code snapshots (for optimizable nodes)
     for key, fn_name in CODE_TARGETS.items():
@@ -1181,7 +1192,8 @@ def main():
 
     template_history = {
         "planner_prompt": PLANNER_TEMPLATE_DEFAULT,
-        "executor_prompt": EXECUTOR_TEMPLATE_DEFAULT
+        "executor_prompt": EXECUTOR_TEMPLATE_DEFAULT,
+        "synthesizer_prompt": SYNTH_TEMPLATE_DEFAULT,
     }
     baseline_param_snapshots = dict(template_history)
 
@@ -1340,36 +1352,30 @@ def main():
         )
 
     # Show final optimized prompts with colored diffs
-    print("\\n" + "="*80)
-    print("FINAL OPTIMIZED PROMPTS (vs Original)".center(80))
-    print("="*80)
+        print("\\n" + "="*80 + "\n🔵🔵 FINAL OPTIMIZED PROMPTS (vs Original)\n".center(80))
     
     if best_iteration > 0:
         # Show diff for planner prompt
-        print("\n" + "─"*80)
-        print("🔵 PLANNER PROMPT (Final Optimized vs Original)")
-        print("─"*80)
+        print("\n" + "─"*80 + "\n🔵 PLANNER PROMPT (Final Optimized vs Original)\n" + "─"*80)
         show_prompt_diff(original_planner_tmpl, current_planner_tmpl, "planner_prompt")
         
         # Show diff for executor prompt
-        print("\n" + "─"*80)
-        print("🔵 EXECUTOR PROMPT (Final Optimized vs Original)")
-        print("─"*80)
+        print("\n" + "─"*80 + "\n🔵 EXECUTOR PROMPT (Final Optimized vs Original\n)" + "─"*80)
         show_prompt_diff(original_executor_tmpl, current_executor_tmpl, "executor_prompt")
+
+        # Show diff for synthesizer prompt
+        print("\n" + "─"*80 + "\n🔵 SYNTHESIZER PROMPT (Final Optimized vs Original\n)" + "─"*80)
+        show_prompt_diff(original_synthesizer_tmpl, current_synthesizer_tmpl, "synthesizer_prompt")
     else:
         print("\\n   No optimization occurred - baseline templates retained")
 
     # Show final optimized CODE with diffs
     if BASELINE_CODE_SNAPSHOTS:
-        print("\\n" + "="*80)
-        print("FINAL OPTIMIZED CODE (vs Original)".center(80))
-        print("="*80)
+        print("\\n" + "="*80 + "\n🔵🔵 FINAL OPTIMIZED CODE (vs Original)\n" + "="*80)
         for key, base_src in BASELINE_CODE_SNAPSHOTS.items():
             final_src = CURRENT_CODE.get(key, base_src)
             if final_src != base_src:
-                print("\\n" + "─"*80)
-                print(f"🔵 __code_{key} (Final vs Original)")
-                print("─"*80)
+                print("\\n" + "─"*80 + f"\n🔵 __code_{key} (Final vs Original)\n" + "─"*80)
                 show_prompt_diff(base_src, final_src, f"__code_{key}")
             else:
                 print(f"\\n🔸 __code_{key}: no change")
