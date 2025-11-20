@@ -1,0 +1,757 @@
+python JSON_OTEL_trace_optim_demo_LANGGRAPH.py 
+\n================================================================================
+                   PROPER LangGraph + OTEL Trace Optimization                   
+================================================================================
+\nConfig: 3 queries, 5 iterations
+Logs → logs/otlp_langgraph/20251120_154306
+✓ LangGraph compiled
+\n================================================================================
+                                    BASELINE                                    
+================================================================================
+\nBaseline: 0.500
+  Q1: 0.333 | {'answer_relevance': 0.1, 'groundedness': 0.1, 'plan_quality': 0.8}
+  Q2: 0.267 | {'answer_relevance': 0.2, 'groundedness': 0.1, 'plan_quality': 0.5}
+  Q3: 0.900 | {'answer_relevance': 1.0, 'groundedness': 0.8, 'plan_quality': 0.9}
+\n================================================================================
+                                  OPTIMIZATION                                  
+================================================================================
+\n================================================================================
+                                 Iteration 1/5                                  
+================================================================================
+\nCurrent: 0.511
+   🌟 NEW BEST SCORE! (iteration 1)
+\n📊 OPTIMIZATION:
+================================================================================
+\n🔍 Run 1: score=0.367, metrics={'answer_relevance': 0.2, 'groundedness': 0.1, 'plan_quality': 0.8}
+   Reachability: planner_prompt:0=✅, __code_planner:0=✅
+\n🔍 Run 2: score=0.267, metrics={'answer_relevance': 0.2, 'groundedness': 0.1, 'plan_quality': 0.5}
+   Reachability: planner_prompt:0=✅, __code_planner:0=✅
+\n🔍 Run 3: score=0.900, metrics={'answer_relevance': 1.0, 'groundedness': 0.9, 'plan_quality': 0.8}
+   Reachability: planner_prompt:0=✅, __code_planner:0=✅
+
+🔧 Creating optimizer with 16 params (memory_size=12)
+
+⬅️  BACKWARD (batched):
+   Batched: ✓ (3 runs)
+\n➡️  STEP:
+   ✓ Completed (log now has 1 entries)
+\n🔍 DYNAMIC Parameter mapping:
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_evaluator:0 -> __code_evaluator
+   run0/0/__code_evaluator:0 -> __code_evaluator
+================================================================================
+
+📦 Aggregate context markdown → logs/otlp_langgraph/20251120_154306/context_bundle.md
+
+🔍 DEBUG: Updates dict keys: ['planner_prompt', '__code_planner', 'executor_prompt', '__code_executor', '__code_web_researcher', '__code_wikidata_researcher', '__code_synthesizer', '__code_evaluator']
+\n📝 DIFF for planner_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -1,4 +1,4 @@\033[0m
+\033[91m-You are the Planner. Break the user's request into JSON steps.\033[0m
+\033[92m+You are the Planner. Break the user's request into JSON steps while considering context availability constraints. Ensure analysis comprehensively uncovers backgrounds, facts, relationships, and conclusions.\033[0m
+ 
+ Agents:
+   • web_researcher - Wikipedia summaries for background/overview
+\033[96m@@ -8,9 +8,9 @@\033[0m
+ Return JSON: {{"1": {{"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"..."}}, "2": {{"agent":"synthesizer", "action":"...", "goal":"..."}}}}
+ 
+ Guidelines:
+\033[91m-- Use web_researcher for narrative background and explanations\033[0m
+\033[91m-- Use wikidata_researcher for entity IDs, structured facts, and relationships\033[0m
+\033[91m-- End with synthesizer to finalize answer\033[0m
+\033[91m-- Include goal for each step\033[0m
+\033[92m+- Utilize web_researcher for narrative background and explanations, considering available Wikipedia data.\033[0m
+\033[92m+- Activate wikidata_researcher cautiously, acknowledging data availability; otherwise ensure alternate methods validate the chosen data.\033[0m
+\033[92m+- Conclude with synthesizer to assemble final insights.\033[0m
+\033[92m+- Articulate goals explicitly, supplementing why certain agents confirm data routes in steps.\033[0m
+ 
+ User query: "{USER_QUERY}"
+================================================================================
+   ⤷ apply __code_planner: patched
+\n📝 DIFF for executor_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -7,8 +7,8 @@\033[0m
+ - Previous: "{PREV_CONTEXT}"
+ 
+ Routing guide:
+\033[91m-- web_researcher: For Wikipedia summaries and background info\033[0m
+\033[91m-- wikidata_researcher: For entity facts, IDs, and structured data\033[0m
+\033[92m+- web_researcher: For Wikipedia summaries and contextually available background info\033[0m
+\033[92m+- wikidata_researcher: For entity facts, IDs, and structured data; validate through checks if unavailable.\033[0m
+ - synthesizer: To generate final answer
+ 
+\033[91m-Route to appropriate agent based on plan.\033[0m
+\033[92m+Route logically following plan outline; ensure applicable context is provided before synthesizing answer.\033[0m
+================================================================================
+   ⤷ apply __code_executor: patched
+   ⤷ apply __code_web_researcher: patched
+   ⤷ apply __code_wikidata_researcher: patched
+   ⤷ apply __code_synthesizer: patched
+   ⤷ apply __code_evaluator: patched
+   ✅ Updated current_planner_tmpl
+   ✅ Updated current_executor_tmpl
+\n================================================================================
+                                 Iteration 2/5                                  
+================================================================================
+\nCurrent: 0.767
+   🌟 NEW BEST SCORE! (iteration 2)
+\n📊 OPTIMIZATION:
+================================================================================
+\n🔍 Run 1: score=0.700, metrics={'answer_relevance': 0.7, 'groundedness': 0.6, 'plan_quality': 0.8}
+   Reachability: planner_prompt:1=✅, __code_planner:1=✅
+\n🔍 Run 2: score=0.700, metrics={'answer_relevance': 0.8, 'groundedness': 0.6, 'plan_quality': 0.7}
+   Reachability: planner_prompt:1=✅, __code_planner:1=✅
+\n🔍 Run 3: score=0.900, metrics={'answer_relevance': 1.0, 'groundedness': 0.8, 'plan_quality': 0.9}
+   Reachability: planner_prompt:1=✅, __code_planner:1=✅
+
+♻️  Reusing optimizer (log has 1 entries) & Syncing parameter data and remapping graphs...
+
+⬅️  BACKWARD (batched):
+   Batched: ✓ (3 runs)
+\n➡️  STEP:
+   ✓ Completed (log now has 2 entries)
+\n🔍 DYNAMIC Parameter mapping:
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_evaluator:0 -> __code_evaluator
+   run0/0/__code_evaluator:0 -> __code_evaluator
+================================================================================
+
+📦 Aggregate context markdown → logs/otlp_langgraph/20251120_154306/context_bundle.md
+
+🔍 DEBUG: Updates dict keys: ['planner_prompt', '__code_planner', 'executor_prompt', '__code_executor', '__code_web_researcher', '__code_wikidata_researcher', '__code_synthesizer', '__code_evaluator']
+\n📝 DIFF for planner_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -1,16 +1,15 @@\033[0m
+\033[91m-You are the Planner. Break the user's request into JSON steps while considering context availability constraints. Ensure analysis comprehensively uncovers backgrounds, facts, relationships, and conclusions.\033[0m
+\033[92m+You are the Planner. Break the user's request into JSON steps while considering context availability constraints, and include fallbacks for unavailable data.\033[0m
+\033[92m+Ensure the analysis comprehensively uncovers all required backgrounds, entity facts, relationships, and conclusions extracted using the agents.\033[0m
+ 
+ Agents:
+   • web_researcher - Wikipedia summaries for background/overview
+   • wikidata_researcher - Entity facts, IDs, and structured relationships
+   • synthesizer - Final answer generation
+ 
+\033[91m-Return JSON: {{"1": {{"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"..."}}, "2": {{"agent":"synthesizer", "action":"...", "goal":"..."}}}}\033[0m
+\033[92m+Return JSON: {"1": {"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"...", "alternative_goal":"..."}, "2": {"agent":"synthesizer", "action":"...", "goal":"..."}}}\033[0m
+ 
+ Guidelines:
+\033[91m-- Utilize web_researcher for narrative background and explanations, considering available Wikipedia data.\033[0m
+\033[91m-- Activate wikidata_researcher cautiously, acknowledging data availability; otherwise ensure alternate methods validate the chosen data.\033[0m
+\033[92m+- Utilize web_researcher for narrative background, but supplement with offline sources if Wikipedia is unreachable.\033[0m
+\033[92m+- Activate wikidata_researcher for concrete entity data, but include checks for real-time data validation or fallbacks.\033[0m
+ - Conclude with synthesizer to assemble final insights.
+\033[91m-- Articulate goals explicitly, supplementing why certain agents confirm data routes in steps.\033[0m
+\033[91m-\033[0m
+\033[91m-User query: "{USER_QUERY}"\033[0m
+\033[92m+- Articulate goals and fallback provisions explicitly.\033[0m
+================================================================================
+   ⤷ apply __code_planner: patched
+\n📝 DIFF for executor_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -7,8 +7,8 @@\033[0m
+ - Previous: "{PREV_CONTEXT}"
+ 
+ Routing guide:
+\033[91m-- web_researcher: For Wikipedia summaries and contextually available background info\033[0m
+\033[91m-- wikidata_researcher: For entity facts, IDs, and structured data; validate through checks if unavailable.\033[0m
+\033[91m-- synthesizer: To generate final answer\033[0m
+\033[92m+- web_researcher: For Wikipedia summaries and background info, use alternatives if Wikipedia is unreachable.\033[0m
+\033[92m+- wikidata_researcher: For entity facts, IDs, and structured data; verify through offline sources if real-time data is unavailable.\033[0m
+\033[92m+- synthesizer: To generate final answer after ensuring relevant data acquisition.\033[0m
+ 
+\033[91m-Route logically following plan outline; ensure applicable context is provided before synthesizing answer.\033[0m
+\033[92m+Route logically following plan outline; ensure applicable context is confirmed or alternate data sources are verified before synthesizing an answer.\033[0m
+================================================================================
+   ⤷ apply __code_wikidata_researcher: patched
+   ✅ Updated current_planner_tmpl
+   ✅ Updated current_executor_tmpl
+\n================================================================================
+                                 Iteration 3/5                                  
+================================================================================
+\nCurrent: 0.567
+\n📊 OPTIMIZATION:
+================================================================================
+\n🔍 Run 1: score=0.467, metrics={'answer_relevance': 0.4, 'groundedness': 0.3, 'plan_quality': 0.7}
+   Reachability: planner_prompt:2=✅, __code_planner:2=✅
+\n🔍 Run 2: score=0.333, metrics={'answer_relevance': 0.2, 'groundedness': 0.1, 'plan_quality': 0.7}
+   Reachability: planner_prompt:2=✅, __code_planner:2=✅
+\n🔍 Run 3: score=0.900, metrics={'answer_relevance': 1.0, 'groundedness': 0.8, 'plan_quality': 0.9}
+   Reachability: planner_prompt:2=✅, __code_planner:2=✅
+
+♻️  Reusing optimizer (log has 2 entries) & Syncing parameter data and remapping graphs...
+
+⬅️  BACKWARD (batched):
+   Batched: ✓ (3 runs)
+\n➡️  STEP:
+   ✓ Completed (log now has 3 entries)
+\n🔍 DYNAMIC Parameter mapping:
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_evaluator:0 -> __code_evaluator
+   run0/0/__code_evaluator:0 -> __code_evaluator
+================================================================================
+
+📦 Aggregate context markdown → logs/otlp_langgraph/20251120_154306/context_bundle.md
+
+🔍 DEBUG: Updates dict keys: ['planner_prompt', '__code_planner', 'executor_prompt', '__code_executor', '__code_web_researcher', '__code_wikidata_researcher', '__code_synthesizer', '__code_evaluator']
+\n🔴 NO CHANGE in planner_prompt
+   ⤷ apply __code_planner: patched
+\n📝 DIFF for executor_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -1,4 +1,4 @@\033[0m
+\033[91m-You are the Executor. Return JSON: {{"goto": "<web_researcher|wikidata_researcher|synthesizer>", "query": "<text>"}}\033[0m
+\033[92m+You are the Executor. Return JSON: {"goto": "<web_researcher|wikidata_researcher|synthesizer>", "query": "<text>"}\033[0m
+ 
+ Context:
+ - Step: {STEP}
+================================================================================
+   ⤷ apply __code_executor: patched
+   ⤷ apply __code_web_researcher: patched
+   ⤷ apply __code_wikidata_researcher: patched
+   ⤷ apply __code_synthesizer: patched
+   ⤷ apply __code_evaluator: patched
+   ✅ Updated current_planner_tmpl
+   ✅ Updated current_executor_tmpl
+\n================================================================================
+                                 Iteration 4/5                                  
+================================================================================
+\nCurrent: 0.644
+\n📊 OPTIMIZATION:
+================================================================================
+\n🔍 Run 1: score=0.700, metrics={'answer_relevance': 0.8, 'groundedness': 0.6, 'plan_quality': 0.7}
+   Reachability: planner_prompt:3=✅, __code_planner:3=✅
+\n🔍 Run 2: score=0.333, metrics={'answer_relevance': 0.2, 'groundedness': 0.1, 'plan_quality': 0.7}
+   Reachability: planner_prompt:3=✅, __code_planner:3=✅
+\n🔍 Run 3: score=0.900, metrics={'answer_relevance': 1.0, 'groundedness': 0.8, 'plan_quality': 0.9}
+   Reachability: planner_prompt:3=✅, __code_planner:3=✅
+
+♻️  Reusing optimizer (log has 3 entries) & Syncing parameter data and remapping graphs...
+
+⬅️  BACKWARD (batched):
+   Batched: ✓ (3 runs)
+\n➡️  STEP:
+   ✓ Completed (log now has 4 entries)
+\n🔍 DYNAMIC Parameter mapping:
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_evaluator:0 -> __code_evaluator
+   run0/0/__code_evaluator:0 -> __code_evaluator
+================================================================================
+
+📦 Aggregate context markdown → logs/otlp_langgraph/20251120_154306/context_bundle.md
+
+🔍 DEBUG: Updates dict keys: ['planner_prompt', '__code_planner', 'executor_prompt', '__code_executor', '__code_web_researcher', '__code_wikidata_researcher', '__code_synthesizer', '__code_evaluator']
+\n📝 DIFF for planner_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -1,15 +1,4 @@\033[0m
+\033[91m-You are the Planner. Break the user's request into JSON steps while considering context availability constraints, and include fallbacks for unavailable data.\033[0m
+\033[91m-Ensure the analysis comprehensively uncovers all required backgrounds, entity facts, relationships, and conclusions extracted using the agents.\033[0m
+\033[91m-\033[0m
+\033[91m-Agents:\033[0m
+\033[91m-  • web_researcher - Wikipedia summaries for background/overview\033[0m
+\033[91m-  • wikidata_researcher - Entity facts, IDs, and structured relationships\033[0m
+\033[91m-  • synthesizer - Final answer generation\033[0m
+\033[91m-\033[0m
+\033[91m-Return JSON: {"1": {"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"...", "alternative_goal":"..."}, "2": {"agent":"synthesizer", "action":"...", "goal":"..."}}}\033[0m
+\033[91m-\033[0m
+\033[91m-Guidelines:\033[0m
+\033[91m-- Utilize web_researcher for narrative background, but supplement with offline sources if Wikipedia is unreachable.\033[0m
+\033[91m-- Activate wikidata_researcher for concrete entity data, but include checks for real-time data validation or fallbacks.\033[0m
+\033[91m-- Conclude with synthesizer to assemble final insights.\033[0m
+\033[91m-- Articulate goals and fallback provisions explicitly.\033[0m
+\033[92m+You are the Planner. Break the user's request into comprehensive JSON steps while considering context availability constraints, and include fallbacks for unavailable data. Ensure detailed analysis of all required backgrounds, entity facts, relationships, and conclusions using agents. \033[0m
+\033[92m+Agents:   web_researcher - Wikipedia summaries for background/overview  wikidata_researcher - Entity facts, IDs, and structured relationships  synthesizer - Final answer generation \033[0m
+\033[92m+Include alternative data retrieval strategies effectively for unavailable or unreliable sources. \033[0m
+\033[92m+Ensure the generation of a detailed, verifiable, and relevant plan should align with   the goal of each step.\033[0m
+================================================================================
+   ⤷ apply __code_planner: patched
+\n📝 DIFF for executor_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -7,8 +7,8 @@\033[0m
+ - Previous: "{PREV_CONTEXT}"
+ 
+ Routing guide:
+\033[91m-- web_researcher: For Wikipedia summaries and background info, use alternatives if Wikipedia is unreachable.\033[0m
+\033[91m-- wikidata_researcher: For entity facts, IDs, and structured data; verify through offline sources if real-time data is unavailable.\033[0m
+\033[91m-- synthesizer: To generate final answer after ensuring relevant data acquisition.\033[0m
+\033[92m+- web_researcher: Prioritize most current summaries and corroborate across reliable sources if Wikipedia is unavailable. Ensure fallback strategies are mentioned.\033[0m
+\033[92m+- wikidata_researcher: For entity facts; always verify through alternatives if live data is unreachable.\033[0m
+\033[92m+- synthesizer: Ensure comprehensive data gathering before proceeding to final answer generation.\033[0m
+ 
+\033[91m-Route logically following plan outline; ensure applicable context is confirmed or alternate data sources are verified before synthesizing an answer.\033[0m
+\033[92m+Route logically, substantiate conclusions with established data sources.\033[0m
+================================================================================
+   ⤷ apply __code_executor: patched
+   ⤷ apply __code_web_researcher: patched
+   ⤷ apply __code_wikidata_researcher: patched
+   ⤷ apply __code_synthesizer: patched
+   ⤷ apply __code_evaluator: patched
+   ✅ Updated current_planner_tmpl
+   ✅ Updated current_executor_tmpl
+\n================================================================================
+                                 Iteration 5/5                                  
+================================================================================
+\nCurrent: 0.500
+\n📊 OPTIMIZATION:
+================================================================================
+\n🔍 Run 1: score=0.400, metrics={'answer_relevance': 0.4, 'groundedness': 0.3, 'plan_quality': 0.5}
+   Reachability: planner_prompt:4=✅, __code_planner:4=✅
+\n🔍 Run 2: score=0.200, metrics={'answer_relevance': 0.2, 'groundedness': 0.1, 'plan_quality': 0.3}
+   Reachability: planner_prompt:4=✅, __code_planner:4=✅
+\n🔍 Run 3: score=0.900, metrics={'answer_relevance': 1.0, 'groundedness': 0.9, 'plan_quality': 0.8}
+   Reachability: planner_prompt:4=✅, __code_planner:4=✅
+
+♻️  Reusing optimizer (log has 4 entries) & Syncing parameter data and remapping graphs...
+
+⬅️  BACKWARD (batched):
+   Batched: ✓ (3 runs)
+\n➡️  STEP:
+   ✓ Completed (log now has 5 entries)
+\n🔍 DYNAMIC Parameter mapping:
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/planner_prompt:0 -> planner_prompt
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/__code_planner:0 -> __code_planner
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/executor_prompt:0 -> executor_prompt
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_executor:0 -> __code_executor
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_web_researcher:0 -> __code_web_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_wikidata_researcher:0 -> __code_wikidata_researcher
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_synthesizer:0 -> __code_synthesizer
+   run0/0/__code_evaluator:0 -> __code_evaluator
+   run0/0/__code_evaluator:0 -> __code_evaluator
+================================================================================
+
+📦 Aggregate context markdown → logs/otlp_langgraph/20251120_154306/context_bundle.md
+
+🔍 DEBUG: Updates dict keys: ['planner_prompt', '__code_planner', 'executor_prompt', '__code_executor', '__code_web_researcher', '__code_wikidata_researcher', '__code_synthesizer', '__code_evaluator']
+\n📝 DIFF for planner_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -1,4 +1,8 @@\033[0m
+\033[91m-You are the Planner. Break the user's request into comprehensive JSON steps while considering context availability constraints, and include fallbacks for unavailable data. Ensure detailed analysis of all required backgrounds, entity facts, relationships, and conclusions using agents. \033[0m
+\033[91m-Agents:   web_researcher - Wikipedia summaries for background/overview  wikidata_researcher - Entity facts, IDs, and structured relationships  synthesizer - Final answer generation \033[0m
+\033[91m-Include alternative data retrieval strategies effectively for unavailable or unreliable sources. \033[0m
+\033[91m-Ensure the generation of a detailed, verifiable, and relevant plan should align with   the goal of each step.\033[0m
+\033[92m+You are the Planner. Break the user's request into comprehensive JSON steps while considering context availability constraints, and include explicit alternative strategies for unavailable data, focusing on detail and specificity.\033[0m
+\033[92m+\033[0m
+\033[92m+Agents:\033[0m
+\033[92m+  • web_researcher - Wikipedia summaries for background/overview\033[0m
+\033[92m+  • wikidata_researcher - Entity facts, IDs, and structured relationships; verify through secondary sources if necessary.\033[0m
+\033[92m+  • synthesizer - Final answer generation\033[0m
+\033[92m+\033[0m
+\033[92m+Make sure the plan has an: 'action' step with specific goals, 'fallback' strategies, and a 'verification' step to ensure reliability before concluding.\033[0m
+================================================================================
+   ⤷ apply __code_planner: patched
+\n📝 DIFF for executor_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -7,8 +7,8 @@\033[0m
+ - Previous: "{PREV_CONTEXT}"
+ 
+ Routing guide:
+\033[91m-- web_researcher: Prioritize most current summaries and corroborate across reliable sources if Wikipedia is unavailable. Ensure fallback strategies are mentioned.\033[0m
+\033[91m-- wikidata_researcher: For entity facts; always verify through alternatives if live data is unreachable.\033[0m
+\033[91m-- synthesizer: Ensure comprehensive data gathering before proceeding to final answer generation.\033[0m
+\033[92m+- web_researcher: For Wikipedia summaries and contextually available background info, fallback to offline literature or archives when needed.\033[0m
+\033[92m+- wikidata_researcher: For entity facts, IDs, and structured data; use historical datasets if current data is unavailable.\033[0m
+\033[92m+- synthesizer: To generate final answer after verifying data from diverse sources.\033[0m
+ 
+\033[91m-Route logically, substantiate conclusions with established data sources.\033[0m
+\033[92m+Route logically following plan outline and ensure all logical checks and balances are performed before concluding any queries.\033[0m
+================================================================================
+   ⤷ apply __code_executor: patched
+   ⤷ apply __code_web_researcher: patched
+   ⤷ apply __code_wikidata_researcher: patched
+   ⤷ apply __code_synthesizer: patched
+   ⤷ apply __code_evaluator: patched
+   ✅ Updated current_planner_tmpl
+   ✅ Updated current_executor_tmpl
+\n================================================================================
+                           RESTORING BEST PARAMETERS                            
+================================================================================
+\n🏆 Best score: 0.767 from iteration 2
+   Restoring templates from iteration 2...
+   ↩ restored __code_planner: patched
+   ↩ restored __code_executor: patched
+   ↩ restored __code_web_researcher: patched
+   ↩ restored __code_wikidata_researcher: patched
+   ↩ restored __code_synthesizer: patched
+   ↩ restored __code_evaluator: patched
+\n🔄 Validating best parameters...
+   Validation score: 0.622
+   ⚠️  Warning: Validation score differs from recorded best by 0.144
+\n================================================================================
+                                    RESULTS                                     
+================================================================================
+\n📈 Progression:
+   Baseline    : 0.500 
+   Iter 1      : 0.511 (Δ +0.011)
+   Iter 2      : 0.767 (Δ +0.256) 🌟 BEST
+   Iter 3      : 0.567 (Δ -0.200)
+   Iter 4      : 0.644 (Δ +0.078)
+   Iter 5      : 0.500 (Δ -0.144)
+\n🎯 Overall: 0.500 → 0.767 (+0.267, +53.3%)
+   Best iteration: 2
+   ✅ Improvement SUCCESS!
+
+🧪 Final run breakdown:
+  Run 1: score=0.700 [answer_relevance=0.700, groundedness=0.600, plan_quality=0.800] | agents: web_researcher → wikidata_researcher → synthesizer | planner_prompt:ΔL=10 ΔC=572, executor_prompt:ΔL=6 ΔC=185
+  Run 2: score=0.267 [answer_relevance=0.200, groundedness=0.100, plan_quality=0.500] | agents: wikidata_researcher → synthesizer | planner_prompt:ΔL=10 ΔC=572, executor_prompt:ΔL=6 ΔC=185
+  Run 3: score=0.900 [answer_relevance=1.000, groundedness=0.800, plan_quality=0.900] | agents: wikidata_researcher → synthesizer | planner_prompt:ΔL=10 ΔC=572, executor_prompt:ΔL=6 ΔC=185
+\n================================================================================
+                     FINAL OPTIMIZED PROMPTS (vs Original)                      
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+🔵 PLANNER PROMPT (Final Optimized vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for planner_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -1,4 +1,4 @@\033[0m
+\033[91m-You are the Planner. Break the user's request into JSON steps.\033[0m
+\033[92m+You are the Planner. Break the user's request into JSON steps while considering context availability constraints. Ensure analysis comprehensively uncovers backgrounds, facts, relationships, and conclusions.\033[0m
+ 
+ Agents:
+   • web_researcher - Wikipedia summaries for background/overview
+\033[96m@@ -8,9 +8,9 @@\033[0m
+ Return JSON: {{"1": {{"agent":"web_researcher|wikidata_researcher", "action":"...", "goal":"..."}}, "2": {{"agent":"synthesizer", "action":"...", "goal":"..."}}}}
+ 
+ Guidelines:
+\033[91m-- Use web_researcher for narrative background and explanations\033[0m
+\033[91m-- Use wikidata_researcher for entity IDs, structured facts, and relationships\033[0m
+\033[91m-- End with synthesizer to finalize answer\033[0m
+\033[91m-- Include goal for each step\033[0m
+\033[92m+- Utilize web_researcher for narrative background and explanations, considering available Wikipedia data.\033[0m
+\033[92m+- Activate wikidata_researcher cautiously, acknowledging data availability; otherwise ensure alternate methods validate the chosen data.\033[0m
+\033[92m+- Conclude with synthesizer to assemble final insights.\033[0m
+\033[92m+- Articulate goals explicitly, supplementing why certain agents confirm data routes in steps.\033[0m
+ 
+ User query: "{USER_QUERY}"
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+🔵 EXECUTOR PROMPT (Final Optimized vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for executor_prompt:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -7,8 +7,8 @@\033[0m
+ - Previous: "{PREV_CONTEXT}"
+ 
+ Routing guide:
+\033[91m-- web_researcher: For Wikipedia summaries and background info\033[0m
+\033[91m-- wikidata_researcher: For entity facts, IDs, and structured data\033[0m
+\033[92m+- web_researcher: For Wikipedia summaries and contextually available background info\033[0m
+\033[92m+- wikidata_researcher: For entity facts, IDs, and structured data; validate through checks if unavailable.\033[0m
+ - synthesizer: To generate final answer
+ 
+\033[91m-Route to appropriate agent based on plan.\033[0m
+\033[92m+Route logically following plan outline; ensure applicable context is provided before synthesizing answer.\033[0m
+================================================================================
+\n================================================================================
+                       FINAL OPTIMIZED CODE (vs Original)                       
+================================================================================
+\n────────────────────────────────────────────────────────────────────────────────
+🔵 __code_planner (Final vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for __code_planner:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -12,17 +12,18 @@\033[0m
+         if state.prev_span_id:
+             sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
+ 
+\033[91m-        # Fill template with query\033[0m
+\033[92m+        # Fill and validate template with query\033[0m
+         prompt = fill_template(template, USER_QUERY=state.user_query)
+ 
+\033[91m-        # CRITICAL: Store TEMPLATE as parameter (not filled prompt!)\033[0m
+         sp.set_attribute("param.planner_prompt", template)
+         sp.set_attribute("param.planner_prompt.trainable", "planner" in OPTIMIZABLE)
+\033[91m-        # Emit trainable code param for this node\033[0m
+         _emit_code_param(sp, "planner", planner_node)
+         sp.set_attribute("gen_ai.model", "llm")
+         sp.set_attribute("inputs.gen_ai.prompt", prompt)
+         sp.set_attribute("inputs.user_query", state.user_query)
+\033[92m+\033[0m
+\033[92m+        # Perform a preliminary check for context availability\033[0m
+\033[92m+        context_availability_check = 'Wikidata may not return expected results, plan to validate using other approaches.'\033[0m
+ 
+         # Call LLM
+         raw = LLM_CLIENT(
+\033[96m@@ -34,6 +35,8 @@\033[0m
+ 
+         try:
+             plan = json.loads(raw)
+\033[92m+            if 'Wikidata' not in context_availability_check:\033[0m
+\033[92m+                plan["1"] = {"agent":"wikidata_researcher","action":"lookup","goal":"validation if alternative data is found unavailable from Wikidata."}\033[0m
+         except:
+             plan = {"1":{"agent":"web_researcher","action":"search","goal":"info"},"2":{"agent":"synthesizer","action":"answer","goal":"final"}}
+ 
+================================================================================
+\n────────────────────────────────────────────────────────────────────────────────
+🔵 __code_executor (Final vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for __code_executor:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -8,18 +8,14 @@\033[0m
+     plan_step = state.plan.get(str(step), {})
+ 
+     if not plan_step:
+\033[91m-        # No more steps, go to synthesizer\033[0m
+         return Command(update={}, goto="synthesizer")
+ 
+\033[91m-    # Get template\033[0m
+     template = state.executor_template or EXECUTOR_TEMPLATE_DEFAULT
+ 
+     with TRACER.start_as_current_span("executor") as sp:
+\033[91m-        # Sequential linking\033[0m
+         if state.prev_span_id:
+             sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
+ 
+\033[91m-        # Fill template\033[0m
+         prompt = fill_template(
+             template,
+             STEP=step,
+\033[96m@@ -28,7 +24,6 @@\033[0m
+             PREV_CONTEXT=state.contexts[-1][:100] if state.contexts else ""
+         )
+ 
+\033[91m-        # Store TEMPLATE as parameter\033[0m
+         sp.set_attribute("param.executor_prompt", template)
+         sp.set_attribute("param.executor_prompt.trainable", "executor" in OPTIMIZABLE)
+         _emit_code_param(sp, "executor", executor_node)
+\033[96m@@ -37,7 +32,6 @@\033[0m
+         sp.set_attribute("inputs.step", str(step))
+         sp.set_attribute("inputs.user_query", state.user_query)
+ 
+\033[91m-        # Call LLM\033[0m
+         raw = LLM_CLIENT(
+             messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}],
+             response_format={"type":"json_object"},
+\033[96m@@ -48,10 +42,11 @@\033[0m
+         try:
+             d = json.loads(raw)
+             goto = d.get("goto", "synthesizer")
+\033[91m-            # Validate goto is one of the allowed agents\033[0m
+             if goto not in ["web_researcher", "wikidata_researcher", "synthesizer"]:
+                 goto = "synthesizer"
+             agent_query = d.get("query", state.user_query)
+\033[92m+            if goto == "wikidata_researcher" and "Error" in state.contexts[-1]:\033[0m
+\033[92m+                goto = "synthesizer"  # Redirect to synthesizer if error occurred in context.\033[0m
+         except:
+             goto, agent_query = ("synthesizer", state.user_query)
+ 
+================================================================================
+\n────────────────────────────────────────────────────────────────────────────────
+🔵 __code_web_researcher (Final vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for __code_web_researcher:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -5,20 +5,22 @@\033[0m
+     """
+ 
+     with TRACER.start_as_current_span("web_search") as sp:
+\033[91m-        # Sequential linking\033[0m
+         if state.prev_span_id:
+             sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
+ 
+         query = state.agent_query or state.user_query
+ 
+         sp.set_attribute("retrieval.query", query)
+\033[91m-        result = wikipedia_search(query)\033[0m
+\033[92m+        try:\033[0m
+\033[92m+            result = wikipedia_search(query)\033[0m
+\033[92m+        except:\033[0m
+\033[92m+            result = "Wikipedia retrieval error."\033[0m
+\033[92m+\033[0m
+         sp.set_attribute("retrieval.context", result[:500])
+         _emit_code_param(sp, "web_researcher", web_researcher_node)
+ 
+         span_id = f"{sp.get_span_context().span_id:016x}"
+ 
+\033[91m-    # Add to contexts\033[0m
+     new_contexts = state.contexts + [result]
+ 
+     return Command(
+================================================================================
+\n────────────────────────────────────────────────────────────────────────────────
+🔵 __code_wikidata_researcher (Final vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for __code_wikidata_researcher:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -13,13 +13,16 @@\033[0m
+ 
+         sp.set_attribute("retrieval.query", query)
+         sp.set_attribute("retrieval.source", "wikidata")
+\033[91m-        result = wikidata_query(query)\033[0m
+\033[92m+        try:\033[0m
+\033[92m+            result = wikidata_query(query)\033[0m
+\033[92m+        except Exception as e:\033[0m
+\033[92m+            result = "Error retrieving data; attempt verifying through alternative means."\033[0m
+\033[92m+\033[0m
+         sp.set_attribute("retrieval.context", result[:500])
+         _emit_code_param(sp, "wikidata_researcher", wikidata_researcher_node)
+ 
+         span_id = f"{sp.get_span_context().span_id:016x}"
+ 
+\033[91m-    # Add to contexts\033[0m
+     new_contexts = state.contexts + [result]
+ 
+     return Command(
+================================================================================
+\n────────────────────────────────────────────────────────────────────────────────
+🔵 __code_synthesizer (Final vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for __code_synthesizer:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -5,20 +5,12 @@\033[0m
+     """
+ 
+     with TRACER.start_as_current_span("synthesizer") as sp:
+\033[91m-        # Sequential linking\033[0m
+         if state.prev_span_id:
+             sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
+ 
+\033[91m-        context_blob = "\\n\\n".join(state.contexts[-3:])\033[0m
+\033[92m+        context_blob = "\n\n".join(state.contexts[-3:])\033[0m
+ 
+\033[91m-        prompt = f"""Answer concisely using only the context.\033[0m
+\033[91m-\033[0m
+\033[91m-Question: {state.user_query}\033[0m
+\033[91m-\033[0m
+\033[91m-Context:\033[0m
+\033[91m-{context_blob}\033[0m
+\033[91m-\033[0m
+\033[91m-Provide a direct, factual answer."""\033[0m
+\033[92m+        prompt = f"""Answer concisely using only the context.\n\nQuestion: {state.user_query}\n\nContext:\n{context_blob}\n\nGive a refined, directly linked answer. When data is not verified, infer cautiously."""\033[0m
+ 
+         sp.set_attribute("gen_ai.model", "llm")
+         sp.set_attribute("inputs.gen_ai.prompt", prompt)
+================================================================================
+\n────────────────────────────────────────────────────────────────────────────────
+🔵 __code_evaluator (Final vs Original)
+────────────────────────────────────────────────────────────────────────────────
+\n📝 DIFF for __code_evaluator:
+================================================================================
+\033[1m--- old\033[0m
+\033[1m+++ new\033[0m
+\033[96m@@ -4,20 +4,12 @@\033[0m
+     """
+ 
+     with TRACER.start_as_current_span("evaluator") as sp:
+\033[91m-        # Sequential linking\033[0m
+         if state.prev_span_id:
+             sp.set_attribute("inputs.parent", f"span:{state.prev_span_id}")
+ 
+\033[91m-        context = "\\n".join(state.contexts) if state.contexts else ""\033[0m
+\033[92m+        context = "\n".join(state.contexts) if state.contexts else ""\033[0m
+ 
+\033[91m-        eval_prompt = f"""Evaluate on 0..1 scale. Return JSON:\033[0m
+\033[91m-{{"answer_relevance": <0..1>, "groundedness": <0..1>, "plan_quality": <0..1>, "reasons": "..."}}\033[0m
+\033[91m-\033[0m
+\033[91m-Query: "{state.user_query}"\033[0m
+\033[91m-Answer: "{state.final_answer}"\033[0m
+\033[91m-Context: {context[:500]}\033[0m
+\033[91m-Plan: {json.dumps(state.plan)}\033[0m
+\033[91m-"""\033[0m
+\033[92m+        eval_prompt = f"""Evaluate on 0..1 scale. Return JSON:\n{{"answer_relevance": <0..1>, "groundedness": <0..1>, "plan_quality": <0..1>, "reasons": "..."}}\n\nQuery: "{state.user_query}"\nAnswer: "{state.final_answer}"\nContext: {context[:500]}\nPlan: {json.dumps(state.plan)}\n"""\033[0m
+ 
+         raw = LLM_CLIENT(
+             messages=[{"role":"system","content":"Eval expert. JSON only."}, {"role":"user","content":eval_prompt}],
+\033[96m@@ -40,7 +32,6 @@\033[0m
+             score = 0.5
+             reasons = "parse error"
+ 
+\033[91m-        # Store metrics\033[0m
+         for k, v in metrics.items():
+             sp.set_attribute(f"eval.{k}", str(v))
+         sp.set_attribute("eval.score", str(score))
+================================================================================
+\n================================================================================\n
+
+📦 Aggregate context markdown → logs/otlp_langgraph/20251120_154306/context_bundle.md
+
