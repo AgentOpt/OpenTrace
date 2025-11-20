@@ -34,7 +34,8 @@ image = (
     })
     .run_commands("mkdir /run/sshd")
     .add_local_file(str(ssh_key_path), "/root/.ssh/authorized_keys", copy=True)
-    .add_local_dir(str(project_root), "/root/Trace", copy=True)
+    .add_local_dir(str(project_root / "opto"), "/root/Trace/opto", copy=True)
+    .add_local_dir(str(project_root / "tests"), "/root/Trace/tests", copy=True)
 )
 app = modal.App("Trace-dev-jupyter", image=image)
 
