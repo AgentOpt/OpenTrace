@@ -224,14 +224,6 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
       - Optional periodic Merge crossover (uniform per-parameter) with desirability checks
     """
 
-    def _rank(self, raw: float) -> float:
-        """
-        If a score_range is provided (lo, hi), clamp the scalar score into that band.
-        This keeps UCB-like behavior numerically stable without changing external APIs.
-        """
-        if getattr(self, "score_range", None) is None or raw is None: return raw
-        lo, hi = self.score_range;  return float(min(hi, max(lo, raw)))
-
     def __init__(self,
                  agent,
                  optimizer=None,
@@ -278,7 +270,6 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
               pareto_subset_size: int = 24,
               num_search_iterations: int = 120,
               train_batch_size: int = 2,
-              score_range: Optional[Tuple[float, float]] = None,
               merge_every: int = 6,
               log_frequency: Optional[int] = None,
               save_frequency: Optional[int] = None,
@@ -291,7 +282,6 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
         num_threads = num_threads or self.num_threads
         log_frequency = log_frequency or 5
         validate_ds = validation_dataset or train_dataset
-        self.score_range = score_range # Optional score clamping band for mean-based selections
 
         # Fix a Pareto subset (small, stable) to compute per-instance vectors
         assert len(validate_ds["inputs"]) > 0, "Empty dataset."
@@ -306,12 +296,9 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
 
         # Seed with current params
         base_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
-        v0, m0_raw = self._evaluate_on_pareto(base_params, guide, num_threads=num_threads)
-        m0 = self._rank(m0_raw)
-        buffer.append(Candidate(params=base_params, eval_vector=v0, mean=m0, id=self._next_id(),
-                                ancestors=set(), meta={"raw_mean": m0_raw}))
+        v0, m0 = self._evaluate_on_pareto(base_params, guide, num_threads=num_threads)
+        buffer.append(Candidate(params=base_params, eval_vector=v0, mean=m0, id=self._next_id(), ancestors=set()))
         print_color(f"[GEPA] Seed candidate mean={m0:.4f}", "cyan")
-
 
         metrics = {"best_means": [], "new_child_means": [], "merge_accepts": 0, "total_merges": 0}
 
@@ -335,16 +322,14 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
                 continue
 
             # Evaluate child on Pareto subset
-            child_vec, child_mean_raw = self._evaluate_on_pareto(update_dict, guide, num_threads=num_threads)
-            child_mean = self._rank(child_mean_raw)
+            child_vec, child_mean = self._evaluate_on_pareto(update_dict, guide, num_threads=num_threads)
             child = Candidate(params=update_dict,
                               eval_vector=child_vec,
                               mean=child_mean,
                               id=self._next_id(),
                               parent_ids=(parent.id,),
                               ancestors=set(parent.ancestors) | {parent.id},
-                              created_iter=it,
-                              meta={"raw_mean": child_mean_raw})
+                              created_iter=it)
             buffer.append(child)
             metrics["new_child_means"].append(child_mean)
             print_color(f"[GEPA] iter {it}: child mean={child_mean:.4f} (train-batch≈{train_batch_mean})", "green")
@@ -362,10 +347,6 @@ class GEPAUCBSearch(UCBSearchAlgorithm):
                 if merged is not None:
                     merged.id = self._next_id()
                     merged.created_iter = it
-                    # preserve raw and clamp to range for ranking/logging
-                    _raw = merged.mean
-                    merged.meta["raw_mean"] = _raw
-                    merged.mean = self._rank(_raw)
                     buffer.append(merged)
                     metrics["merge_accepts"] += 1
                     print_color(f"[GEPA] Merge accepted: mean={merged.mean:.4f}", "magenta")
