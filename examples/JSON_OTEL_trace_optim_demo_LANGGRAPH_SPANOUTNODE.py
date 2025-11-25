@@ -283,12 +283,68 @@ class InMemorySpanExporter(SpanExporter):
     def clear(self) -> None:
         self._finished_spans.clear()
 
+class TracingLLM:
+    def __init__(self, llm, tracer):
+        self.llm = llm
+        self.tracer = tracer
+
+    def _record_llm_call(
+        self,
+        sp,
+        *,
+        template_name: str | None,
+        template: str | None,
+        optimizable_key: str | None,
+        code_key: str | None,
+        code_fn,
+        user_query: str | None,
+        prompt: str,
+        extra_inputs: Dict[str, str] | None = None,
+    ) -> None:
+        """
+        Centralize the OTEL logic for an LLM node:
+        - registers the template as a trainable parameter
+        - emits the trainable code parameter
+        - records standard prompt and inputs.*
+        """
+        if template_name and template is not None:
+            sp.set_attribute(f"param.{template_name}", template)
+            if optimizable_key:
+                sp.set_attribute(f"param.{template_name}.trainable", optimizable_key in OPTIMIZABLE)
+        if code_key and code_fn is not None:
+            _emit_code_param(sp, code_key, code_fn)
+        sp.set_attribute("gen_ai.model", "llm")
+        sp.set_attribute("inputs.gen_ai.prompt", prompt)
+        if user_query is not None:
+            sp.set_attribute("inputs.user_query", user_query)
+        for k, v in (extra_inputs or {}).items():
+            sp.set_attribute(f"inputs.{k}", v)
+
+    def node_call(self, *, span_name, template_name=None, template=None,
+                  optimizable_key=None, code_key=None, code_fn=None,
+                  user_query=None, extra_inputs=None, messages=None, **llm_kwargs):
+        with self.tracer.start_as_current_span(span_name) as sp:
+            self._record_llm_call(
+                sp,
+                template_name=template_name,
+                template=template,
+                optimizable_key=optimizable_key,
+                code_key=code_key,
+                code_fn=code_fn,
+                user_query=user_query,
+                prompt=[m["content"] for m in messages if m["role"]=="user"][-1],
+                extra_inputs=extra_inputs or {},
+            )
+            return self.llm(messages=messages, **llm_kwargs).choices[0].message.content
+
 _exporter = InMemorySpanExporter()
 _provider = TracerProvider()
 _provider.add_span_processor(SimpleSpanProcessor(_exporter))
 oteltrace.set_tracer_provider(_provider)
+
 TRACER = oteltrace.get_tracer("demo")
 LLM_CLIENT = LLM()
+TRACING_LLM = TracingLLM(LLM_CLIENT, TRACER)
 
 def flush_otlp() -> Dict[str, Any]:
     spans = _exporter.get_finished_spans()
@@ -432,31 +488,17 @@ def planner_node(state: State) -> Command[Literal["executor"]]:
     # Get template (use state's or default)
     template = state.planner_template or PLANNER_TEMPLATE_DEFAULT
 
-    with TRACER.start_as_current_span("planner") as sp:
-        # Fill template with query
-        prompt = fill_template(template, USER_QUERY=state.user_query)
+    # Fill template with query
+    prompt = fill_template(template, USER_QUERY=state.user_query)
 
-        # CRITICAL: Store TEMPLATE as parameter (not filled prompt!)
-        sp.set_attribute("param.planner_prompt", template)
-        sp.set_attribute("param.planner_prompt.trainable", "planner" in OPTIMIZABLE)
-        # Emit trainable code param for this node
-        _emit_code_param(sp, "planner", planner_node)
-        sp.set_attribute("gen_ai.model", "llm")
-        sp.set_attribute("inputs.gen_ai.prompt", prompt)
-        sp.set_attribute("inputs.user_query", state.user_query)
+    # Call LLM with tracing
+    raw = TRACING_LLM.node_call( span_name="planner", template_name="planner_prompt", template=template, optimizable_key="planner", code_key="planner", code_fn=planner_node,
+            user_query=state.user_query, messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}], response_format={"type":"json_object"}, max_tokens=400, temperature=0)
 
-        # Call LLM
-        raw = LLM_CLIENT(
-            messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}],
-            response_format={"type":"json_object"},
-            max_tokens=400,
-            temperature=0,
-        ).choices[0].message.content
-
-        try:
-            plan = json.loads(raw)
-        except:
-            plan = {"1":{"agent":"web_researcher","action":"search","goal":"info"},"2":{"agent":"synthesizer","action":"answer","goal":"final"}}
+    try:
+        plan = json.loads(raw)
+    except:
+        plan = {"1":{"agent":"web_researcher","action":"search","goal":"info"},"2":{"agent":"synthesizer","action":"answer","goal":"final"}}
 
     return Command(
         update={
@@ -482,42 +524,28 @@ def executor_node(state: State) -> Command[Literal["web_researcher", "wikidata_r
     # Get template
     template = state.executor_template or EXECUTOR_TEMPLATE_DEFAULT
 
-    with TRACER.start_as_current_span("executor") as sp:
-        # Fill template
-        prompt = fill_template(
-            template,
-            STEP=step,
-            PLAN_STEP=json.dumps(plan_step),
-            USER_QUERY=state.user_query,
-            PREV_CONTEXT=state.contexts[-1][:100] if state.contexts else ""
-        )
+    # Fill template
+    prompt = fill_template(
+        template,
+        STEP=step,
+        PLAN_STEP=json.dumps(plan_step),
+        USER_QUERY=state.user_query,
+        PREV_CONTEXT=state.contexts[-1][:100] if state.contexts else ""
+    )
 
-        # Store TEMPLATE as parameter
-        sp.set_attribute("param.executor_prompt", template)
-        sp.set_attribute("param.executor_prompt.trainable", "executor" in OPTIMIZABLE)
-        _emit_code_param(sp, "executor", executor_node)
-        sp.set_attribute("gen_ai.model", "llm")
-        sp.set_attribute("inputs.gen_ai.prompt", prompt)
-        sp.set_attribute("inputs.step", str(step))
-        sp.set_attribute("inputs.user_query", state.user_query)
+    # Call LLM with tracing
+    raw = TRACING_LLM.node_call( span_name="executor", template_name="executor_prompt", template=template, optimizable_key="executor", code_key="executor", code_fn=executor_node,
+            user_query=state.user_query, messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}], response_format={"type":"json_object"}, max_tokens=300, temperature=0)
 
-        # Call LLM
-        raw = LLM_CLIENT(
-            messages=[{"role":"system","content":"JSON only"}, {"role":"user","content":prompt}],
-            response_format={"type":"json_object"},
-            max_tokens=300,
-            temperature=0,
-        ).choices[0].message.content
-
-        try:
-            d = json.loads(raw)
-            goto = d.get("goto", "synthesizer")
-            # Validate goto is one of the allowed agents
-            if goto not in ["web_researcher", "wikidata_researcher", "synthesizer"]:
-                goto = "synthesizer"
-            agent_query = d.get("query", state.user_query)
-        except:
-            goto, agent_query = ("synthesizer", state.user_query)
+    try:
+        d = json.loads(raw)
+        goto = d.get("goto", "synthesizer")
+        # Validate goto is one of the allowed agents
+        if goto not in ["web_researcher", "wikidata_researcher", "synthesizer"]:
+            goto = "synthesizer"
+        agent_query = d.get("query", state.user_query)
+    except:
+        goto, agent_query = ("synthesizer", state.user_query)
 
     return Command(
         update={
@@ -581,24 +609,15 @@ def synthesizer_node(state: State) -> Command[Literal[END]]:
     Ends the graph.
     """
 
-    with TRACER.start_as_current_span("synthesizer") as sp:
-        template = state.synthesizer_template or SYNTH_TEMPLATE_DEFAULT
+    template = state.synthesizer_template or SYNTH_TEMPLATE_DEFAULT
 
-        context_blob = "\\n\\n".join(state.contexts[-3:])
+    context_blob = "\\n\\n".join(state.contexts[-3:])
 
-        prompt = fill_template(template, USER_QUERY=state.user_query, CONTEXT=context_blob)
+    prompt = fill_template(template, USER_QUERY=state.user_query, CONTEXT=context_blob)
 
-        sp.set_attribute("param.synthesizer_prompt", template)
-        sp.set_attribute("param.synthesizer_prompt.trainable", "synthesizer" in OPTIMIZABLE)
-        sp.set_attribute("gen_ai.model", "llm")
-        sp.set_attribute("inputs.gen_ai.prompt", prompt)
-        _emit_code_param(sp, "synthesizer", synthesizer_node)
-
-        answer = LLM_CLIENT(
-            messages=[{"role":"system","content":"Answer concisely"}, {"role":"user","content":prompt}],
-            max_tokens=400,
-            temperature=0,
-        ).choices[0].message.content
+    # LLM with tracing
+    answer = TRACING_LLM.node_call( span_name="synthesizer", template_name="synthesizer_prompt", template=template, optimizable_key="synthesizer", code_key="synthesizer", code_fn=synthesizer_node,
+            user_query=state.user_query, messages=[{"role":"system","content":"Answer concisely"}, {"role":"user","content":prompt}], max_tokens=400, temperature=0)
 
     return Command(update={ "final_answer": answer }, goto=END)
 
