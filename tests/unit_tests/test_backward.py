@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 from opto.trace import node, bundle
 from opto.trace.nodes import GRAPH, Node
 from opto.trace.propagators import GraphPropagator
@@ -96,6 +97,34 @@ def test_node_feedback():
             print(f"  {kk}: {vv}")
         print("User Feedback:")
         print(f"  {f_feedback.user_feedback}")
+
+
+
+def test_multiple_backward():
+    # This test _detach calls in backward
+
+    x = node(1, name="x", trainable=True)
+    def fun(x):
+        return x + np.ones(10)
+
+    for i in range(10):
+        y1 = fun(x)
+        y2 = fun(x)
+        x.zero_feedback()
+        y1.backward("first backward")
+        # after backward, y1 should be detached from x
+        assert len(x.children) == 1
+        # but the feedback should be there
+        assert len(x.feedback) == 1
+
+        y2.backward("second backward")
+        # after backward, y2 should be detached from x
+        assert len(x.children) == 0
+        # but the feedback should be there
+        assert len(x.feedback) == 2
+
+
+
 
 
 

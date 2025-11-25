@@ -2,7 +2,7 @@ import opto.trace as trace
 from opto.trace.bundle import TraceMissingInputsError
 from opto.trace.nodes import Node, node
 from opto.trace.utils import for_all_methods, contain
-
+import copy
 
 global_var = node('This is a global variable')
 global_list = [1,2,3]
@@ -421,6 +421,157 @@ def run(trainable=False):
     assert len(global_list) == old_len + 1
 
 
+def _test_copying(trainable):
+    # test copying a bundle function
+    @trace.bundle(trainable=trainable)
+    def add(a, b):
+        return a + b
+
+    add2 = copy.copy(add)
+    assert add2(node(1), node(2)) == 3
+
+    add3 = copy.deepcopy(add)  # module cannot be deepcopied?
+    assert add3(node(1), node(2)) == 3
+
+    add3 = add.detach()
+    assert add3(node(1), node(2)) == 3
+
+    add4 = add.copy()
+    assert add4(node(1), node(2)) == 3
+
+
+    new_code = """
+def add(a, b):
+    return a + b + 1
+"""
+
+    if trainable:
+
+        add.parameter._data = new_code
+
+        add2 = copy.copy(add)
+        assert add2.parameter._data == new_code
+        assert add2(node(1), node(2)) == 4
+
+        add3 = copy.deepcopy(add)  # module cannot be deepcopied?
+        assert add3.parameter._data == new_code
+        assert add3(node(1), node(2)) == 4
+
+        add3 = add.detach()
+        assert add3.parameter._data == new_code
+        assert add3(node(1), node(2)) == 4
+
+        add4 = add.copy()
+        assert add4.parameter._data == new_code
+        assert add4(node(1), node(2)) == 4
+
+
+
+def _test_module_copying(trainable):
+    # test copying a trace.Module with bundle-decorated methods
+
+
+    from functools import partial
+    @trace.bundle(trainable=trainable)
+    def add(a, b):
+        return a + b
+
+    @trace.bundle()
+    def add_not_trainable(a, b):
+        return a + b
+
+    def add_normal(a, b):
+        return a + b
+
+    @trace.model
+    class Dummy:
+
+        def __init__(self):
+            self.partial_add = partial(add, 10)
+            self.partial_add_not_trainable = partial(add_not_trainable, -3)
+            self.partial_add_normal = partial(add_normal, -10)
+
+        @trace.bundle(trainable=trainable)
+        def add(self, a, b):
+            return a + b
+
+        def forward(self, a, b):
+            return self.add(a, b) + self.partial_add(a) + self.partial_add_not_trainable(a) + self.partial_add_normal(a)
+
+    dummy = Dummy()
+    trigger_error = False
+
+    try:
+        dummy.parameters()
+    except ValueError as e:
+        dummy.partial_add = partial(add_not_trainable, 10)
+        trigger_error = True
+    if trainable:
+        assert trigger_error, "This should trigger an error because partial_add is trainable but is wrapped by functools.partial"
+    assert dummy(node(1), node(2)) == 1+2 + (10+1) + (-3+1) + (-10+1)
+    assert dummy.add(node(1), node(2)) == 3
+    assert dummy.partial_add(node(1)) == 11
+    assert dummy.partial_add_normal(1) == -9
+    assert dummy.partial_add_not_trainable(node(1)) == -2
+
+    dummy2 = copy.copy(dummy)
+    assert dummy2(node(1), node(2)) == 1+2 + (10+1) + (-3+1) + (-10+1)
+    assert dummy2.add(node(1), node(2)) == 3
+    assert dummy2.partial_add(node(1)) == 11
+    assert dummy2.partial_add_normal(1) == -9
+    assert dummy2.partial_add_not_trainable(node(1)) == -2
+
+    dummy3 = copy.deepcopy(dummy)
+    assert dummy3(node(1), node(2)) == 1+2 + (10+1) + (-3+1) + (-10+1)
+    assert dummy3.add(node(1), node(2)) == 3
+    assert dummy3.partial_add(node(1)) == 11
+    assert dummy3.partial_add_normal(1) == -9
+    assert dummy3.partial_add_not_trainable(node(1)) == -2
+
+    dummy4 = dummy.copy()
+    assert dummy4(node(1), node(2)) == 1+2 + (10+1) + (-3+1) + (-10+1)
+    assert dummy4.add(node(1), node(2)) == 3
+    assert dummy4.partial_add(node(1)) == 11
+    assert dummy4.partial_add_normal(1) == -9
+    assert dummy4.partial_add_not_trainable(node(1)) == -2
+
+    new_cls_code = """
+def add(self, a, b):
+    return a + b + 1
+"""
+
+    if trainable:
+
+        dummy.add.parameter._data = new_cls_code
+
+        assert dummy(node(1), node(2)) == 1+2+1 + (10+1) + (-3+1) + (-10+1)
+        assert dummy.add(node(1), node(2)) == 3+1
+        assert dummy.partial_add(node(1)) == 11
+        assert dummy.partial_add_normal(1) == -9
+        assert dummy.partial_add_not_trainable(node(1)) == -2
+
+        dummy2 = copy.copy(dummy)
+        assert dummy2(node(1), node(2)) == 1+2+1 + (10+1) + (-3+1) + (-10+1)
+        assert dummy2.add(node(1), node(2)) == 3+1
+        assert dummy2.partial_add(node(1)) == 11
+        assert dummy2.partial_add_normal(1) == -9
+        assert dummy2.partial_add_not_trainable(node(1)) == -2
+
+        dummy3 = copy.deepcopy(dummy)
+        assert dummy3(node(1), node(2)) == 1+2+1 + (10+1) + (-3+1) + (-10+1)
+        assert dummy3.add(node(1), node(2)) == 3+1
+        assert dummy3.partial_add(node(1)) == 11
+        assert dummy3.partial_add_normal(1) == -9
+        assert dummy3.partial_add_not_trainable(node(1)) == -2
+
+        dummy4 = dummy.copy()
+        assert dummy4(node(1), node(2)) == 1+2+1 + (10+1) + (-3+1) + (-10+1)
+        assert dummy4.add(node(1), node(2)) == 3+1
+        assert dummy4.partial_add(node(1)) == 11
+        assert dummy4.partial_add_normal(1) == -9
+        assert dummy4.partial_add_not_trainable(node(1)) == -2
+
+
 def test_trainable_FALSE():
     print("Running tests with trainable=False")
     run(trainable=False)
@@ -428,3 +579,15 @@ def test_trainable_FALSE():
 def test_trainable_TRUE():
     print("Running tests with trainable=True")
     run(trainable=True)
+
+def test_copying():
+    print("Running copying tests with trainable=False")
+    _test_copying(trainable=False)
+    print("Running copying tests with trainable=True")
+    _test_copying(trainable=True)
+
+def test_module_copying():
+    print("Running module copying tests with trainable=False")
+    _test_module_copying(trainable=False)
+    print("Running module copying tests with trainable=True")
+    _test_module_copying(trainable=True)

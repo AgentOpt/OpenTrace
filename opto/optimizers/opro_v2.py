@@ -7,6 +7,47 @@ from opto.optimizers.optoprime_v2 import OptoPrimeV2, OptimizerPromptSymbolSet
 
 # Not inheriting from optoprime_v2 because this should have a smaller set
 class OPROPromptSymbolSet(OptimizerPromptSymbolSet):
+    """Prompt symbol set for OPRO optimizer.
+
+    This class defines the tags and symbols used in the OPRO optimizer's prompts
+    and output parsing. It provides a structured way to format problems and parse
+    responses from the language model.
+
+    Attributes
+    ----------
+    problem_context_section_title : str
+        Title for the problem context section in prompts.
+    variable_section_title : str
+        Title for the variable/solution section in prompts.
+    feedback_section_title : str
+        Title for the feedback section in prompts.
+    node_tag : str
+        Tag used to identify constant nodes in the computation graph.
+    variable_tag : str
+        Tag used to identify variable nodes that can be optimized.
+    value_tag : str
+        Tag used to wrap the value of a node.
+    constraint_tag : str
+        Tag used to wrap constraint expressions for nodes.
+    reasoning_tag : str
+        Tag used to wrap reasoning in the output.
+    improved_variable_tag : str
+        Tag used to wrap improved variable values in the output.
+    name_tag : str
+        Tag used to wrap variable names.
+    expect_json : bool
+        Whether to expect JSON output format (default: False).
+
+    Methods
+    -------
+    default_prompt_symbols
+        Returns default prompt symbols dictionary.
+
+    Notes
+    -----
+    This class inherits from OptimizerPromptSymbolSet but defines a smaller,
+    more focused set of symbols specifically for OPRO optimization.
+    """
 
     problem_context_section_title = "# Problem Context"
     variable_section_title = "# Solution"
@@ -35,6 +76,34 @@ class OPROPromptSymbolSet(OptimizerPromptSymbolSet):
 
 @dataclass
 class ProblemInstance:
+    """Represents a problem instance for OPRO optimization.
+
+    This dataclass encapsulates a complete problem instance including the
+    instruction, current variables/solution, and feedback received.
+
+    Attributes
+    ----------
+    instruction : str
+        The instruction describing what needs to be done or the question to answer.
+    variables : str
+        The current proposed solution that can be modified.
+    feedback : str
+        Feedback about the current solution.
+    optimizer_prompt_symbol_set : OPROPromptSymbolSet
+        The symbol set used for formatting the problem.
+    problem_template : str
+        Template for formatting the problem instance as a string.
+
+    Methods
+    -------
+    __repr__()
+        Returns a formatted string representation of the problem instance.
+
+    Notes
+    -----
+    The problem instance is formatted using the problem_template which
+    organizes the instruction, variables, and feedback into a structured format.
+    """
     instruction: str
     variables: str
     feedback: str
@@ -62,6 +131,64 @@ class ProblemInstance:
         )
 
 class OPROv2(OptoPrimeV2):
+    """OPRO (Optimization by PROmpting) optimizer version 2.
+
+    OPRO is an optimization algorithm that leverages large language models to
+    iteratively improve solutions based on feedback. It treats optimization as
+    a natural language problem where the LLM proposes improvements to variables
+    based on instruction and feedback.
+
+    Parameters
+    ----------
+    *args
+        Variable length argument list passed to parent class.
+    optimizer_prompt_symbol_set : OptimizerPromptSymbolSet, optional
+        The symbol set for formatting prompts and parsing outputs.
+        Defaults to OPROPromptSymbolSet().
+    include_example : bool, optional
+        Whether to include examples in the prompt. Default is False as
+        the default example in OptoPrimeV2 does not work well with OPRO.
+    memory_size : int, optional
+        Number of past optimization steps to remember. Default is 5.
+    **kwargs
+        Additional keyword arguments passed to parent class.
+
+    Attributes
+    ----------
+    representation_prompt : str
+        Template for explaining the problem representation to the LLM.
+    output_format_prompt_template : str
+        Template for specifying the expected output format.
+    user_prompt_template : str
+        Template for presenting the problem instance to the LLM.
+    final_prompt : str
+        Template for requesting the final revised solutions.
+    default_objective : str
+        Default objective when none is specified.
+
+    Methods
+    -------
+    problem_instance(summary, mask=None)
+        Creates a ProblemInstance from an optimization summary.
+    initialize_prompt()
+        Initializes and formats the prompt templates.
+
+    Notes
+    -----
+    OPRO differs from OptoPrime by focusing on simpler problem representations
+    and clearer feedback incorporation. It is particularly effective for
+    problems where the optimization can be expressed in natural language.
+
+    See Also
+    --------
+    OptoPrimeV2 : Parent class providing core optimization functionality.
+    OPROPromptSymbolSet : Symbol set used for formatting.
+
+    Examples
+    --------
+    >>> optimizer = OPROv2(memory_size=10)
+    >>> # Use optimizer to improve solutions based on feedback
+    """
     representation_prompt = dedent(
         """
         You're tasked to change the proposed solution according to feedback.
@@ -118,12 +245,48 @@ class OPROv2(OptoPrimeV2):
                  include_example=False, # default example in OptoPrimeV2 does not work in OPRO
                  memory_size=5,
                  **kwargs):
+        """Initialize the OPROv2 optimizer.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list passed to parent class.
+        optimizer_prompt_symbol_set : OptimizerPromptSymbolSet, optional
+            The symbol set for formatting prompts and parsing outputs.
+            If None, uses OPROPromptSymbolSet().
+        include_example : bool, optional
+            Whether to include examples in the prompt. Default is False.
+        memory_size : int, optional
+            Number of past optimization steps to remember. Default is 5.
+        **kwargs
+            Additional keyword arguments passed to parent class.
+        """
         optimizer_prompt_symbol_set = optimizer_prompt_symbol_set or OPROPromptSymbolSet()
         super().__init__(*args, optimizer_prompt_symbol_set=optimizer_prompt_symbol_set,
                          include_example=include_example, memory_size=memory_size,
                          **kwargs)
 
     def problem_instance(self, summary, mask=None):
+        """Create a ProblemInstance from an optimization summary.
+
+        Parameters
+        ----------
+        summary : object
+            The optimization summary containing variables and feedback.
+        mask : list, optional
+            List of sections to mask/hide in the problem instance.
+            Can include "#Instruction", variable section title, or feedback section title.
+
+        Returns
+        -------
+        ProblemInstance
+            A formatted problem instance ready for presentation to the LLM.
+
+        Notes
+        -----
+        The mask parameter allows selective hiding of problem components,
+        useful for ablation studies or specific optimization strategies.
+        """
         mask = mask or []
         return ProblemInstance(
             instruction=self.objective if "#Instruction" not in mask else "",
@@ -139,6 +302,17 @@ class OPROv2(OptoPrimeV2):
         )
 
     def initialize_prompt(self):
+        """Initialize and format the prompt templates.
+
+        This method formats the representation_prompt and output_format_prompt
+        templates with the appropriate symbols from the optimizer_prompt_symbol_set.
+        It prepares the prompts for use in optimization.
+
+        Notes
+        -----
+        This method should be called during initialization to ensure all
+        prompt templates are properly formatted with the correct tags and symbols.
+        """
         self.representation_prompt = self.representation_prompt.format(
             variable_expression_format=dedent(f"""
             <{self.optimizer_prompt_symbol_set.variable_tag} name="variable_name" type="data_type">
