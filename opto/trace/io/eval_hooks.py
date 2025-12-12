@@ -285,10 +285,17 @@ def make_document_embedding_analysis_eval(
         if mode == "dea":
             score = float(dea_scalar)
         elif mode == "hybrid":
-            score = float(weight_llm * llm_score + weight_dea * float(dea_scalar))
+            # Hybrid mode: Use DEA score for optimization, but enrich feedback with LLM synthesis
+            # The user requested "measure should be all a DEA measure" for the benchmark.
+            # So we return DEA score as the primary score.
+            score = float(dea_scalar)
             if llm:
                 final_reasons = _synthesize_hybrid_feedback(llm, answer, reasons, dea_scores)
-        else:  # "llm" or unknown
+        elif mode == "llm":
+            # LLM mode: Use LLM score for optimization, but include DEA metrics in the payload
+            # for benchmarking purposes.
+            score = llm_score
+        else:  # unknown
             score = llm_score
 
         feedback_payload: Dict[str, Any] = {
@@ -299,6 +306,8 @@ def make_document_embedding_analysis_eval(
             "article_metrics": article_metrics,
             "prometheus_scores": prometheus_scores,
             "writehere_scores": writehere_scores,
+            # Explicitly store DEA score for benchmark extraction regardless of optimization score
+            "benchmark_dea_score": float(dea_scalar)
         }
         return score, metrics, json.dumps(feedback_payload)
 

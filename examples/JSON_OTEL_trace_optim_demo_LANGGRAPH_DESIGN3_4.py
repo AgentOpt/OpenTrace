@@ -108,6 +108,105 @@ def run_graph_with_otel(
     )
 
 
+def run_benchmark(
+    eval_mode: str,
+    steps: int,
+    solutions: List[tuple[str, dict]],
+    graph: Any,
+    eval_fn: Optional[EvalFn],
+    candidate_content_type: str = "markdown",
+) -> List[Dict[str, Any]]:
+    """
+    Run the optimization loop for a specified number of steps.
+    Returns a list of stats per iteration.
+    """
+    print(f"\n🚀 Starting Benchmark: mode={eval_mode}, steps={steps}, examples={len(solutions)}")
+    
+    current_planner_tmpl = base.PLANNER_TEMPLATE_DEFAULT
+    current_executor_tmpl = base.EXECUTOR_TEMPLATE_DEFAULT
+    current_synthesizer_tmpl = base.SYNTH_TEMPLATE_DEFAULT
+    
+    optimizer = None
+    stats = []
+
+    for step in range(steps):
+        print(f"\n=== Iteration {step+1}/{steps} ===")
+        runs: List[RunResult] = []
+        
+        for title, sol in solutions:
+            q = f'Write a wikipedia like article about "{title}"'
+            res = run_graph_with_otel(
+                graph,
+                q,
+                planner_template=current_planner_tmpl,
+                executor_template=current_executor_tmpl,
+                synthesizer_template=current_synthesizer_tmpl,
+                eval_fn=eval_fn,
+                eval_data={
+                    "solution": sol,
+                    "turns": [],
+                    "content_type": candidate_content_type,
+                },
+            )
+            runs.append(res)
+            # Print brief feedback for the first example to avoid spam
+            if len(runs) == 1:
+                print(f"\n--- Feedback for {title} ({eval_mode}) ---")
+                print(res.feedback)
+                print(f"Score: {res.score}")
+                print("------------------------------------------------\n")
+
+        # Calculate average score for reporting
+        # For fair comparison, we try to extract 'benchmark_dea_score' from feedback if available.
+        report_scores = []
+        for r in runs:
+            try:
+                fb = json.loads(r.feedback)
+                if isinstance(fb, dict) and "benchmark_dea_score" in fb:
+                    report_scores.append(fb["benchmark_dea_score"])
+                else:
+                    report_scores.append(r.score)
+            except Exception:
+                report_scores.append(r.score)
+
+        avg_score = sum(report_scores) / len(report_scores)
+        print(f"[iter {step+1}] avg_score={avg_score:.3f} (using benchmark_dea_score if available)")
+        
+        stats.append({
+            "step": step + 1,
+            "avg_score": avg_score,
+            "scores": report_scores,
+            "metrics": [r.metrics for r in runs]
+        })
+
+        if step < steps - 1:
+            updates, optimizer = optimize_iteration(runs, optimizer=optimizer)
+            
+            if updates:
+                print(f"   Updated params: {list(updates.keys())}")
+                
+                # Apply prompt updates
+                if "planner_prompt" in updates:
+                    current_planner_tmpl = updates["planner_prompt"]
+                if "executor_prompt" in updates:
+                    current_executor_tmpl = updates["executor_prompt"]
+                if "synthesizer_prompt" in updates:
+                    current_synthesizer_tmpl = updates["synthesizer_prompt"]
+                
+                # Apply code updates
+                for param_name, new_value in updates.items():
+                    if param_name.startswith("__code_"):
+                        key = param_name[len("__code_"):]
+                        # Use base._apply_code_update
+                        if hasattr(base, "_apply_code_update"):
+                            ok, msg = base._apply_code_update(key, new_value)
+                            print(f"   Code update {key}: {msg}")
+                        else:
+                            print(f"   ⚠️ Cannot apply code update for {key}: _apply_code_update not found in base")
+
+    return stats
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval_mode", default="llm", choices=["llm", "dea", "hybrid"], help="Scoring mode")
@@ -116,12 +215,15 @@ def main() -> None:
     parser.add_argument("--max_examples", type=int, default=2, help="Max DEA examples to run when using --dea_root")
     parser.add_argument("--candidate_content_type", default="markdown", help="Candidate content type for doc_eval: markdown|latex")
     parser.add_argument("--skip_dea", action="store_true", help="Pass skip_dea=True to doc_eval (debug/fast)")
+    parser.add_argument("--steps", type=int, default=1, help="Number of optimization steps")
     args = parser.parse_args()
 
     graph = build_graph()
 
     eval_fn: Optional[EvalFn] = None
-    if args.eval_mode in ("dea", "hybrid"):
+    # Always create eval_fn if we have DEA args, even for "llm" mode, 
+    # so we can compute DEA metrics for the benchmark report.
+    if args.eval_mode in ("dea", "hybrid", "llm") and (args.dea_solution_json or args.dea_root):
         eval_fn = make_document_embedding_analysis_eval(
             mode=args.eval_mode,
             llm=base.LLM_CLIENT,
@@ -130,13 +232,24 @@ def main() -> None:
 
     # Default demo path (no DEA dataset specified)
     if not args.dea_solution_json and not args.dea_root:
+        # ... (keep existing default logic or adapt it? I'll adapt it to use run_benchmark for consistency)
         questions = [
             "What are the key events in the Apollo 11 mission?",
             "Explain the main causes of World War I.",
         ]
-
+        # Mock solutions for default path
+        solutions = [(q, {}) for q in questions]
+        
+        # For default path, we need to handle run_graph_with_otel slightly differently as it expects 'title' in solutions loop
+        # But run_benchmark expects solutions list.
+        # Let's just keep the default path simple or adapt run_benchmark to handle it.
+        # Actually, run_benchmark constructs query from title: q = f'Write a wikipedia like article about "{title}"'
+        # This is specific to DEA.
+        # So I will leave the default path as is, or just warn that --steps is only for DEA mode.
+        
+        print("Running default demo (non-DEA). Use --dea_solution_json for benchmark.")
         optimizer = None
-        for step in range(2):
+        for step in range(args.steps):
             runs: List[RunResult] = []
             for q in questions:
                 result = run_graph_with_otel(graph, q, eval_fn=eval_fn)
@@ -168,28 +281,22 @@ def main() -> None:
                 break
             solutions.append((title, sol))
 
-    optimizer = None
-    runs: List[RunResult] = []
-    for title, sol in solutions:
-        q = f'Write a wikipedia like article about "{title}"'
-        res = run_graph_with_otel(
-            graph,
-            q,
-            eval_fn=eval_fn,
-            eval_data={
-                "solution": sol,
-                "turns": [],
-                "content_type": args.candidate_content_type,
-            },
-        )
-        runs.append(res)
-        print(f"\n--- Feedback for {title} ({args.eval_mode}) ---")
-        print(res.feedback)
-        print(f"Score: {res.score}")
-        print("------------------------------------------------\n")
-
-    updates, optimizer = optimize_iteration(runs, optimizer=optimizer)
-    print(f"[dea] avg_score={sum(r.score for r in runs)/len(runs):.3f} updated={list(updates.keys())}")
+    # Run Benchmark
+    stats = run_benchmark(
+        eval_mode=args.eval_mode,
+        steps=args.steps,
+        solutions=solutions,
+        graph=graph,
+        eval_fn=eval_fn,
+        candidate_content_type=args.candidate_content_type
+    )
+    
+    # Print Summary
+    print("\n" + "="*40)
+    print("BENCHMARK SUMMARY")
+    print("="*40)
+    for s in stats:
+        print(f"Step {s['step']}: Avg Score = {s['avg_score']:.3f}")
 
 
 if __name__ == "__main__":
