@@ -1,0 +1,2384 @@
+[
+  {
+    "iteration": "baseline",
+    "query_index": 0,
+    "score": 0.8999999999999999,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "demo-api"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0001",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331581584837100,
+                  "endTimeUnixNano": 1770331585941302100,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: {query}\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: What is artificial intelligence?\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0002",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331581584837100,
+                  "endTimeUnixNano": 1770331585941302100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a planning agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are a planning agent. Given a user query, create a simple plan.\\n\\nOutput a JSON object with numbered steps:\\n{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather information\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create final answer\\\"}\\n}\\n\\nUser query: What is artificial intelligence?\\n\\nRespond with ONLY the JSON object, no other text.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather basic AI definitions and concepts\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"identify key AI applications and types\\\"},\\n    \\\"3\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"understand historical context and development\\\"},\\n    \\\"4\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"combine information into clear explanation\\\"},\\n    \\\"5\\\": {\\\"action\\\": \\\"review\\\", \\\"goal\\\": \\\"ensure explanation is accurate and comprehensive\\\"}\\n}\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0003",
+                  "parentSpanId": "",
+                  "name": "researcher",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331585942347300,
+                  "endTimeUnixNano": 1770331593577999800,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide 3-5 key facts about: What is artificial intelligence?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0004",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331585942347300,
+                  "endTimeUnixNano": 1770331593577999800,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a research assistant. Provide relevant facts about the topic.\"}, {\"role\": \"user\", \"content\": \"Provide 3-5 key facts about: What is artificial intelligence?\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here are key facts about artificial intelligence:\\n\\n1. Artificial Intelligence (AI) refers to computer systems that can perform tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.\\n\\n2. AI can be categorized into two main types:\\n- Narrow/Weak AI: Designed for specific tasks (like facial recognition or playing chess)\\n- General/Strong AI: Hypothetical systems that would match or exceed human intelligence across all\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0005",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331593578998400,
+                  "endTimeUnixNano": 1770331603563873900,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: {query}\n\nResearch/Context: {context}\n\nProvide a clear, factual answer based on the information provided. Be concise but thorough."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: What is artificial intelligence?\n\nResearch/Context: Here are key facts about artificial intelligence:\n\n1. Artificial Intelligence (AI) refers to computer systems that can perform tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.\n\n2. AI can be categorized into two main types:\n- Narrow/Weak AI: Designed for s"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0006",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331593578998400,
+                  "endTimeUnixNano": 1770331603563873900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a synthesis agent. Provide comprehensive answers.\"}, {\"role\": \"user\", \"content\": \"You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\\n\\nQuery: What is artificial intelligence?\\n\\nResearch/Context: Here are key facts about artificial intelligence:\\n\\n1. Artificial Intelligence (AI) refers to computer systems that can perform tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.\\n\\n2. AI can be categorized into two main types:\\n- Narrow/Weak AI: Designed for specific tasks (like facial recognition or playing chess)\\n- General/Strong AI: Hypothetical systems that would match or exceed human intelligence across all domains\\n\\n3. Modern AI primarily uses machine learning techniques, where systems learn from data rather than following pre-programmed rules, with deep learning being a particularly powerful subset of this approa"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\\n\\nArtificial Intelligence (AI) is a field of computer science focused on creating systems capable of performing tasks that traditionally require human intelligence. First defined by John McCarthy in 1956, AI has evolved into a sophisticated technology that encompasses various cognitive capabilities including visual perception, speech recognition, decision-making, and language translation.\\n\\nAI can be u\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0007",
+                  "parentSpanId": "",
+                  "name": "evaluator",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331603564873000,
+                  "endTimeUnixNano": 1770331608556800100,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\n\nQuery: What is artificial intelligence?\nAnswer: Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\n\nArtificial Intelligence (AI) is a field of computer science focused on creating systems capable of performing tasks that traditionally require human intelligence. First defined by John McCarthy in 1956, AI has evolved into a sophisticated technology that encompasses various"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0008",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331603564873000,
+                  "endTimeUnixNano": 1770331608556800100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are an evaluation agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\\n\\nQuery: What is artificial intelligence?\\nAnswer: Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\\n\\nArtificial Intelligence (AI) is a field of computer science focused on creating systems capable of performing tasks that traditionally require human intelligence. First defined by John McCarthy in 1956, AI has evolved into a sophisticated technology that encompasses various cognitive capabilities including visual perception, speech recognition, decision-making, and language translation.\\n\\nAI can be understood through two fundamental categories:\\n1. Narrow or Weak AI - Systems designed to excel at specific, focused tasks (like chess programs or facial recognition systems)\\n2. General or Strong AI - Theoretical systems that would match or surpas"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"answer_relevance\\\": 0.95,\\n    \\\"groundedness\\\": 0.85,\\n    \\\"plan_quality\\\": 0.90,\\n    \\\"reasons\\\": \\\"The answer provides a clear, comprehensive explanation of AI, covering its definition, key categories, historical context, and modern applications. It's well-structured, starting with fundamentals and progressing to more complex concepts. The information is accurate and includes important technical distinctions. The approach effectively breaks down the topic into digestible components while mainta\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0009",
+                  "parentSpanId": "",
+                  "name": "evaluation_metrics",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331608556800100,
+                  "endTimeUnixNano": 1770331608556800100,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.8999999999999999"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.85"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.reasons",
+                      "value": {
+                        "stringValue": "The answer provides a clear, comprehensive explanation of AI, covering its definition, key categories, historical context, and modern applications. It's well-structured, starting with fundamentals and progressing to more complex concepts. The information is accurate and includes important technical distinctions. The approach effectively breaks down the topic into digestible components while maintaining academic rigor."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331581554",
+                  "spanId": "span_0010",
+                  "parentSpanId": "",
+                  "name": "agentlightning.annotation",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331608556800100,
+                  "endTimeUnixNano": 1770331608556800100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.8999999999999999"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "baseline",
+    "query_index": 1,
+    "score": 0.9333333333333332,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "demo-api"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0001",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331608559320300,
+                  "endTimeUnixNano": 1770331613426063300,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: {query}\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: Explain quantum computing basics.\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0002",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331608559320300,
+                  "endTimeUnixNano": 1770331613426063300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a planning agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are a planning agent. Given a user query, create a simple plan.\\n\\nOutput a JSON object with numbered steps:\\n{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather information\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create final answer\\\"}\\n}\\n\\nUser query: Explain quantum computing basics.\\n\\nRespond with ONLY the JSON object, no other text.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"1\\\": {\\\"action\\\": \\\"Define quantum computing\\\", \\\"goal\\\": \\\"Establish fundamental concept\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"Explain qubits\\\", \\\"goal\\\": \\\"Introduce basic unit of quantum information\\\"},\\n    \\\"3\\\": {\\\"action\\\": \\\"Describe superposition\\\", \\\"goal\\\": \\\"Explain key quantum principle\\\"},\\n    \\\"4\\\": {\\\"action\\\": \\\"Cover entanglement\\\", \\\"goal\\\": \\\"Explain quantum relationships\\\"},\\n    \\\"5\\\": {\\\"action\\\": \\\"Discuss applications\\\", \\\"goal\\\": \\\"Show real-world relevance\\\"},\\n    \\\"6\\\": {\\\"action\\\": \\\"Summarize basics\\\", \\\"goal\\\": \\\"Reinforce c\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0003",
+                  "parentSpanId": "",
+                  "name": "researcher",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331613428097200,
+                  "endTimeUnixNano": 1770331621318649100,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide 3-5 key facts about: Explain quantum computing basics."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0004",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331613428097200,
+                  "endTimeUnixNano": 1770331621318649100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a research assistant. Provide relevant facts about the topic.\"}, {\"role\": \"user\", \"content\": \"Provide 3-5 key facts about: Explain quantum computing basics.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here are 4 key facts about quantum computing basics:\\n\\n1. Quantum computers use quantum bits (qubits) instead of classical bits, allowing them to exist in multiple states simultaneously through a property called superposition, rather than just 0 or 1.\\n\\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and the state of one qubit directly affects the state of another, regardless of distance, enabling complex parallel computations.\\n\\n3. While classical computers ar\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0005",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331621318649100,
+                  "endTimeUnixNano": 1770331634349542600,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: {query}\n\nResearch/Context: {context}\n\nProvide a clear, factual answer based on the information provided. Be concise but thorough."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: Explain quantum computing basics.\n\nResearch/Context: Here are 4 key facts about quantum computing basics:\n\n1. Quantum computers use quantum bits (qubits) instead of classical bits, allowing them to exist in multiple states simultaneously through a property called superposition, rather than just 0 or 1.\n\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and th"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0006",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331621318649100,
+                  "endTimeUnixNano": 1770331634349542600,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a synthesis agent. Provide comprehensive answers.\"}, {\"role\": \"user\", \"content\": \"You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\\n\\nQuery: Explain quantum computing basics.\\n\\nResearch/Context: Here are 4 key facts about quantum computing basics:\\n\\n1. Quantum computers use quantum bits (qubits) instead of classical bits, allowing them to exist in multiple states simultaneously through a property called superposition, rather than just 0 or 1.\\n\\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and the state of one qubit directly affects the state of another, regardless of distance, enabling complex parallel computations.\\n\\n3. While classical computers are better for everyday tasks, quantum computers excel at solving specific problems like factoring large numbers, optimization, and simulating quantum systems - problems that classical computers would take years or"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here's a comprehensive synthesis of quantum computing basics:\\n\\nQuantum computing represents a fundamental shift from classical computing by leveraging the unique properties of quantum mechanics. At its core, quantum computers operate using quantum bits (qubits), which differ dramatically from traditional computer bits in their ability to exist in multiple states simultaneously through superposition. While a classical bit must be either 0 or 1, a qubit can effectively be both at once, enabling ex\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0007",
+                  "parentSpanId": "",
+                  "name": "evaluator",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331634349542600,
+                  "endTimeUnixNano": 1770331639375515900,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\n\nQuery: Explain quantum computing basics.\nAnswer: Here's a comprehensive synthesis of quantum computing basics:\n\nQuantum computing represents a fundamental shift from classical computing by leveraging the unique properties of quantum mechanics. At its core, quantum computers operate using quantum bits (qubits), which differ dramatically from traditional computer bits in their ability to exist in multiple states simult"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0008",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331634349542600,
+                  "endTimeUnixNano": 1770331639375515900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are an evaluation agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\\n\\nQuery: Explain quantum computing basics.\\nAnswer: Here's a comprehensive synthesis of quantum computing basics:\\n\\nQuantum computing represents a fundamental shift from classical computing by leveraging the unique properties of quantum mechanics. At its core, quantum computers operate using quantum bits (qubits), which differ dramatically from traditional computer bits in their ability to exist in multiple states simultaneously through superposition. While a classical bit must be either 0 or 1, a qubit can effectively be both at once, enabling exponentially greater processing potential.\\n\\nA key principle that makes quantum computing powerful is quantum entanglement, where qubits become fundamentally interconnected. In this state, changes to one qubit instantaneously affect its entangled pa"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"answer_relevance\\\": 0.95,\\n    \\\"groundedness\\\": 0.9,\\n    \\\"plan_quality\\\": 0.95,\\n    \\\"reasons\\\": \\\"The answer provides a clear, comprehensive explanation of quantum computing fundamentals, covering key concepts like qubits, superposition, and entanglement. It's well-structured, moving from basic principles to practical challenges. The explanation is accurate and includes both theoretical concepts and practical limitations. The approach effectively builds from simple to complex ideas, making it a\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0009",
+                  "parentSpanId": "",
+                  "name": "evaluation_metrics",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331639375515900,
+                  "endTimeUnixNano": 1770331639375515900,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.9333333333333332"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.reasons",
+                      "value": {
+                        "stringValue": "The answer provides a clear, comprehensive explanation of quantum computing fundamentals, covering key concepts like qubits, superposition, and entanglement. It's well-structured, moving from basic principles to practical challenges. The explanation is accurate and includes both theoretical concepts and practical limitations. The approach effectively builds from simple to complex ideas, making it accessible while maintaining technical accuracy."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331608556",
+                  "spanId": "span_0010",
+                  "parentSpanId": "",
+                  "name": "agentlightning.annotation",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331639375515900,
+                  "endTimeUnixNano": 1770331639375515900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.9333333333333332"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 0,
+    "score": 0.8666666666666667,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "demo-api"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0001",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331639377512300,
+                  "endTimeUnixNano": 1770331643200964800,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: {query}\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: What is artificial intelligence?\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0002",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331639377512300,
+                  "endTimeUnixNano": 1770331643200964800,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a planning agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are a planning agent. Given a user query, create a simple plan.\\n\\nOutput a JSON object with numbered steps:\\n{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather information\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create final answer\\\"}\\n}\\n\\nUser query: What is artificial intelligence?\\n\\nRespond with ONLY the JSON object, no other text.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather basic AI definitions and concepts\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"identify key AI applications and types\\\"},\\n    \\\"3\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"understand historical context and development\\\"},\\n    \\\"4\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"combine information into clear explanation\\\"},\\n    \\\"5\\\": {\\\"action\\\": \\\"review\\\", \\\"goal\\\": \\\"ensure explanation is accurate and accessible\\\"}\\n}\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0003",
+                  "parentSpanId": "",
+                  "name": "researcher",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331643200964800,
+                  "endTimeUnixNano": 1770331648958043300,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide 3-5 key facts about: What is artificial intelligence?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0004",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331643200964800,
+                  "endTimeUnixNano": 1770331648958043300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a research assistant. Provide relevant facts about the topic.\"}, {\"role\": \"user\", \"content\": \"Provide 3-5 key facts about: What is artificial intelligence?\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here are 4 key facts about artificial intelligence:\\n\\n1. Artificial Intelligence (AI) refers to computer systems that can perform tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.\\n\\n2. AI can be categorized into two main types:\\n- Narrow/Weak AI: Designed for specific tasks (like facial recognition or playing chess)\\n- General/Strong AI: Hypothetical systems that would match or exceed human intelligence across a\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0005",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331648959046100,
+                  "endTimeUnixNano": 1770331656317970800,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: {query}\n\nResearch/Context: {context}\n\nProvide a clear, factual answer based on the information provided. Be concise but thorough."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: What is artificial intelligence?\n\nResearch/Context: Here are 4 key facts about artificial intelligence:\n\n1. Artificial Intelligence (AI) refers to computer systems that can perform tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.\n\n2. AI can be categorized into two main types:\n- Narrow/Weak AI: Designed for"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0006",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331648959046100,
+                  "endTimeUnixNano": 1770331656317970800,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a synthesis agent. Provide comprehensive answers.\"}, {\"role\": \"user\", \"content\": \"You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\\n\\nQuery: What is artificial intelligence?\\n\\nResearch/Context: Here are 4 key facts about artificial intelligence:\\n\\n1. Artificial Intelligence (AI) refers to computer systems that can perform tasks that typically require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.\\n\\n2. AI can be categorized into two main types:\\n- Narrow/Weak AI: Designed for specific tasks (like facial recognition or playing chess)\\n- General/Strong AI: Hypothetical systems that would match or exceed human intelligence across all domains\\n\\n3. Modern AI primarily uses machine learning techniques, where systems learn from data rather than being explicitly programmed, with deep learning being a particularly powerful subset of this approac"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\\n\\nArtificial Intelligence (AI) is a field of computer science focused on creating systems capable of performing tasks that traditionally require human intelligence. First defined by John McCarthy in 1956, AI has evolved into a sophisticated technology with diverse applications.\\n\\nThe field can be broken down into two fundamental categories:\\n1. Narrow/Weak AI - Systems designed for specific, focused tas\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0007",
+                  "parentSpanId": "",
+                  "name": "evaluator",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331656317970800,
+                  "endTimeUnixNano": 1770331661193211900,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\n\nQuery: What is artificial intelligence?\nAnswer: Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\n\nArtificial Intelligence (AI) is a field of computer science focused on creating systems capable of performing tasks that traditionally require human intelligence. First defined by John McCarthy in 1956, AI has evolved into a sophisticated technology with diverse application"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0008",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331656317970800,
+                  "endTimeUnixNano": 1770331661193211900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are an evaluation agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\\n\\nQuery: What is artificial intelligence?\\nAnswer: Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\\n\\nArtificial Intelligence (AI) is a field of computer science focused on creating systems capable of performing tasks that traditionally require human intelligence. First defined by John McCarthy in 1956, AI has evolved into a sophisticated technology with diverse applications.\\n\\nThe field can be broken down into two fundamental categories:\\n1. Narrow/Weak AI - Systems designed for specific, focused tasks like facial recognition or chess\\n2. General/Strong AI - Theoretical systems that would match or exceed human-level intelligence across all domains\\n\\nModern AI primarily operates through machine learning, where systems learn patterns from data"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"answer_relevance\\\": 0.9,\\n    \\\"groundedness\\\": 0.8,\\n    \\\"plan_quality\\\": 0.9,\\n    \\\"reasons\\\": \\\"The answer provides a clear, structured explanation of AI, covering key definitions, categories, and capabilities. It's highly relevant, well-organized, and includes essential concepts like machine learning and deep learning. The information is factual though could include more specific examples or sources. The plan follows a logical progression from definition to categories to modern applications.\\\"\\n\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0009",
+                  "parentSpanId": "",
+                  "name": "evaluation_metrics",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331661193211900,
+                  "endTimeUnixNano": 1770331661193211900,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.8666666666666667"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.8"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.reasons",
+                      "value": {
+                        "stringValue": "The answer provides a clear, structured explanation of AI, covering key definitions, categories, and capabilities. It's highly relevant, well-organized, and includes essential concepts like machine learning and deep learning. The information is factual though could include more specific examples or sources. The plan follows a logical progression from definition to categories to modern applications."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331639375",
+                  "spanId": "span_0010",
+                  "parentSpanId": "",
+                  "name": "agentlightning.annotation",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331661193211900,
+                  "endTimeUnixNano": 1770331661193211900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.8666666666666667"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 1,
+    "score": 0.9333333333333332,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "demo-api"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0001",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331661194840900,
+                  "endTimeUnixNano": 1770331664918375200,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: {query}\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: Explain quantum computing basics.\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0002",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331661194840900,
+                  "endTimeUnixNano": 1770331664918375200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a planning agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are a planning agent. Given a user query, create a simple plan.\\n\\nOutput a JSON object with numbered steps:\\n{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather information\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create final answer\\\"}\\n}\\n\\nUser query: Explain quantum computing basics.\\n\\nRespond with ONLY the JSON object, no other text.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"understand fundamental quantum mechanics concepts\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"learn about qubits and superposition\\\"},\\n    \\\"3\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"study quantum gates and circuits\\\"},\\n    \\\"4\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"explore quantum algorithms\\\"},\\n    \\\"5\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create simple explanation of quantum computing\\\"},\\n    \\\"6\\\": {\\\"action\\\": \\\"review\\\", \\\"goal\\\": \\\"ensure explanation is accessible to beginne\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0003",
+                  "parentSpanId": "",
+                  "name": "researcher",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331664919378100,
+                  "endTimeUnixNano": 1770331672169036200,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide 3-5 key facts about: Explain quantum computing basics."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0004",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331664919378100,
+                  "endTimeUnixNano": 1770331672169036200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a research assistant. Provide relevant facts about the topic.\"}, {\"role\": \"user\", \"content\": \"Provide 3-5 key facts about: Explain quantum computing basics.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here are key facts about quantum computing basics:\\n\\n1. Quantum computers use quantum bits (qubits) instead of classical bits, allowing them to exist in multiple states simultaneously due to superposition, rather than just 0 or 1. This enables them to perform certain calculations exponentially faster than classical computers.\\n\\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and the state of one qubit directly affects the state of another, regardless of distan\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0005",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331672170032800,
+                  "endTimeUnixNano": 1770331680840705200,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: {query}\n\nResearch/Context: {context}\n\nProvide a clear, factual answer based on the information provided. Be concise but thorough."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: Explain quantum computing basics.\n\nResearch/Context: Here are key facts about quantum computing basics:\n\n1. Quantum computers use quantum bits (qubits) instead of classical bits, allowing them to exist in multiple states simultaneously due to superposition, rather than just 0 or 1. This enables them to perform certain calculations exponentially faster than classical computers.\n\n2. Quantum entan"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0006",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331672170032800,
+                  "endTimeUnixNano": 1770331680840705200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a synthesis agent. Provide comprehensive answers.\"}, {\"role\": \"user\", \"content\": \"You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\\n\\nQuery: Explain quantum computing basics.\\n\\nResearch/Context: Here are key facts about quantum computing basics:\\n\\n1. Quantum computers use quantum bits (qubits) instead of classical bits, allowing them to exist in multiple states simultaneously due to superposition, rather than just 0 or 1. This enables them to perform certain calculations exponentially faster than classical computers.\\n\\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and the state of one qubit directly affects the state of another, regardless of distance. This property is essential for quantum computing operations and calculations.\\n\\n3. Quantum computers are particularly well-suited for specific tasks like cryptography, complex molecular simulations, and optimi"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here's a comprehensive synthesis of quantum computing basics:\\n\\nQuantum computing represents a revolutionary approach to computation that harnesses the principles of quantum mechanics to process information. At its core, quantum computers differ fundamentally from classical computers in several key ways:\\n\\nCore Components and Principles:\\n- Instead of traditional bits (0s and 1s), quantum computers use quantum bits (qubits)\\n- Qubits can exist in multiple states simultaneously through superposition\\n\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0007",
+                  "parentSpanId": "",
+                  "name": "evaluator",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331680840705200,
+                  "endTimeUnixNano": 1770331685579542900,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\n\nQuery: Explain quantum computing basics.\nAnswer: Here's a comprehensive synthesis of quantum computing basics:\n\nQuantum computing represents a revolutionary approach to computation that harnesses the principles of quantum mechanics to process information. At its core, quantum computers differ fundamentally from classical computers in several key ways:\n\nCore Components and Principles:\n- Instead of traditional bits (0s"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0008",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331680840705200,
+                  "endTimeUnixNano": 1770331685579542900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are an evaluation agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\\n\\nQuery: Explain quantum computing basics.\\nAnswer: Here's a comprehensive synthesis of quantum computing basics:\\n\\nQuantum computing represents a revolutionary approach to computation that harnesses the principles of quantum mechanics to process information. At its core, quantum computers differ fundamentally from classical computers in several key ways:\\n\\nCore Components and Principles:\\n- Instead of traditional bits (0s and 1s), quantum computers use quantum bits (qubits)\\n- Qubits can exist in multiple states simultaneously through superposition\\n- Quantum entanglement allows qubits to be interconnected in ways that classical bits cannot, creating powerful computational capabilities\\n\\nKey Capabilities and Applications:\\n- Exponentially faster processing for specific types of calculatio"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"answer_relevance\\\": 0.95,\\n    \\\"groundedness\\\": 0.9,\\n    \\\"plan_quality\\\": 0.95,\\n    \\\"reasons\\\": \\\"The answer provides a clear, structured explanation of quantum computing fundamentals, covering key concepts (qubits, superposition, entanglement), practical applications, and technical challenges. The organization from basic principles to applications to challenges creates a logical flow. The content is accurate and well-supported with specific examples and technical details. The explanation maint\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0009",
+                  "parentSpanId": "",
+                  "name": "evaluation_metrics",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331685579542900,
+                  "endTimeUnixNano": 1770331685579542900,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.9333333333333332"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.reasons",
+                      "value": {
+                        "stringValue": "The answer provides a clear, structured explanation of quantum computing fundamentals, covering key concepts (qubits, superposition, entanglement), practical applications, and technical challenges. The organization from basic principles to applications to challenges creates a logical flow. The content is accurate and well-supported with specific examples and technical details. The explanation maintains an accessible level while including sufficient technical depth."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331661193",
+                  "spanId": "span_0010",
+                  "parentSpanId": "",
+                  "name": "agentlightning.annotation",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331685579542900,
+                  "endTimeUnixNano": 1770331685579542900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.9333333333333332"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 0,
+    "score": 0.8999999999999999,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "demo-api"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0001",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331685581544400,
+                  "endTimeUnixNano": 1770331689594914000,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: {query}\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: What is artificial intelligence?\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0002",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331685581544400,
+                  "endTimeUnixNano": 1770331689594914000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a planning agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are a planning agent. Given a user query, create a simple plan.\\n\\nOutput a JSON object with numbered steps:\\n{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather information\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create final answer\\\"}\\n}\\n\\nUser query: What is artificial intelligence?\\n\\nRespond with ONLY the JSON object, no other text.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather basic AI definitions from reputable sources\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"identify key AI concepts and applications\\\"},\\n    \\\"3\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"understand historical context and development\\\"},\\n    \\\"4\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"combine information into clear explanation\\\"},\\n    \\\"5\\\": {\\\"action\\\": \\\"simplify\\\", \\\"goal\\\": \\\"make complex concepts accessible\\\"},\\n    \\\"6\\\": {\\\"action\\\": \\\"finalize\\\", \\\"goal\\\": \\\"create comprehensive\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0003",
+                  "parentSpanId": "",
+                  "name": "researcher",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331689594914000,
+                  "endTimeUnixNano": 1770331697159506400,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide 3-5 key facts about: What is artificial intelligence?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0004",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331689594914000,
+                  "endTimeUnixNano": 1770331697159506400,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a research assistant. Provide relevant facts about the topic.\"}, {\"role\": \"user\", \"content\": \"Provide 3-5 key facts about: What is artificial intelligence?\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here are key facts about artificial intelligence:\\n\\n1. Artificial Intelligence (AI) refers to computer systems designed to simulate human intelligence and perform tasks that typically require human cognitive abilities, such as learning, problem-solving, pattern recognition, and decision-making.\\n\\n2. AI can be categorized into two main types:\\n- Narrow/Weak AI: Designed for specific tasks (like facial recognition or playing chess)\\n- General/Strong AI: Hypothetical systems that would match or exceed \"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0005",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331697159506400,
+                  "endTimeUnixNano": 1770331705537776700,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: {query}\n\nResearch/Context: {context}\n\nProvide a clear, factual answer based on the information provided. Be concise but thorough."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: What is artificial intelligence?\n\nResearch/Context: Here are key facts about artificial intelligence:\n\n1. Artificial Intelligence (AI) refers to computer systems designed to simulate human intelligence and perform tasks that typically require human cognitive abilities, such as learning, problem-solving, pattern recognition, and decision-making.\n\n2. AI can be categorized into two main types:\n- N"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0006",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331697159506400,
+                  "endTimeUnixNano": 1770331705537776700,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a synthesis agent. Provide comprehensive answers.\"}, {\"role\": \"user\", \"content\": \"You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\\n\\nQuery: What is artificial intelligence?\\n\\nResearch/Context: Here are key facts about artificial intelligence:\\n\\n1. Artificial Intelligence (AI) refers to computer systems designed to simulate human intelligence and perform tasks that typically require human cognitive abilities, such as learning, problem-solving, pattern recognition, and decision-making.\\n\\n2. AI can be categorized into two main types:\\n- Narrow/Weak AI: Designed for specific tasks (like facial recognition or playing chess)\\n- General/Strong AI: Hypothetical systems that would match or exceed human intelligence across all domains\\n\\n3. Modern AI primarily uses machine learning techniques, where systems learn from data rather than being explicitly programmed, with deep learning being a particularly powe"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\\n\\nArtificial Intelligence (AI) is a field of computer science focused on creating systems that can simulate human intelligence and perform cognitive tasks. Originally conceived in 1956 by John McCarthy, AI has evolved into a sophisticated technology that encompasses various capabilities including learning, problem-solving, pattern recognition, and decision-making.\\n\\nAI can be understood through two mai\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0007",
+                  "parentSpanId": "",
+                  "name": "evaluator",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331705538781300,
+                  "endTimeUnixNano": 1770331710400641900,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\n\nQuery: What is artificial intelligence?\nAnswer: Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\n\nArtificial Intelligence (AI) is a field of computer science focused on creating systems that can simulate human intelligence and perform cognitive tasks. Originally conceived in 1956 by John McCarthy, AI has evolved into a sophisticated technology that encompasses various c"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0008",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331705538781300,
+                  "endTimeUnixNano": 1770331710400641900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are an evaluation agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\\n\\nQuery: What is artificial intelligence?\\nAnswer: Based on the provided research, here is a comprehensive synthesis about artificial intelligence:\\n\\nArtificial Intelligence (AI) is a field of computer science focused on creating systems that can simulate human intelligence and perform cognitive tasks. Originally conceived in 1956 by John McCarthy, AI has evolved into a sophisticated technology that encompasses various capabilities including learning, problem-solving, pattern recognition, and decision-making.\\n\\nAI can be understood through two main categories:\\n1. Narrow or Weak AI - Systems designed for specific, focused tasks (e.g., facial recognition systems or chess programs)\\n2. General or Strong AI - Theoretical systems that would match or exceed human-level intelligence across all do"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"answer_relevance\\\": 0.95,\\n    \\\"groundedness\\\": 0.85,\\n    \\\"plan_quality\\\": 0.90,\\n    \\\"reasons\\\": \\\"The answer provides a comprehensive, well-structured explanation of AI, covering key concepts like its definition, history, types (narrow vs general), and core technologies like machine learning. It's directly relevant to the question, uses clear examples, and follows a logical progression. The information appears accurate and well-supported, though some specific citations could strengthen grounde\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0009",
+                  "parentSpanId": "",
+                  "name": "evaluation_metrics",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331710401785600,
+                  "endTimeUnixNano": 1770331710401785600,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.8999999999999999"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.85"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.reasons",
+                      "value": {
+                        "stringValue": "The answer provides a comprehensive, well-structured explanation of AI, covering key concepts like its definition, history, types (narrow vs general), and core technologies like machine learning. It's directly relevant to the question, uses clear examples, and follows a logical progression. The information appears accurate and well-supported, though some specific citations could strengthen groundedness. The organizational approach using clear categories and progressive explanation is effective."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331685579",
+                  "spanId": "span_0010",
+                  "parentSpanId": "",
+                  "name": "agentlightning.annotation",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331710401785600,
+                  "endTimeUnixNano": 1770331710401785600,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.8999999999999999"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 1,
+    "score": 0.9333333333333332,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "demo-api"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0001",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331710403703600,
+                  "endTimeUnixNano": 1770331714874042400,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: {query}\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\n\nOutput a JSON object with numbered steps:\n{\n    \"1\": {\"action\": \"research\", \"goal\": \"gather information\"},\n    \"2\": {\"action\": \"synthesize\", \"goal\": \"create final answer\"}\n}\n\nUser query: Explain quantum computing basics.\n\nRespond with ONLY the JSON object, no other text."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0002",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331710403703600,
+                  "endTimeUnixNano": 1770331714874042400,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a planning agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are a planning agent. Given a user query, create a simple plan.\\n\\nOutput a JSON object with numbered steps:\\n{\\n    \\\"1\\\": {\\\"action\\\": \\\"research\\\", \\\"goal\\\": \\\"gather information\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"synthesize\\\", \\\"goal\\\": \\\"create final answer\\\"}\\n}\\n\\nUser query: Explain quantum computing basics.\\n\\nRespond with ONLY the JSON object, no other text.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"1\\\": {\\\"action\\\": \\\"Define quantum computing\\\", \\\"goal\\\": \\\"Establish fundamental concept\\\"},\\n    \\\"2\\\": {\\\"action\\\": \\\"Explain qubits\\\", \\\"goal\\\": \\\"Introduce basic unit of quantum information\\\"},\\n    \\\"3\\\": {\\\"action\\\": \\\"Describe superposition\\\", \\\"goal\\\": \\\"Explain key quantum principle\\\"},\\n    \\\"4\\\": {\\\"action\\\": \\\"Explain entanglement\\\", \\\"goal\\\": \\\"Cover quantum relationships\\\"},\\n    \\\"5\\\": {\\\"action\\\": \\\"Compare to classical computing\\\", \\\"goal\\\": \\\"Provide familiar reference point\\\"},\\n    \\\"6\\\": {\\\"action\\\": \\\"Give practical applica\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0003",
+                  "parentSpanId": "",
+                  "name": "researcher",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331714874042400,
+                  "endTimeUnixNano": 1770331721795426700,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide 3-5 key facts about: Explain quantum computing basics."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0004",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331714874042400,
+                  "endTimeUnixNano": 1770331721795426700,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a research assistant. Provide relevant facts about the topic.\"}, {\"role\": \"user\", \"content\": \"Provide 3-5 key facts about: Explain quantum computing basics.\"}]"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here are 4 key facts about quantum computing basics:\\n\\n1. Quantum computers use quantum bits (qubits) instead of classical bits. While classical bits can only be in one of two states (0 or 1), qubits can exist in multiple states simultaneously due to superposition, exponentially increasing computational power.\\n\\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and the state of one qubit directly influences another, regardless of distance. This allows quantum co\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0005",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331721797452600,
+                  "endTimeUnixNano": 1770331731754309300,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: {query}\n\nResearch/Context: {context}\n\nProvide a clear, factual answer based on the information provided. Be concise but thorough."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\n\nQuery: Explain quantum computing basics.\n\nResearch/Context: Here are 4 key facts about quantum computing basics:\n\n1. Quantum computers use quantum bits (qubits) instead of classical bits. While classical bits can only be in one of two states (0 or 1), qubits can exist in multiple states simultaneously due to superposition, exponentially increasing computational power.\n\n2. Quantum entanglement is a fun"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0006",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331721797452600,
+                  "endTimeUnixNano": 1770331731754309300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are a synthesis agent. Provide comprehensive answers.\"}, {\"role\": \"user\", \"content\": \"You are a synthesis agent. Given a query and research results, provide a comprehensive answer.\\n\\nQuery: Explain quantum computing basics.\\n\\nResearch/Context: Here are 4 key facts about quantum computing basics:\\n\\n1. Quantum computers use quantum bits (qubits) instead of classical bits. While classical bits can only be in one of two states (0 or 1), qubits can exist in multiple states simultaneously due to superposition, exponentially increasing computational power.\\n\\n2. Quantum entanglement is a fundamental principle where qubits become interconnected and the state of one qubit directly influences another, regardless of distance. This allows quantum computers to perform complex calculations in parallel.\\n\\n3. Quantum computers excel at specific tasks like cryptography, optimization problems, and molecular simulation, but they're not meant to replace classical co"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"Here's a comprehensive explanation of quantum computing basics:\\n\\nQuantum computing represents a revolutionary approach to computation that harnesses the principles of quantum mechanics. At its core, quantum computers operate using quantum bits (qubits), which fundamentally differ from the classical bits used in traditional computers. While classical bits can only exist as either 0 or 1, qubits possess the remarkable ability to exist in multiple states simultaneously through a phenomenon called s\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0007",
+                  "parentSpanId": "",
+                  "name": "evaluator",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331731754309300,
+                  "endTimeUnixNano": 1770331736921522300,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\n\nQuery: Explain quantum computing basics.\nAnswer: Here's a comprehensive explanation of quantum computing basics:\n\nQuantum computing represents a revolutionary approach to computation that harnesses the principles of quantum mechanics. At its core, quantum computers operate using quantum bits (qubits), which fundamentally differ from the classical bits used in traditional computers. While classical bits can only exist"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0008",
+                  "parentSpanId": "",
+                  "name": "openrouter.chat.completion",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331731754309300,
+                  "endTimeUnixNano": 1770331736921522300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "anthropic/claude-3.5-sonnet"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.input.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"system\", \"content\": \"You are an evaluation agent. Output valid JSON only.\"}, {\"role\": \"user\", \"content\": \"You are an evaluation agent. Evaluate the quality of an answer on a 0-1 scale.\\n\\nQuery: Explain quantum computing basics.\\nAnswer: Here's a comprehensive explanation of quantum computing basics:\\n\\nQuantum computing represents a revolutionary approach to computation that harnesses the principles of quantum mechanics. At its core, quantum computers operate using quantum bits (qubits), which fundamentally differ from the classical bits used in traditional computers. While classical bits can only exist as either 0 or 1, qubits possess the remarkable ability to exist in multiple states simultaneously through a phenomenon called superposition. This capability exponentially increases the computational power of quantum systems.\\n\\nA key principle that makes quantum computing powerful is quantum entanglement, where qubits become interconnected in such a way that the state of on"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.messages",
+                      "value": {
+                        "stringValue": "[{\"role\": \"assistant\", \"content\": \"{\\n    \\\"answer_relevance\\\": 0.95,\\n    \\\"groundedness\\\": 0.9,\\n    \\\"plan_quality\\\": 0.95,\\n    \\\"reasons\\\": \\\"The answer provides a clear, comprehensive explanation of quantum computing basics, covering key concepts like qubits, superposition, and entanglement. It effectively structures information from fundamental principles to practical challenges, includes relevant applications, and explains technical limitations. The explanation is accurate, well-organized, and appropriately pitched for a basic introdu\"}]"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0009",
+                  "parentSpanId": "",
+                  "name": "evaluation_metrics",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331736922880500,
+                  "endTimeUnixNano": 1770331736922880500,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.9333333333333332"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.9"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.95"
+                      }
+                    },
+                    {
+                      "key": "eval.reasons",
+                      "value": {
+                        "stringValue": "The answer provides a clear, comprehensive explanation of quantum computing basics, covering key concepts like qubits, superposition, and entanglement. It effectively structures information from fundamental principles to practical challenges, includes relevant applications, and explains technical limitations. The explanation is accurate, well-organized, and appropriately pitched for a basic introduction."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770331710401",
+                  "spanId": "span_0010",
+                  "parentSpanId": "",
+                  "name": "agentlightning.annotation",
+                  "kind": "INTERNAL",
+                  "startTimeUnixNano": 1770331736922880500,
+                  "endTimeUnixNano": 1770331736922880500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.9333333333333332"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
