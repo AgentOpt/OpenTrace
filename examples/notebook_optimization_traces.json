@@ -1,0 +1,1940 @@
+[
+  {
+    "iteration": "baseline",
+    "query_index": 0,
+    "score": 0.5,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "optimization-demo"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0001",
+                  "name": "planner",
+                  "startTimeUnixNano": 1770332717778972100,
+                  "endTimeUnixNano": 1770332717823382600,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: {query}\nRespond with ONLY the JSON object."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: What is artificial intelligence?\nRespond with ONLY the JSON object."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0002",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332717778972100,
+                  "endTimeUnixNano": 1770332717823382600,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0003",
+                  "name": "researcher",
+                  "startTimeUnixNano": 1770332717824598400,
+                  "endTimeUnixNano": 1770332717862825300,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide key facts about: What is artificial intelligence?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0004",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332717824598400,
+                  "endTimeUnixNano": 1770332717862825300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0005",
+                  "name": "synthesizer",
+                  "startTimeUnixNano": 1770332717864244500,
+                  "endTimeUnixNano": 1770332717910714500,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: {query}\nResearch: {context}\nProvide a clear, factual answer."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: What is artificial intelligence?\nResearch: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nProvide a clear, factual answer."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0006",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332717864244500,
+                  "endTimeUnixNano": 1770332717910714500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0007",
+                  "name": "evaluator",
+                  "startTimeUnixNano": 1770332717911727400,
+                  "endTimeUnixNano": 1770332717976535000,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Evaluate the answer quality on 0-1 scale.\nQuery: What is artificial intelligence?\nAnswer: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nOutput JSON: {{\"answer_relevance\": 0.8, \"groundedness\": 0.7, \"plan_quality\": 0.9, \"reasons\": \"...\"}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0008",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332717911727400,
+                  "endTimeUnixNano": 1770332717976535000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0009",
+                  "name": "evaluation_metrics",
+                  "startTimeUnixNano": 1770332717977535200,
+                  "endTimeUnixNano": 1770332717977535200,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717776",
+                  "spanId": "span_0010",
+                  "name": "agentlightning.annotation",
+                  "startTimeUnixNano": 1770332717977535200,
+                  "endTimeUnixNano": 1770332717977535200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "baseline",
+    "query_index": 1,
+    "score": 0.5,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "optimization-demo"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0001",
+                  "name": "planner",
+                  "startTimeUnixNano": 1770332717979535700,
+                  "endTimeUnixNano": 1770332718037158100,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: {query}\nRespond with ONLY the JSON object."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: Explain quantum computing basics.\nRespond with ONLY the JSON object."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0002",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332717979535700,
+                  "endTimeUnixNano": 1770332718037158100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0003",
+                  "name": "researcher",
+                  "startTimeUnixNano": 1770332718038155800,
+                  "endTimeUnixNano": 1770332718097359000,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide key facts about: Explain quantum computing basics."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0004",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718038155800,
+                  "endTimeUnixNano": 1770332718097359000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0005",
+                  "name": "synthesizer",
+                  "startTimeUnixNano": 1770332718098357500,
+                  "endTimeUnixNano": 1770332718155344700,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: {query}\nResearch: {context}\nProvide a clear, factual answer."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: Explain quantum computing basics.\nResearch: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nProvide a clear, factual answer."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0006",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718098357500,
+                  "endTimeUnixNano": 1770332718155344700,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0007",
+                  "name": "evaluator",
+                  "startTimeUnixNano": 1770332718156357500,
+                  "endTimeUnixNano": 1770332718220536500,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Evaluate the answer quality on 0-1 scale.\nQuery: Explain quantum computing basics.\nAnswer: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nOutput JSON: {{\"answer_relevance\": 0.8, \"groundedness\": 0.7, \"plan_quality\": 0.9, \"reasons\": \"...\"}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0008",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718156357500,
+                  "endTimeUnixNano": 1770332718220536500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0009",
+                  "name": "evaluation_metrics",
+                  "startTimeUnixNano": 1770332718220536500,
+                  "endTimeUnixNano": 1770332718220536500,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332717977",
+                  "spanId": "span_0010",
+                  "name": "agentlightning.annotation",
+                  "startTimeUnixNano": 1770332718220536500,
+                  "endTimeUnixNano": 1770332718220536500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 0,
+    "score": 0.5,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "optimization-demo"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0001",
+                  "name": "planner",
+                  "startTimeUnixNano": 1770332718221562300,
+                  "endTimeUnixNano": 1770332718262440500,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: {query}\nRespond with ONLY the JSON object."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: What is artificial intelligence?\nRespond with ONLY the JSON object."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0002",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718221562300,
+                  "endTimeUnixNano": 1770332718262440500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0003",
+                  "name": "researcher",
+                  "startTimeUnixNano": 1770332718263304900,
+                  "endTimeUnixNano": 1770332718305811800,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide key facts about: What is artificial intelligence?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0004",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718263304900,
+                  "endTimeUnixNano": 1770332718305811800,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0005",
+                  "name": "synthesizer",
+                  "startTimeUnixNano": 1770332718305811800,
+                  "endTimeUnixNano": 1770332718349135600,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: {query}\nResearch: {context}\nProvide a clear, factual answer."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: What is artificial intelligence?\nResearch: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nProvide a clear, factual answer."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0006",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718305811800,
+                  "endTimeUnixNano": 1770332718349135600,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0007",
+                  "name": "evaluator",
+                  "startTimeUnixNano": 1770332718350135600,
+                  "endTimeUnixNano": 1770332718399362200,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Evaluate the answer quality on 0-1 scale.\nQuery: What is artificial intelligence?\nAnswer: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nOutput JSON: {{\"answer_relevance\": 0.8, \"groundedness\": 0.7, \"plan_quality\": 0.9, \"reasons\": \"...\"}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0008",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718350135600,
+                  "endTimeUnixNano": 1770332718399362200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0009",
+                  "name": "evaluation_metrics",
+                  "startTimeUnixNano": 1770332718401361500,
+                  "endTimeUnixNano": 1770332718401361500,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718220",
+                  "spanId": "span_0010",
+                  "name": "agentlightning.annotation",
+                  "startTimeUnixNano": 1770332718401361500,
+                  "endTimeUnixNano": 1770332718401361500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 1,
+    "score": 0.5,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "optimization-demo"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0001",
+                  "name": "planner",
+                  "startTimeUnixNano": 1770332718402892000,
+                  "endTimeUnixNano": 1770332718469360000,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: {query}\nRespond with ONLY the JSON object."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: Explain quantum computing basics.\nRespond with ONLY the JSON object."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0002",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718402892000,
+                  "endTimeUnixNano": 1770332718469360000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0003",
+                  "name": "researcher",
+                  "startTimeUnixNano": 1770332718469360000,
+                  "endTimeUnixNano": 1770332718509460200,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide key facts about: Explain quantum computing basics."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0004",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718469360000,
+                  "endTimeUnixNano": 1770332718509460200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0005",
+                  "name": "synthesizer",
+                  "startTimeUnixNano": 1770332718510460800,
+                  "endTimeUnixNano": 1770332718550838900,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: {query}\nResearch: {context}\nProvide a clear, factual answer."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: Explain quantum computing basics.\nResearch: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nProvide a clear, factual answer."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0006",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718510460800,
+                  "endTimeUnixNano": 1770332718550838900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0007",
+                  "name": "evaluator",
+                  "startTimeUnixNano": 1770332718551842500,
+                  "endTimeUnixNano": 1770332718591482300,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Evaluate the answer quality on 0-1 scale.\nQuery: Explain quantum computing basics.\nAnswer: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nOutput JSON: {{\"answer_relevance\": 0.8, \"groundedness\": 0.7, \"plan_quality\": 0.9, \"reasons\": \"...\"}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0008",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718551842500,
+                  "endTimeUnixNano": 1770332718591482300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0009",
+                  "name": "evaluation_metrics",
+                  "startTimeUnixNano": 1770332718592025100,
+                  "endTimeUnixNano": 1770332718592025100,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718401",
+                  "spanId": "span_0010",
+                  "name": "agentlightning.annotation",
+                  "startTimeUnixNano": 1770332718592025100,
+                  "endTimeUnixNano": 1770332718592025100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 0,
+    "score": 0.5,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "optimization-demo"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0001",
+                  "name": "planner",
+                  "startTimeUnixNano": 1770332718593081800,
+                  "endTimeUnixNano": 1770332718644294100,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: {query}\nRespond with ONLY the JSON object."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: What is artificial intelligence?\nRespond with ONLY the JSON object."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0002",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718593081800,
+                  "endTimeUnixNano": 1770332718644294100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0003",
+                  "name": "researcher",
+                  "startTimeUnixNano": 1770332718644836300,
+                  "endTimeUnixNano": 1770332718702439600,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide key facts about: What is artificial intelligence?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0004",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718644836300,
+                  "endTimeUnixNano": 1770332718702439600,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0005",
+                  "name": "synthesizer",
+                  "startTimeUnixNano": 1770332718703441000,
+                  "endTimeUnixNano": 1770332718741771900,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: {query}\nResearch: {context}\nProvide a clear, factual answer."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: What is artificial intelligence?\nResearch: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nProvide a clear, factual answer."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0006",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718703441000,
+                  "endTimeUnixNano": 1770332718741771900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0007",
+                  "name": "evaluator",
+                  "startTimeUnixNano": 1770332718741771900,
+                  "endTimeUnixNano": 1770332718787388300,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Evaluate the answer quality on 0-1 scale.\nQuery: What is artificial intelligence?\nAnswer: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nOutput JSON: {{\"answer_relevance\": 0.8, \"groundedness\": 0.7, \"plan_quality\": 0.9, \"reasons\": \"...\"}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0008",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718741771900,
+                  "endTimeUnixNano": 1770332718787388300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0009",
+                  "name": "evaluation_metrics",
+                  "startTimeUnixNano": 1770332718788376800,
+                  "endTimeUnixNano": 1770332718788376800,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718592",
+                  "spanId": "span_0010",
+                  "name": "agentlightning.annotation",
+                  "startTimeUnixNano": 1770332718788376800,
+                  "endTimeUnixNano": 1770332718788376800,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 1,
+    "score": 0.5,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "optimization-demo"
+              },
+              "spans": [
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0001",
+                  "name": "planner",
+                  "startTimeUnixNano": 1770332718789381200,
+                  "endTimeUnixNano": 1770332718825471900,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: {query}\nRespond with ONLY the JSON object."
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a planning agent. Given a user query, create a simple plan.\nOutput a JSON object with numbered steps.\nUser query: Explain quantum computing basics.\nRespond with ONLY the JSON object."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0002",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718789381200,
+                  "endTimeUnixNano": 1770332718825471900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0003",
+                  "name": "researcher",
+                  "startTimeUnixNano": 1770332718826434900,
+                  "endTimeUnixNano": 1770332718868076000,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Provide key facts about: Explain quantum computing basics."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0004",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718826434900,
+                  "endTimeUnixNano": 1770332718868076000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0005",
+                  "name": "synthesizer",
+                  "startTimeUnixNano": 1770332718869080100,
+                  "endTimeUnixNano": 1770332718904612800,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: {query}\nResearch: {context}\nProvide a clear, factual answer."
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "You are a synthesis agent. Given a query and research, provide a comprehensive answer.\nQuery: Explain quantum computing basics.\nResearch: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nProvide a clear, factual answer."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0006",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718869080100,
+                  "endTimeUnixNano": 1770332718904612800,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0007",
+                  "name": "evaluator",
+                  "startTimeUnixNano": 1770332718906256200,
+                  "endTimeUnixNano": 1770332718956069100,
+                  "attributes": [
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "meta-llama/llama-3.1-8b-instruct:free"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Evaluate the answer quality on 0-1 scale.\nQuery: Explain quantum computing basics.\nAnswer: {\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}\nOutput JSON: {{\"answer_relevance\": 0.8, \"groundedness\": 0.7, \"plan_quality\": 0.9, \"reasons\": \"...\"}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0008",
+                  "name": "openrouter.chat.completion",
+                  "startTimeUnixNano": 1770332718906256200,
+                  "endTimeUnixNano": 1770332718956069100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openrouter"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "{\"error\": \"404 Client Error: Not Found for url: https://openrouter.ai/api/v1/chat/completions\"}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0009",
+                  "name": "evaluation_metrics",
+                  "startTimeUnixNano": 1770332718957081300,
+                  "endTimeUnixNano": 1770332718957081300,
+                  "attributes": [
+                    {
+                      "key": "eval.score",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.answer_relevance",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.groundedness",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    },
+                    {
+                      "key": "eval.plan_quality",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "trace_1770332718788",
+                  "spanId": "span_0010",
+                  "name": "agentlightning.annotation",
+                  "startTimeUnixNano": 1770332718957081300,
+                  "endTimeUnixNano": 1770332718957081300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.name",
+                      "value": {
+                        "stringValue": "final_score"
+                      }
+                    },
+                    {
+                      "key": "agentlightning.reward.0.value",
+                      "value": {
+                        "stringValue": "0.5"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
