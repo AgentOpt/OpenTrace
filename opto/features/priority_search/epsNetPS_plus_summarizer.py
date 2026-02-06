@@ -36,14 +36,13 @@ class EpsilonNetPS_plus_Summarizer(PrioritySearch):
     def __init__(self,
                  epsilon: float = 0.1,
                  use_summarizer: bool = False,
-                 summarizer_model_name: str = "gemini/gemini-2.0-flash",
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.epsilon = epsilon
         self.use_summarizer = use_summarizer
         self.regressor = RegressorTemplate()
-        self.summarizer = Summarizer(model_name=summarizer_model_name)
+        self.summarizer = Summarizer()
         self.context = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: "
         
     def filter_candidates(self, new_candidates: List[ModuleCandidate]) -> List[ModuleCandidate]:

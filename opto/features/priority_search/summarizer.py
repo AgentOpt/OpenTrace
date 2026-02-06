@@ -51,24 +51,20 @@ def get_trajectory_of_one_rollout(rollout):
 
 ## Result
 - **Score:** {rollout['score']} 
-- **Feedback:** {rollout['feedback']}
-
-## Optimization Note
-Analyze what parameter patterns lead to successful vs. failed outputs.
-"""
+- **Feedback:** {rollout['feedback']}"""
     return trajectory
-
-
-
 
 class Summarizer:
     """A class which use LLM to summarize the trajectories of the memory. It should be able to learn the patterns of the trajectories. Generate a summary to guide the optimizer to generate better candidates.
     """
-    def __init__(self, model_name: str = "gemini/gemini-2.0-flash"):
+    def __init__(self,verbose: bool = False):
         self.llm = LLM() # use the default model
-        self.max_candidates_in_prompt = 50
+        self.max_candidates_in_prompt = 5
+        self.current_summary = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: "
+        self.used_candidates = set()  # Track candidates that have been summarized
+        self.verbose = verbose
 
-    def _get_trajecories_for_memory(self, memory):
+    def _get_trajectories_for_memory(self, memory):
         """
         Get trajectories for the memory. Memory is a list of (neg_score, candidate) tuples.
         We first collect rollouts from the each candidate, and then get the trajectories for each rollout.
@@ -76,10 +72,20 @@ class Summarizer:
         Return one single string of all trajectories.
         """
         trajectories = []
-        print_color(f"Getting trajectories from {len(memory)} candidates.", "blue")
-        # copy a random shuffle of the memory
-        memory_with_rollouts = [(neg_score, candidate) for neg_score, candidate in memory if len([rollout for rollout in candidate.rollouts if rollout['score'] is not None]) > 0]
-        temporary_memory = random.sample(memory_with_rollouts, k=min(self.max_candidates_in_prompt, len(memory_with_rollouts)))
+        if self.verbose:
+            print_color(f"Getting trajectories from {len(memory)} candidates.", "blue")
+        # Filter out candidates that have already been used and have rollouts
+        memory_with_rollouts = [(neg_score, candidate) for neg_score, candidate in memory
+                                if len([rollout for rollout in candidate.rollouts if rollout['score'] is not None]) > 0
+                                and id(candidate) not in self.used_candidates]
+        if self.verbose:
+            print_color(f"Memory (unseen candidates) with rollouts: {len(memory_with_rollouts)}", "blue")
+        # Sample 5 candidates (or fewer if not enough available)
+        num_to_sample = min(5, len(memory_with_rollouts))
+        temporary_memory = random.sample(memory_with_rollouts, k=num_to_sample)
+        # Mark sampled candidates as used
+        for _, candidate in temporary_memory:
+            self.used_candidates.add(id(candidate))
         for _, candidate in temporary_memory:
             rollouts = [rollout for rollout in candidate.rollouts if rollout['score'] is not None]
             if len(rollouts) == 0:
@@ -98,8 +104,9 @@ class Summarizer:
                 prompt += f"\nFailed trajectory: {get_trajectory_of_one_rollout(random_failed_rollout)}."
             
             trajectories.append(prompt)
+        if self.verbose:
+            print_color(f"Generated trajectories from {len(trajectories)} candidates.", "green")
         
-        print_color(f"Generated trajectories from {len(trajectories)} candidates.", "green")
         return '\n'.join(trajectories)
 
     def summarize(self, memory) -> str:
@@ -110,39 +117,56 @@ class Summarizer:
             str: The summary.
         """
 
-        history_trajectories = self._get_trajecories_for_memory(memory)
+        history_trajectories = self._get_trajectories_for_memory(memory)
 
         # print_color(f"History trajectories: {history_trajectories}", "green")
 
         if len(history_trajectories) == 0:
-            return "No successful trajectories found for the memory."
+            return "No trajectories found for the memory."
         
         system_prompt = "You are an expert at analyzing agent behavior patterns and providing actionable guidance for parameter optimization."
         
-        user_prompt = f"""Analyze the following agent rollout trajectories and extract insights for optimization.
+        user_prompt = f"""Analyze the following agent conversation trajectories and extract insights for optimization.
 
-        Trajectories:
+        Current Summary (from previous analysis):
+        {self.current_summary}
+
+        New Trajectories to Analyze:
         {history_trajectories}
+
+        Instructions:
+        - Review both the Current Summary and the New Trajectories
+        - Synthesize ALL insights into a single, cohesive summary
+        - Integrate new patterns with existing knowledge
+        - Reorganize and consolidate information as needed for clarity
+        - DO NOT use incremental language like "[Previous points remain valid, plus:]"
+        - Generate a complete, standalone summary that incorporates everything
 
         Provide your analysis in XML format:
         <reasoning>
-        Analyze the key patterns and strategies that led to success or failure in these trajectories.
+        Analyze the key patterns and strategies that led to success or failure in these trajectories. Consider both the current summary and new trajectories.
         </reasoning>
         <summary>
-        Concrete recommendations for improving output quality based on successful or failed patterns observed in the trajectories.
+        A complete, consolidated summary with concrete recommendations for generating better Lean 4 code. This should be a standalone summary that integrates insights from both the current summary and new trajectories, without using incremental modification language.
         </summary>"""
 
         prompt_messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
+
+        # print_color(f"User prompt: {user_prompt}", "blue")
+        
+        # print_color(f"System prompt: {system_prompt}", "blue")
+        # print_color(f"User prompt: {user_prompt}", "blue")
         
         response = self.llm(messages=prompt_messages)
         response = response.choices[0].message.content
+        # print_color(f"Response: {response}", "yellow")
         
         # Extract summary using XML regex
         summary_match = re.search(r'<summary>(.*?)</summary>', response, re.DOTALL)
 
-        return summary_match.group(1).strip()
+        self.current_summary = summary_match.group(1).strip()
 
-
+        return self.current_summary

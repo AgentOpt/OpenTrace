@@ -29,7 +29,7 @@ class RegressorTemplate:
     This class itself is enough for getting embeddings for candidates.
     """
     
-    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1, linear_dim=None, rich_text=True):
+    def __init__(self, embedding_model="gemini/text-embedding-004", num_threads=None, regularization_strength=1, linear_dim=None, rich_text=True,verbose: bool = False):
         # In the regressor, no need for calling LLM to make the prediction. So we could predict the entire memory at once.
         self.max_candidates_to_predict = 500
         self.embedding_model = embedding_model
@@ -59,6 +59,7 @@ class RegressorTemplate:
         # Initialize weights with larger values for more aggressive learning
         self.weights = np.random.normal(0, 0.1, self.linear_dim)
         self.bias = 0.0
+        self.verbose = verbose
 
     def _get_parameter_text(self, candidate):
         """Get the parameter text for a ModuleCandidate."""
@@ -257,7 +258,8 @@ class ModuleCandidateRegressor:
     def update(self):
         """Update the regression model parameters using the current memory with logistic regression."""
         start_time = time.time()
-        print_color("Updating regression model using the current memory with logistic regression...", "blue")
+        if self.verbose:
+            print_color("Updating regression model using the current memory with logistic regression...", "blue")
         # Extract candidates from memory (memory contains (neg_score, candidate) tuples)
         batch = [candidate for _, candidate in self.memory]
         # Ensure all candidates have embeddings
@@ -267,10 +269,12 @@ class ModuleCandidateRegressor:
         training_candidates = [candidate for neg_score, candidate in self.memory if candidate.num_rollouts > 0 and candidate.mean_score() is not None]
         
         if len(training_candidates) == 0:
-            print_color("Warning: No training data available for regression model.", "yellow")
+            if self.verbose:
+                print_color("Warning: No training data available for regression model.", "yellow")
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
+            if self.verbose:
+                print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no training data)", "cyan")
             return
             
         # Extract raw binary training data from each candidate
@@ -310,7 +314,8 @@ class ModuleCandidateRegressor:
             print_color("Warning: No binary training samples generated.", "yellow")
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
+            if self.verbose:
+                print_color(f"Regressor update completed in {elapsed_time:.4f} seconds (no binary samples)", "cyan")
             return
             
         # Convert to numpy arrays
