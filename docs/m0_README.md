@@ -1,6 +1,6 @@
 # LangGraph OTEL Instrumentation API
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_ORG/YOUR_REPO/blob/YOUR_BRANCH/examples/prototype_api_validation.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mjehanzaib999/NewTrace/blob/feature/M0-technical-plan/examples/notebooks/prototype_api_validation.ipynb)
 
 A simplified API for instrumenting LangGraph agents with OpenTelemetry (OTEL) tracing, enabling optimization via the Trace framework while maintaining compatibility with Agent Lightning semantic conventions.
 
