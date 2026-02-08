@@ -96,6 +96,7 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                 trace_id = sp.get("traceId") or trace_id
                 sid = sp.get("spanId")
                 psid = sp.get("parentSpanId")
+                orig_has_parent = bool(psid)
                 attrs = _attrs(sp.get("attributes", []))
                 op = _op(attrs, sp)
                 name = _sanitize(sp.get("name") or sid)
@@ -150,9 +151,10 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                 node_id = f"{svc}:{sid}"
                 nodes[node_id] = rec
                 
-                # Update prev_span_id for next iteration (temporal parenting)
-                prev_span_id = sid
-                
+                # Update prev_span_id for next iteration (temporal parenting) # Only advance the temporal chain on spans that were not children in OTEL.
+                if not orig_has_parent:
+                    prev_span_id = sid
+
             docs.append(
                 {
                     "version": PROFILE_VERSION,
