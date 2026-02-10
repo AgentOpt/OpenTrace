@@ -2,7 +2,7 @@
 
 **Version:** 1.0 (Refined)
 **Author:** Carlos Rodriguez
-**Date:** February 9, 2025
+**Date:** February 9, 2026
 **Status:** M0 Deliverable — Analysis + Architecture + Interface Spec
 
 **Target repos / branches:**
@@ -31,6 +31,9 @@
 ## 1. Executive Summary
 
 Today, trainer selection in Trace is driven by a **single scalar score**. Guides return `Tuple[float, str]` via `get_feedback()`, evaluators produce `np.array` of floats, and trainers (`BasicSearchAlgorithm`, `BeamsearchAlgorithm`) select candidates via scalar comparison (`max(candidates, key=lambda x: x[0])` and `sorted(..., key=lambda x: x[0])` respectively). This blocks trainer-side search from exploiting multiple metrics like `{accuracy, latency_ms, cost}`.
+
+**Motivation note (from team discussion):**
+Putting multiple metrics into the *feedback dict/text* is useful for optimizers (OptoPrime/OPRO), but trainers (BasicSearch/UCB/PrioritySearch/GEPA) typically only inspect the **scalar score** for ranking/UCB and ignore additional feedback structure. Therefore, enabling **vector score / score-as-dict** (with backward-compatible scalar reduction) is required for multi-objective trainer selection.
 
 ### What this plan adds
 
@@ -516,7 +519,7 @@ def select_top_k(candidates: List[Tuple[ScoreLike, any]],
 
 | File | Change | Milestone |
 |------|--------|-----------|
-| `opto/trainer/guide.py` | Add `get_score_dict()` method to `Guide` base class. Update `metric()` to collapse dict scores to `float` via `mean(values)` (return type stays `float`). | M1 |
+| `opto/trainer/guide.py` | Add `get_score_dict()` method to `Guide` base class. Keep training loop scalar-safe (`metric()` returns `float`). Dict/vector scores are accessed via `get_score_dict()` for trainer-side selection. | M1 |
 | `opto/trainer/evaluators.py` | Add `evaluate_vector()` and `aggregate_vector_scores()`. Existing `evaluate()` unchanged. | M1 |
 | `opto/trainer/algorithms/basic_algorithms.py` | Add `objective_config` param to `BasicSearchAlgorithm.train()`. Replace `max(candidates, ...)` with `select_best()` in `optimizer_step()`. | M1 (minimal) / M2 (robust) |
 | `opto/trainer/algorithms/beamsearch_algorithm.py` | Add `objective_config` param to `BeamsearchAlgorithm.train()`. Replace scalar sort in `select()` with `select_top_k()`. | M2 |
@@ -592,7 +595,7 @@ This `score` flows into `MinibatchAlgorithm.update()` where `np.mean(scores)` is
 | Constraint | Enforcement |
 |-----------|-------------|
 | `guide.__call__()` / `get_feedback()` return type is **NOT widened** | No changes to `get_feedback()` signature; it still returns `Tuple[float, str]` |
-| Training loop always receives scalar `score` | `metric()` always returns `float` (collapses dict via `mean(values)` if needed) |
+| Training loop always receives scalar `score` | `metric()` always returns `float`. Vector/dict scores are not used by the training loop and are accessed via `get_score_dict()` for trainer-side selection. |
 | Dict scores flow through a separate path | `get_score_dict()` → `evaluate_vector()` → `select_best()` / `select_top_k()` |
 | A multi-objective guide must return `(float, str)` from `get_feedback()` for the training loop | The float is a collapsed scalar summary; the full dict is extracted via `get_score_dict()` during selection |
 
@@ -619,7 +622,7 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 
 **Deliverables:**
 - `docs/T6_technical_plan.md` — this document, finalized
-- `notebooks/t6_m0_analysis.ipynb` — Colab-ready notebook
+- `examples/notebooks/t6_m0_analysis.ipynb` — Colab-ready notebook
 
 **Notebook demonstrates:**
 - Current Guide score contract (`get_feedback` → `Tuple[float, str]`, `metric` → `float`)
@@ -641,12 +644,12 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 - `opto/trainer/evaluators.py` (add `evaluate_vector`, `aggregate_vector_scores`)
 - `opto/trainer/algorithms/basic_algorithms.py` (BasicSearch: accept/use ObjectiveConfig)
 - `tests/test_objectives.py`, `tests/test_evaluators_vector.py`
-- `notebooks/t6_m1_vector_scores.ipynb`
+- `examples/notebooks/t6_m1_vector_scores.ipynb`
 
 **Notebook demonstrates:**
 - StubLLM mode: BasicSearchAlgorithm on small candidate set (5-10) with deterministic dummy guide returning dict metrics
 - Shows: (a) scalar baseline, (b) weighted mode, (c) Pareto mode, (d) deterministic tie-break under fixed seed
-- Real LLM mode (optional): tiny dataset (≤5 items) producing ≥2 metrics
+- Real LLM mode (required): tiny dataset (≤5 items) producing ≥2 metrics
 
 **SMART validation:**
 - `pytest -q` passes (all new functions covered)
@@ -663,7 +666,7 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 - Expanded BasicSearch tests (edge cases, missing metrics, tie-break policies)
 - Optional: minimal PrioritySearch support (weighted scalarization for heap, dict stored for logging)
 - `tests/test_trainers_multiobjective.py`
-- `notebooks/t6_m2_trainers.ipynb`
+- `examples/notebooks/t6_m2_trainers.ipynb`
 
 **Notebook demonstrates:**
 - BasicSearch + Beamsearch in: scalar mode (baseline), weighted mode, Pareto mode
@@ -681,11 +684,18 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 
 **Deliverables:**
 - PR to Trace-Bench: benchmark configs/tasks + notebook
+  - **Trace-Bench touchpoints (update `main` if default branch differs):**
+    - https://github.com/AgentOpt/Trace-Bench/blob/main/LLM4AD/trainers_benchmark.py
+    - https://github.com/AgentOpt/Trace-Bench/blob/main/LLM4AD/trainers_benchmark_tasks_validation.py
+    - https://github.com/AgentOpt/Trace-Bench/blob/main/LLM4AD/benchmark_tasks/index.json
+    - https://github.com/AgentOpt/Trace-Bench/tree/main/LLM4AD/benchmark_tasks
+    - https://github.com/AgentOpt/Trace-Bench/blob/main/LLM4AD/llm4ad_loader.py
+    - https://github.com/AgentOpt/Trace-Bench/blob/main/tests/test_lite_optimize_llm4ad.py
 - 3 benchmarks:
   1. **Accuracy vs latency** (toy QA dataset)
   2. **Accuracy vs response length** (penalize verbosity)
   3. **Accuracy vs tool calls** (penalize excessive tool usage)
-- `notebooks/t6_m3_benchmarks.ipynb`
+- Trace-Bench notebook: `notebooks/t6_multiobjective_benchmarks.ipynb` (in Trace-Bench repo)
 
 **SMART validation:**
 - Notebook outputs per-benchmark table: weighted-mode best candidate metrics + Pareto-mode set of tradeoffs
@@ -763,7 +773,7 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 
 Each notebook contains:
 - **StubLLM (no keys) section:** deterministic dummy guide, runs quickly
-- **Real LLM section (optional):** small N (5-20 examples), prints cost/latency caveats, requires API key
+- **Real LLM section (required):** small N (5-20 examples), prints cost/latency caveats, requires API key
 
 ---
 
