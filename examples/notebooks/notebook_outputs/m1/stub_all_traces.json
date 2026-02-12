@@ -1,0 +1,1577 @@
+[
+  {
+    "iteration": "baseline",
+    "query_index": 0,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "25549b8c0fbe1cc8ac092be71c54b9f2",
+                  "spanId": "b520796c605f1200",
+                  "parentSpanId": "93d6c8242a3747bb",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147483199900,
+                  "endTimeUnixNano": 1770883147483199900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "25549b8c0fbe1cc8ac092be71c54b9f2",
+                  "spanId": "93d6c8242a3747bb",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147483199900,
+                  "endTimeUnixNano": 1770883147483199900,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: What is reinforcement learning?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "153a66cb95df54c362e2f9828f6c5aa7",
+                  "spanId": "95c6e5896c67befc",
+                  "parentSpanId": "08783148222bcd8a",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147483199900,
+                  "endTimeUnixNano": 1770883147483199900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "153a66cb95df54c362e2f9828f6c5aa7",
+                  "spanId": "08783148222bcd8a",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147483199900,
+                  "endTimeUnixNano": 1770883147483199900,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: What is reinforcement learning?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "baseline",
+    "query_index": 1,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "8e5767aee2044acc751c47ac663a4042",
+                  "spanId": "ea6d8118e6e49da1",
+                  "parentSpanId": "2fb9fdbde839d515",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147485715000,
+                  "endTimeUnixNano": 1770883147486945500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "8e5767aee2044acc751c47ac663a4042",
+                  "spanId": "2fb9fdbde839d515",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147485715000,
+                  "endTimeUnixNano": 1770883147486945500,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: Explain gradient descent in simple terms."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "4d9d71ef11ae3897560ed9214c772d86",
+                  "spanId": "13043390edde9cbb",
+                  "parentSpanId": "28a2dda91cba21be",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147487452100,
+                  "endTimeUnixNano": 1770883147487452100,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "4d9d71ef11ae3897560ed9214c772d86",
+                  "spanId": "28a2dda91cba21be",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147487452100,
+                  "endTimeUnixNano": 1770883147487452100,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: Explain gradient descent in simple terms.\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "baseline",
+    "query_index": 2,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "356af9d310c568c6c9b361d09fd11b32",
+                  "spanId": "ccdc3792869e2b2d",
+                  "parentSpanId": "fd1961cbb92d8376",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147490460500,
+                  "endTimeUnixNano": 1770883147490460500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "356af9d310c568c6c9b361d09fd11b32",
+                  "spanId": "fd1961cbb92d8376",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147490460500,
+                  "endTimeUnixNano": 1770883147490460500,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: What are transformers in NLP?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "50e9da4f10cb956a6da3a1e9bae2fba2",
+                  "spanId": "68a6d181651be5bb",
+                  "parentSpanId": "6948d49459746b80",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147492044800,
+                  "endTimeUnixNano": 1770883147492554000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "50e9da4f10cb956a6da3a1e9bae2fba2",
+                  "spanId": "6948d49459746b80",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147492044800,
+                  "endTimeUnixNano": 1770883147492554000,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: What are transformers in NLP?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 0,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "b93ce66c53187fc2287a87ae074f7ed5",
+                  "spanId": "f50a251ac257d20c",
+                  "parentSpanId": "4cdeadb2734c0167",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147497675200,
+                  "endTimeUnixNano": 1770883147497675200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "b93ce66c53187fc2287a87ae074f7ed5",
+                  "spanId": "4cdeadb2734c0167",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147497616300,
+                  "endTimeUnixNano": 1770883147497675200,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: What is reinforcement learning?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "02757c907b916d617161dbf4ec17d36c",
+                  "spanId": "f18464e4c9b9fdc8",
+                  "parentSpanId": "d3c8b9ace70205a3",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147498814500,
+                  "endTimeUnixNano": 1770883147499366000,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "02757c907b916d617161dbf4ec17d36c",
+                  "spanId": "d3c8b9ace70205a3",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147498814500,
+                  "endTimeUnixNano": 1770883147499366000,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: What is reinforcement learning?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 1,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "ab06cd389ad779dfb167c293fee13af0",
+                  "spanId": "81b8f66f30090941",
+                  "parentSpanId": "651d73a6cf39344e",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147504318700,
+                  "endTimeUnixNano": 1770883147504318700,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "ab06cd389ad779dfb167c293fee13af0",
+                  "spanId": "651d73a6cf39344e",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147504318700,
+                  "endTimeUnixNano": 1770883147504318700,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: Explain gradient descent in simple terms."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "40b48c3d10e610404c5554e4782971a4",
+                  "spanId": "c7d374187a9b6c4d",
+                  "parentSpanId": "7104128a87980126",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147505847300,
+                  "endTimeUnixNano": 1770883147505847300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "40b48c3d10e610404c5554e4782971a4",
+                  "spanId": "7104128a87980126",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147505847300,
+                  "endTimeUnixNano": 1770883147505847300,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: Explain gradient descent in simple terms.\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_1",
+    "query_index": 2,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "327fae711a419dab1c5bdc593ca88777",
+                  "spanId": "73760aebe61f25ed",
+                  "parentSpanId": "4797d71e7a57d40e",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147509388700,
+                  "endTimeUnixNano": 1770883147509388700,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "327fae711a419dab1c5bdc593ca88777",
+                  "spanId": "4797d71e7a57d40e",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147509388700,
+                  "endTimeUnixNano": 1770883147509388700,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Create a concise plan for: What are transformers in NLP?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "d7f4f6c63528487b56329e5cdb9aafde",
+                  "spanId": "4ea83c8d044a074c",
+                  "parentSpanId": "33f0012baf83da25",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147510896300,
+                  "endTimeUnixNano": 1770883147510896300,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "d7f4f6c63528487b56329e5cdb9aafde",
+                  "spanId": "33f0012baf83da25",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147510896300,
+                  "endTimeUnixNano": 1770883147510896300,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: What are transformers in NLP?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 0,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "b69a9fecaa2234d566213fdcc36a3a51",
+                  "spanId": "263967ebc057e5d5",
+                  "parentSpanId": "b9f8cfe0bffb9707",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147527940500,
+                  "endTimeUnixNano": 1770883147527940500,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "b69a9fecaa2234d566213fdcc36a3a51",
+                  "spanId": "b9f8cfe0bffb9707",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147527940500,
+                  "endTimeUnixNano": 1770883147527940500,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "OPTIMIZED: Create a thorough, step-by-step plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "OPTIMIZED: Create a thorough, step-by-step plan for: What is reinforcement learning?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "19f268990df991139d6f2105153fa588",
+                  "spanId": "bd90b2dacf0cd5a4",
+                  "parentSpanId": "864bad0c13df612d",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147529557400,
+                  "endTimeUnixNano": 1770883147529557400,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "19f268990df991139d6f2105153fa588",
+                  "spanId": "864bad0c13df612d",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147529045000,
+                  "endTimeUnixNano": 1770883147529557400,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: What is reinforcement learning?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 1,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "c3a764defd676145cd544f1f5e0bab2a",
+                  "spanId": "f03824be055fee01",
+                  "parentSpanId": "600e22633b651db3",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147532988000,
+                  "endTimeUnixNano": 1770883147533721200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "c3a764defd676145cd544f1f5e0bab2a",
+                  "spanId": "600e22633b651db3",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147532436200,
+                  "endTimeUnixNano": 1770883147533721200,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "OPTIMIZED: Create a thorough, step-by-step plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "OPTIMIZED: Create a thorough, step-by-step plan for: Explain gradient descent in simple terms."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "1ab0dba092e0504632f3c20de5a592a3",
+                  "spanId": "b879358b4cd22486",
+                  "parentSpanId": "27e55970426db231",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147534860200,
+                  "endTimeUnixNano": 1770883147534860200,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "1ab0dba092e0504632f3c20de5a592a3",
+                  "spanId": "27e55970426db231",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147534860200,
+                  "endTimeUnixNano": 1770883147534860200,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: Explain gradient descent in simple terms.\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "iteration": "iteration_2",
+    "query_index": 2,
+    "score": 1.0,
+    "otlp": {
+      "resourceSpans": [
+        {
+          "resource": {
+            "attributes": []
+          },
+          "scopeSpans": [
+            {
+              "scope": {
+                "name": "m1-notebook"
+              },
+              "spans": [
+                {
+                  "traceId": "adffc26eee0d799fdc9712d5ec5cc561",
+                  "spanId": "99948f482350841d",
+                  "parentSpanId": "2fc98208dce6ddf1",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147538401700,
+                  "endTimeUnixNano": 1770883147538401700,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "adffc26eee0d799fdc9712d5ec5cc561",
+                  "spanId": "2fc98208dce6ddf1",
+                  "parentSpanId": "",
+                  "name": "planner",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147538401700,
+                  "endTimeUnixNano": 1770883147538401700,
+                  "attributes": [
+                    {
+                      "key": "param.planner_prompt",
+                      "value": {
+                        "stringValue": "OPTIMIZED: Create a thorough, step-by-step plan for: {query}"
+                      }
+                    },
+                    {
+                      "key": "param.planner_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "OPTIMIZED: Create a thorough, step-by-step plan for: What are transformers in NLP?"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "8e25db5600a8b77e90383cff6c422186",
+                  "spanId": "cf0d286228f86805",
+                  "parentSpanId": "276a499130a8c157",
+                  "name": "openai.chat.completion",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147540415900,
+                  "endTimeUnixNano": 1770883147540415900,
+                  "attributes": [
+                    {
+                      "key": "trace.temporal_ignore",
+                      "value": {
+                        "stringValue": "true"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.operation.name",
+                      "value": {
+                        "stringValue": "chat"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.provider.name",
+                      "value": {
+                        "stringValue": "openai"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.request.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.output.preview",
+                      "value": {
+                        "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "8e25db5600a8b77e90383cff6c422186",
+                  "spanId": "276a499130a8c157",
+                  "parentSpanId": "",
+                  "name": "synthesizer",
+                  "kind": "UNSPECIFIED",
+                  "startTimeUnixNano": 1770883147540415900,
+                  "endTimeUnixNano": 1770883147540415900,
+                  "attributes": [
+                    {
+                      "key": "param.synthesizer_prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                      }
+                    },
+                    {
+                      "key": "param.synthesizer_prompt.trainable",
+                      "value": {
+                        "stringValue": "True"
+                      }
+                    },
+                    {
+                      "key": "gen_ai.model",
+                      "value": {
+                        "stringValue": "stub-llm"
+                      }
+                    },
+                    {
+                      "key": "inputs.gen_ai.prompt",
+                      "value": {
+                        "stringValue": "Synthesize an answer for: What are transformers in NLP?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

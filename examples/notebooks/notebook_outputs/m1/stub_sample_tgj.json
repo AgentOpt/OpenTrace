@@ -1,0 +1,116 @@
+[
+  {
+    "version": "trace-json/1.0+otel",
+    "agent": {
+      "id": "m1-notebook",
+      "service": "m1-notebook"
+    },
+    "otel_meta": {
+      "trace_id": "153a66cb95df54c362e2f9828f6c5aa7"
+    },
+    "nodes": {
+      "m1-notebook:b520796c605f1200": {
+        "kind": "msg",
+        "name": "openai.chat.completion",
+        "op": "unspecified",
+        "inputs": {
+          "parent": "m1-notebook:93d6c8242a3747bb"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "25549b8c0fbe1cc8ac092be71c54b9f2",
+            "span_id": "b520796c605f1200",
+            "parent_span_id": "93d6c8242a3747bb",
+            "service": "m1-notebook"
+          }
+        }
+      },
+      "m1-notebook:param_planner_prompt": {
+        "kind": "parameter",
+        "name": "planner_prompt",
+        "data": "Create a concise plan for: {query}",
+        "trainable": true,
+        "info": {
+          "otel": {
+            "span_id": "93d6c8242a3747bb"
+          }
+        }
+      },
+      "m1-notebook:93d6c8242a3747bb": {
+        "kind": "msg",
+        "name": "planner",
+        "op": "llm_call",
+        "inputs": {
+          "gen_ai.prompt": "Create a concise plan for: What is reinforcement learning?",
+          "param_planner_prompt": "m1-notebook:param_planner_prompt"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "25549b8c0fbe1cc8ac092be71c54b9f2",
+            "span_id": "93d6c8242a3747bb",
+            "parent_span_id": "",
+            "service": "m1-notebook"
+          }
+        }
+      },
+      "m1-notebook:95c6e5896c67befc": {
+        "kind": "msg",
+        "name": "openai.chat.completion",
+        "op": "unspecified",
+        "inputs": {
+          "parent": "m1-notebook:08783148222bcd8a"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "153a66cb95df54c362e2f9828f6c5aa7",
+            "span_id": "95c6e5896c67befc",
+            "parent_span_id": "08783148222bcd8a",
+            "service": "m1-notebook"
+          }
+        }
+      },
+      "m1-notebook:param_synthesizer_prompt": {
+        "kind": "parameter",
+        "name": "synthesizer_prompt",
+        "data": "Synthesize an answer for: {query}\nPlan: {plan}",
+        "trainable": true,
+        "info": {
+          "otel": {
+            "span_id": "08783148222bcd8a"
+          }
+        }
+      },
+      "m1-notebook:08783148222bcd8a": {
+        "kind": "msg",
+        "name": "synthesizer",
+        "op": "llm_call",
+        "inputs": {
+          "gen_ai.prompt": "Synthesize an answer for: What is reinforcement learning?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings.",
+          "parent": "m1-notebook:93d6c8242a3747bb",
+          "param_synthesizer_prompt": "m1-notebook:param_synthesizer_prompt"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "153a66cb95df54c362e2f9828f6c5aa7",
+            "span_id": "08783148222bcd8a",
+            "parent_span_id": "93d6c8242a3747bb",
+            "service": "m1-notebook"
+          }
+        }
+      }
+    },
+    "context": {}
+  }
+]

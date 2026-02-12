@@ -169,3 +169,5 @@ OAI_CONFIG_LIST
 
 # jupyter book API output
 docs/api/*
+
+uv.lock

@@ -129,14 +129,34 @@ def flush_otlp(
 
 class TracingLLM:
     """
-    Design-3 wrapper around an LLM client.
+    Design-3+ wrapper around an LLM client with dual semantic conventions.
 
     Responsibilities
     ----------------
-    * Create an OTEL span per LLM node (`span_name`)
-    * Emit `param.*` and `param.*.trainable` for prompts
-    * Optionally emit trainable code parameters via `emit_code_param`
-    * Standardize `inputs.*` attributes (prompt, user_query, ...)
+    * Create an OTEL **parent** span per LLM node (``span_name``) carrying
+      ``param.*`` and ``inputs.*`` attributes (Trace-compatible).
+    * Optionally create a **child** span with ``gen_ai.*`` attributes
+      (Agent Lightning-compatible) marked with ``trace.temporal_ignore``
+      so it does not break TGJ temporal chaining.
+    * Emit trainable code parameters via ``emit_code_param`` when provided.
+
+    Parameters
+    ----------
+    llm : Any
+        Underlying LLM client (OpenAI-compatible interface).
+    tracer : oteltrace.Tracer
+        OTEL tracer for span creation.
+    trainable_keys : Iterable[str] or None
+        Keys whose prompts are trainable.  ``None`` means **all trainable**.
+        Empty string ``""`` in the set also matches all.
+    emit_code_param : callable, optional
+        ``(span, key, fn) -> None``.
+    provider_name : str
+        Provider name for ``gen_ai.provider.name`` attribute.
+    llm_span_name : str
+        Name for child LLM spans (e.g. ``"openai.chat.completion"``).
+    emit_llm_child_span : bool
+        If *True*, emit Agent Lightning-compatible child spans.
     """
 
     def __init__(
@@ -146,17 +166,28 @@ class TracingLLM:
         *,
         trainable_keys: Optional[Iterable[str]] = None,
         emit_code_param: Optional[Any] = None,
+        # -- dual semconv additions --
+        provider_name: str = "openai",
+        llm_span_name: str = "openai.chat.completion",
+        emit_llm_child_span: bool = True,
     ) -> None:
         self.llm = llm
         self.tracer = tracer
-        self.trainable_keys = set(trainable_keys or [])
+        # None -> all trainable; explicit set otherwise
+        self._trainable_keys_all = trainable_keys is None
+        self.trainable_keys = set(trainable_keys) if trainable_keys is not None else set()
         self.emit_code_param = emit_code_param
+        self.provider_name = provider_name
+        self.llm_span_name = llm_span_name
+        self.emit_llm_child_span = emit_llm_child_span
 
     # ---- helpers ---------------------------------------------------------
 
     def _is_trainable(self, optimizable_key: Optional[str]) -> bool:
         if optimizable_key is None:
             return False
+        if self._trainable_keys_all:
+            return True
         if "" in self.trainable_keys:
             return True
         return optimizable_key in self.trainable_keys
@@ -183,7 +214,7 @@ class TracingLLM:
         if code_key and code_fn is not None and self.emit_code_param:
             self.emit_code_param(sp, code_key, code_fn)
 
-        sp.set_attribute("gen_ai.model", "llm")
+        sp.set_attribute("gen_ai.model", getattr(self.llm, "model", "llm"))
         sp.set_attribute("inputs.gen_ai.prompt", prompt)
         if user_query is not None:
             sp.set_attribute("inputs.user_query", user_query)
@@ -208,6 +239,11 @@ class TracingLLM:
     ) -> str:
         """
         Invoke the wrapped LLM under an OTEL span.
+
+        Creates a **parent** span with ``param.*`` / ``inputs.*`` (Trace-
+        compatible) and optionally a **child** span with ``gen_ai.*``
+        attributes (Agent Lightning-compatible).  The child span is tagged
+        ``trace.temporal_ignore=true`` so it does not break TGJ chaining.
         """
         with self.tracer.start_as_current_span(span_name) as sp:
             prompt = ""
@@ -230,9 +266,29 @@ class TracingLLM:
                 extra_inputs=extra_inputs or {},
             )
 
-            resp = self.llm(messages=messages, **llm_kwargs)
-            # Compatible with OpenAI-style chat responses.
-            return resp.choices[0].message.content
+            # -- invoke LLM, optionally under a child span --
+            if self.emit_llm_child_span:
+                with self.tracer.start_as_current_span(self.llm_span_name) as llm_sp:
+                    # Tag child span so TGJ adapter skips temporal chaining
+                    llm_sp.set_attribute("trace.temporal_ignore", "true")
+                    llm_sp.set_attribute("gen_ai.operation.name", "chat")
+                    llm_sp.set_attribute("gen_ai.provider.name", self.provider_name)
+                    llm_sp.set_attribute(
+                        "gen_ai.request.model",
+                        getattr(self.llm, "model", "llm"),
+                    )
+
+                    resp = self.llm(messages=messages, **llm_kwargs)
+                    content = resp.choices[0].message.content
+
+                    llm_sp.set_attribute(
+                        "gen_ai.output.preview", (content or "")[:500]
+                    )
+            else:
+                resp = self.llm(messages=messages, **llm_kwargs)
+                content = resp.choices[0].message.content
+
+            return content
 
 
 DEFAULT_EVAL_METRIC_KEYS: Mapping[str, str] = {
