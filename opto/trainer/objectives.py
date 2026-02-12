@@ -195,6 +195,12 @@ def select_best(candidates: List[Tuple[ScoreLike, Any]],
 
     Returns:
         Index of the best candidate.
+
+    Notes:
+        When *config* is None or mode='scalar', dict scores are collapsed to
+        mean(values) for backward compatibility.  For explicit multi-objective
+        control, pass an ObjectiveConfig with mode='weighted' or 'pareto'
+        and appropriate weights.
     """
     if config is None or config.mode == "scalar":
         scores = []
@@ -256,6 +262,12 @@ def select_top_k(candidates: List[Tuple[ScoreLike, Any]],
 
     Same logic as select_best but returns *k* indices.
     For Pareto mode: rank-0 front first (up to k), then rank-1, etc.
+
+    Notes:
+        When *config* is None or mode='scalar', dict scores are collapsed to
+        mean(values) for backward compatibility.  For explicit multi-objective
+        control, pass an ObjectiveConfig with mode='weighted' or 'pareto'
+        and appropriate weights.
     """
     if config is None or config.mode == "scalar":
         scores = []

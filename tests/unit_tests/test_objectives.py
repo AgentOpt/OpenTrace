@@ -381,3 +381,72 @@ def test_config_frozen():
     config = ObjectiveConfig()
     with pytest.raises(AttributeError):
         config.mode = "weighted"
+
+
+# ---------------------------------------------------------------------------
+# Objective scalar consistency (Fix 1 verification)
+# ---------------------------------------------------------------------------
+
+def test_weighted_objective_not_mean():
+    """Weighted objective uses weighted_scalarize, not mean(values).
+
+    Xavier's example: score_dict={'accuracy':1.0,'brevity':0.5} with
+    weights={'accuracy':0.7,'brevity':0.3} should be 0.85, not 0.75 (mean).
+    """
+    score_dict = {"accuracy": 1.0, "brevity": 0.5}
+    weights = {"accuracy": 0.7, "brevity": 0.3}
+
+    objective = weighted_scalarize(apply_minimize(score_dict, frozenset()), weights)
+    assert objective == pytest.approx(0.85)  # 0.7*1.0 + 0.3*0.5
+
+    naive_mean = float(np.mean(list(score_dict.values())))
+    assert naive_mean == pytest.approx(0.75)
+    assert objective != pytest.approx(naive_mean)
+
+
+def test_weighted_objective_stub_example():
+    """StubLLM example: weighted objective differs from naive mean.
+
+    score_dict={'accuracy':0.0,'brevity':0.01639...} with
+    weights={'accuracy':0.7,'brevity':0.3} should be ~0.00492, not ~0.00820.
+    """
+    score_dict = {"accuracy": 0.0, "brevity": 0.01639344262295082}
+    weights = {"accuracy": 0.7, "brevity": 0.3}
+
+    objective = weighted_scalarize(apply_minimize(score_dict, frozenset()), weights)
+    expected = 0.7 * 0.0 + 0.3 * 0.01639344262295082
+    assert objective == pytest.approx(expected)  # ~0.004918
+
+    naive_mean = float(np.mean(list(score_dict.values())))
+    assert naive_mean == pytest.approx(0.00819672131147541)
+    assert objective != pytest.approx(naive_mean)
+
+
+def test_weighted_objective_with_minimize():
+    """Minimize metrics are negated before scalarization."""
+    score_dict = {"accuracy": 0.95, "latency_s": 0.200}
+    config = ObjectiveConfig(
+        mode="weighted",
+        weights={"accuracy": 0.8, "latency_s": 0.2},
+        minimize=frozenset({"latency_s"}),
+    )
+
+    minimized = apply_minimize(score_dict, config.minimize)
+    assert minimized == {"accuracy": 0.95, "latency_s": -0.200}
+
+    objective = weighted_scalarize(minimized, config.weights, config.missing_value)
+    assert objective == pytest.approx(0.8 * 0.95 + 0.2 * (-0.200))  # 0.72
+
+
+def test_weight_sensitivity_flips_winner():
+    """Changing weights flips which candidate wins."""
+    candidates = [
+        ({"accuracy": 0.95, "brevity": 0.3}, "A"),  # high acc, low brev
+        ({"accuracy": 0.70, "brevity": 0.9}, "B"),  # low acc, high brev
+    ]
+
+    config_acc = ObjectiveConfig(mode="weighted", weights={"accuracy": 0.9, "brevity": 0.1})
+    assert select_best(candidates, config_acc) == 0  # A wins
+
+    config_brev = ObjectiveConfig(mode="weighted", weights={"accuracy": 0.1, "brevity": 0.9})
+    assert select_best(candidates, config_brev) == 1  # B wins

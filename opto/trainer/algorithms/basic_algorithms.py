@@ -7,7 +7,17 @@ from opto.trainer.loader import DataLoader
 from opto.trainer.utils import batch_run, async_run
 from opto.optimizers.utils import print_color
 from opto.trainer.evaluators import evaluate, evaluate_vector, aggregate_vector_scores
-from opto.trainer.objectives import ObjectiveConfig, select_best
+from opto.trainer.objectives import ObjectiveConfig, select_best, apply_minimize, weighted_scalarize
+
+
+def _objective_scalar(score_dict, config):
+    """Compute scalar objective consistent with selection mode.
+
+    Uses weighted_scalarize(apply_minimize(...)) so the logged scalar
+    reflects the same weights and minimize settings used for selection.
+    """
+    minimized = apply_minimize(score_dict, config.minimize)
+    return weighted_scalarize(minimized, config.weights, config.missing_value)
 
 
 def standard_optimization_step(agent, x, guide, info, min_score=0):
@@ -614,7 +624,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
                     continue
                 self.optimizer.update(update_dict)
                 score_dict = validate_vector()
-                scalar_score = float(np.mean(list(score_dict.values())))
+                scalar_score = _objective_scalar(score_dict, self.objective_config)
                 candidates.append((scalar_score, update_dict))
                 vector_candidates.append((score_dict, update_dict))
                 self.optimizer.update(backup_dict)
@@ -623,7 +633,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
             if self.current_score_dict is None:
                 self.current_score_dict = validate_vector()
             if self.current_score is None:
-                self.current_score = float(np.mean(list(self.current_score_dict.values())))
+                self.current_score = _objective_scalar(self.current_score_dict, self.objective_config)
             candidates.append((self.current_score, backup_dict))
             vector_candidates.append((self.current_score_dict, backup_dict))
 
@@ -631,7 +641,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
             best_idx = select_best(vector_candidates, self.objective_config)
             best_score_dict = vector_candidates[best_idx][0]
             best_update = vector_candidates[best_idx][1]
-            best_score = float(np.mean(list(best_score_dict.values())))
+            best_score = _objective_scalar(best_score_dict, self.objective_config)
             self.current_score = best_score
             self.current_score_dict = best_score_dict
         else:
@@ -660,8 +670,11 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
         # Make the best update
         self.optimizer.update(best_update)
 
-        # Logging — always log scalar for backward compatibility
-        self.logger.log('Validation score', best_score, self.n_iters, color='green')
+        # Logging — scalar objective for backward compatibility
+        if use_vector:
+            self.logger.log('Validation objective', best_score, self.n_iters, color='green')
+        else:
+            self.logger.log('Validation score', best_score, self.n_iters, color='green')
 
         # Log individual vector metrics if available
         if use_vector and isinstance(best_score_dict, dict):
