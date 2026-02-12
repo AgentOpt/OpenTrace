@@ -1,0 +1,15 @@
+{
+  "mode": "live",
+  "model": "meta-llama/llama-3.1-8b-instruct:free",
+  "baseline_score": 1.0,
+  "best_score": 1.0,
+  "score_history": [
+    1.0,
+    1.0
+  ],
+  "final_parameters": {
+    "planner_prompt": "OPTIMIZED: Create a thorough, step-by-step plan for: {query}",
+    "synthesizer_prompt": "Synthesize an answer for: {query}\nPlan: {plan}"
+  },
+  "total_llm_calls": 10
+}
