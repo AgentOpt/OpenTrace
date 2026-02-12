@@ -27,7 +27,6 @@ from typing import (
 
 from opto.trace.io.bindings import Binding, apply_updates
 from opto.trace.io.instrumentation import InstrumentedGraph
-from opto.trace.io.otel_semconv import emit_reward
 
 logger = logging.getLogger(__name__)
 
@@ -106,11 +105,32 @@ class RunResult:
 
 @dataclass
 class OptimizationResult:
-    """Result of ``optimize_graph()``."""
+    """Result of ``optimize_graph()``.
+
+    Attributes
+    ----------
+    baseline_score : float
+        Average score of the baseline (iteration 0) run.
+    best_score : float
+        Highest average score across all iterations.
+    best_iteration : int
+        Iteration index that produced ``best_score``.
+    best_parameters : dict
+        Snapshot of all parameter values at ``best_iteration`` (E11).
+    best_updates : dict
+        The updates dict that was applied to reach ``best_parameters``.
+    final_parameters : dict
+        Parameter values after the last iteration.
+    score_history : list[float]
+        Average scores per iteration.
+    all_runs : list[list[RunResult]]
+        All run results grouped by iteration.
+    """
 
     baseline_score: float
     best_score: float
     best_iteration: int
+    best_parameters: Dict[str, Any]
     best_updates: Dict[str, Any]
     final_parameters: Dict[str, Any]
     score_history: List[float]
@@ -129,6 +149,79 @@ def _default_eval_fn(payload: Dict[str, Any]) -> EvalResult:
     otlp = payload.get("otlp", {})
     score, metrics, reasons = extract_eval_metrics_from_otlp(otlp)
     return EvalResult(score=score, feedback=reasons, metrics=metrics)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _snapshot_parameters(bindings: Dict[str, Binding]) -> Dict[str, Any]:
+    """Take a snapshot of all current parameter values."""
+    snap: Dict[str, Any] = {}
+    for key, binding in bindings.items():
+        try:
+            snap[key] = binding.get()
+        except Exception:
+            snap[key] = "<error reading binding>"
+    return snap
+
+
+def _deduplicate_param_nodes(param_nodes: list) -> list:
+    """Deduplicate trainable ParameterNodes by base name (C7).
+
+    When the same prompt key appears in multiple TGJ docs (e.g. from
+    multiple queries in the same iteration), the optimizer should see
+    each unique trainable parameter only once.
+
+    Uses the ``name`` attribute (before scope-suffix) as the dedup key,
+    falling back to ``py_name`` stripped of trailing digits.
+    """
+    import re
+
+    seen: Dict[str, Any] = {}
+    for n in param_nodes:
+        # Prefer the raw name attribute (e.g. "planner_prompt") which
+        # doesn't have the scope suffix.  Fall back to py_name with
+        # trailing digits stripped (e.g. "planner_prompt0" → "planner_prompt").
+        raw_name = getattr(n, "_name", None) or getattr(n, "name", None)
+        if raw_name is None:
+            raw_name = getattr(n, "py_name", None) or str(id(n))
+        # Strip trailing digits added by scope management
+        key = re.sub(r"\d+$", "", str(raw_name))
+        if key not in seen:
+            seen[key] = n
+    return list(seen.values())
+
+
+def _select_output_node(nodes: dict) -> Any:
+    """Select the sink (final top-level) MessageNode (C8).
+
+    Excludes child spans (those with ``openai`` or ``chat.completion``
+    in their name) and picks the *last* top-level MessageNode.
+    """
+    from opto.trace.nodes import MessageNode as _MN
+
+    # Collect all MessageNodes
+    msg_nodes = [n for n in nodes.values() if isinstance(n, _MN)]
+    if not msg_nodes:
+        return None
+
+    # Filter out child LLM spans by name
+    top_level = []
+    for n in msg_nodes:
+        name = (getattr(n, "py_name", "") or "").lower()
+        # Exclude child LLM spans (openai.chat.completion, etc.)
+        if "openai" in name or "chat.completion" in name or "chat_completion" in name:
+            continue
+        top_level.append(n)
+
+    if not top_level:
+        # Fall back to all msg nodes if filtering was too aggressive
+        top_level = msg_nodes
+
+    # Return the last top-level node (the sink / final node)
+    return top_level[-1]
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +297,7 @@ def optimize_graph(
     best_score = float("-inf")
     best_iteration = 0
     best_updates: Dict[str, Any] = {}
+    best_parameters: Dict[str, Any] = _snapshot_parameters(effective_bindings)
 
     # -- lazy imports for Trace framework --
     _ingest_tgj = None
@@ -254,31 +348,60 @@ def optimize_graph(
         runs: List[RunResult] = []
         for qi, query in enumerate(queries):
             state = _make_state(query)
-            result = graph.invoke(state)
 
-            # Flush OTLP *before* evaluation so eval_fn can inspect spans
+            # E12: Manually control root span lifecycle so we can attach
+            # eval attributes *before* the span closes and gets exported.
+            query_hint = str(query)[:200] if not isinstance(query, dict) else str(query)[:200]
+            invocation_failed = False
+            result = None
+            er = None
+
+            with graph._root_invocation_span(query_hint) as root_sp:
+                try:
+                    # Invoke the underlying compiled graph (not graph.invoke
+                    # which would create a redundant root span).
+                    result = graph.graph.invoke(state)
+                except Exception as exc:
+                    logger.warning("Graph invocation failed: %s", exc)
+                    result = {"answer": "", "_error": str(exc)}
+                    invocation_failed = True
+                    root_sp.set_attribute("error", "true")
+                    root_sp.set_attribute("error.message", str(exc)[:500])
+
+                # E12: Peek at OTLP (child spans are finished and collected,
+                # but root span is still open → not yet in exporter).
+                otlp_peek = graph.session.flush_otlp(clear=False)
+
+                # Evaluate
+                answer = result if isinstance(result, str) else result
+
+                # A4: If invocation failed, force score=0
+                if invocation_failed:
+                    er = EvalResult(
+                        score=0.0,
+                        feedback=f"Invocation failed: {result.get('_error', 'unknown')}",
+                    )
+                else:
+                    eval_payload = {
+                        "query": query,
+                        "answer": answer,
+                        "result": result,
+                        "otlp": otlp_peek,
+                        "iteration": iteration,
+                    }
+                    er = _normalise_eval(eval_fn(eval_payload))
+
+                # E12: Attach eval score on the root span (still open)
+                if er.score is not None:
+                    root_sp.set_attribute("eval.score", str(er.score))
+                if er.feedback:
+                    root_sp.set_attribute(
+                        "eval.feedback", str(er.feedback)[:500]
+                    )
+            # Root span closes here → exported to the in-memory exporter
+
+            # Now flush OTLP with clear=True — includes root span + eval attrs
             otlp = graph.session.flush_otlp(clear=True)
-
-            # Evaluate
-            answer = result if isinstance(result, str) else result
-            eval_payload = {
-                "query": query,
-                "answer": answer,
-                "result": result,
-                "otlp": otlp,
-                "iteration": iteration,
-            }
-            er = _normalise_eval(eval_fn(eval_payload))
-
-            # Record eval reward span
-            if er.score is not None:
-                emit_reward(
-                    graph.session,
-                    value=er.score,
-                    name="eval_score",
-                )
-                # Flush the reward span
-                graph.session.flush_otlp(clear=True)
 
             runs.append(
                 RunResult(
@@ -306,9 +429,11 @@ def optimize_graph(
         score_history.append(avg_score)
         all_runs.append(runs)
 
+        # E11: Track best parameters snapshot
         if avg_score > best_score:
             best_score = avg_score
             best_iteration = iteration
+            best_parameters = _snapshot_parameters(effective_bindings)
             marker = " * NEW BEST" if not is_baseline else ""
         else:
             marker = ""
@@ -321,10 +446,13 @@ def optimize_graph(
             # Convert OTLP → TGJ → Trace nodes
             updates: Dict[str, Any] = {}
             try:
+                # C7: Collect and deduplicate param nodes across all runs
+                all_param_nodes: list = []
+                all_output_nodes: list = []
+
                 for run in runs:
                     tgj_docs = graph.session._flush_tgj_from_otlp(run.otlp)
                     if not tgj_docs:
-                        # Fall back to direct conversion
                         from opto.trace.io.otel_adapter import otlp_traces_to_trace_json
                         tgj_docs = otlp_traces_to_trace_json(
                             run.otlp,
@@ -335,33 +463,33 @@ def optimize_graph(
                     for doc in tgj_docs:
                         nodes = _ingest_tgj(doc)
 
-                        # Find trainable ParameterNodes
                         from opto.trace.nodes import ParameterNode as _PN
                         param_nodes = [
                             n for n in nodes.values()
                             if isinstance(n, _PN) and n.trainable
                         ]
+                        all_param_nodes.extend(param_nodes)
 
-                        if not param_nodes:
-                            continue
+                        # C8: Select output node properly
+                        output_node = _select_output_node(nodes)
+                        if output_node is not None:
+                            all_output_nodes.append((output_node, run))
 
-                        _ensure_optimizer(param_nodes)
+                # C7: Deduplicate before passing to optimizer
+                unique_params = _deduplicate_param_nodes(all_param_nodes)
 
-                        if _optimizer is None:
-                            continue
+                if not unique_params:
+                    logger.info("No trainable ParameterNodes found; skipping optimizer step.")
+                else:
+                    _ensure_optimizer(unique_params)
 
-                        # Find the last MessageNode as the output
-                        from opto.trace.nodes import MessageNode as _MN
-                        msg_nodes = [
-                            n for n in nodes.values() if isinstance(n, _MN)
-                        ]
-                        if not msg_nodes:
-                            continue
-                        output_node = msg_nodes[-1]
-
-                        # Propagate feedback
-                        feedback_text = run.feedback or (
-                            f"Score: {run.score}" if run.score is not None else "No feedback"
+                    if _optimizer is not None and all_output_nodes:
+                        # Use the last output node for backward pass
+                        output_node, run_for_output = all_output_nodes[-1]
+                        feedback_text = run_for_output.feedback or (
+                            f"Score: {run_for_output.score}"
+                            if run_for_output.score is not None
+                            else "No feedback"
                         )
                         try:
                             _optimizer.zero_feedback()
@@ -393,17 +521,13 @@ def optimize_graph(
                 on_iteration(iteration, runs, updates)
 
     # -- build final parameters snapshot --
-    final_params: Dict[str, Any] = {}
-    for key, binding in effective_bindings.items():
-        try:
-            final_params[key] = binding.get()
-        except Exception:
-            final_params[key] = "<error reading binding>"
+    final_params = _snapshot_parameters(effective_bindings)
 
     return OptimizationResult(
         baseline_score=score_history[0] if score_history else 0.0,
         best_score=best_score,
         best_iteration=best_iteration,
+        best_parameters=best_parameters,
         best_updates=best_updates,
         final_parameters=final_params,
         score_history=score_history,
