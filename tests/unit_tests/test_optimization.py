@@ -76,6 +76,7 @@ class TestOptimizationResult:
             baseline_score=0.5,
             best_score=0.8,
             best_iteration=2,
+            best_parameters={"prompt": "best"},
             best_updates={"prompt": "new"},
             final_parameters={"prompt": "new"},
             score_history=[0.5, 0.6, 0.8],
@@ -83,3 +84,4 @@ class TestOptimizationResult:
         )
         assert result.best_score == 0.8
         assert result.best_iteration == 2
+        assert result.best_parameters == {"prompt": "best"}

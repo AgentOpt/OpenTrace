@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
@@ -10,6 +11,16 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
     SpanExportResult,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class LLMCallError(Exception):
+    """Raised when the underlying LLM provider returns a non-success response."""
+
+    def __init__(self, message: str, *, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class InMemorySpanExporter(SpanExporter):
@@ -61,9 +72,21 @@ def init_otel_runtime(
 def flush_otlp(
     exporter: InMemorySpanExporter,
     scope_name: str = "demo",
+    *,
+    clear: bool = True,
 ) -> Dict[str, Any]:
     """
-    Convert exported spans into a minimal OTLP JSON payload and clear exporter.
+    Convert exported spans into a minimal OTLP JSON payload.
+
+    Parameters
+    ----------
+    exporter : InMemorySpanExporter
+        The in-memory exporter holding collected spans.
+    scope_name : str
+        Scope name for the OTLP payload.
+    clear : bool
+        If *True* (default), clear the exporter after flushing.
+        If *False*, spans remain in the exporter (peek mode).
 
     This is compatible with trace/io/otel_adapter.py::otlp_traces_to_trace_json.
     """
@@ -110,7 +133,8 @@ def flush_otlp(
             }
         )
 
-    exporter.clear()
+    if clear:
+        exporter.clear()
 
     return {
         "resourceSpans": [
@@ -139,6 +163,8 @@ class TracingLLM:
       (Agent Lightning-compatible) marked with ``trace.temporal_ignore``
       so it does not break TGJ temporal chaining.
     * Emit trainable code parameters via ``emit_code_param`` when provided.
+    * **Raise ``LLMCallError``** if the provider returns an error instead of
+      silently converting it to assistant content (A1).
 
     Parameters
     ----------
@@ -153,6 +179,7 @@ class TracingLLM:
         ``(span, key, fn) -> None``.
     provider_name : str
         Provider name for ``gen_ai.provider.name`` attribute.
+        Should match the actual provider (e.g. ``"openrouter"``).
     llm_span_name : str
         Name for child LLM spans (e.g. ``"openai.chat.completion"``).
     emit_llm_child_span : bool
@@ -221,6 +248,20 @@ class TracingLLM:
         for k, v in (extra_inputs or {}).items():
             sp.set_attribute(f"inputs.{k}", v)
 
+    @staticmethod
+    def _validate_content(content: Optional[str]) -> str:
+        """Validate LLM response content.  Raise on empty or error markers."""
+        if content is None:
+            raise LLMCallError("LLM returned None content")
+        if not content.strip():
+            raise LLMCallError("LLM returned empty content")
+        # Detect error strings that were smuggled as content (A1)
+        if content.strip().startswith("[ERROR]"):
+            raise LLMCallError(
+                f"LLM provider returned an error: {content.strip()}"
+            )
+        return content
+
     # ---- public API ------------------------------------------------------
 
     def node_call(
@@ -244,6 +285,11 @@ class TracingLLM:
         compatible) and optionally a **child** span with ``gen_ai.*``
         attributes (Agent Lightning-compatible).  The child span is tagged
         ``trace.temporal_ignore=true`` so it does not break TGJ chaining.
+
+        Raises
+        ------
+        LLMCallError
+            If the provider call fails or returns empty/error content.
         """
         with self.tracer.start_as_current_span(span_name) as sp:
             prompt = ""
@@ -267,26 +313,41 @@ class TracingLLM:
             )
 
             # -- invoke LLM, optionally under a child span --
-            if self.emit_llm_child_span:
-                with self.tracer.start_as_current_span(self.llm_span_name) as llm_sp:
-                    # Tag child span so TGJ adapter skips temporal chaining
-                    llm_sp.set_attribute("trace.temporal_ignore", "true")
-                    llm_sp.set_attribute("gen_ai.operation.name", "chat")
-                    llm_sp.set_attribute("gen_ai.provider.name", self.provider_name)
-                    llm_sp.set_attribute(
-                        "gen_ai.request.model",
-                        getattr(self.llm, "model", "llm"),
-                    )
+            try:
+                if self.emit_llm_child_span:
+                    with self.tracer.start_as_current_span(self.llm_span_name) as llm_sp:
+                        # Tag child span so TGJ adapter skips temporal chaining
+                        llm_sp.set_attribute("trace.temporal_ignore", "true")
+                        llm_sp.set_attribute("gen_ai.operation.name", "chat")
+                        llm_sp.set_attribute("gen_ai.provider.name", self.provider_name)
+                        llm_sp.set_attribute(
+                            "gen_ai.request.model",
+                            getattr(self.llm, "model", "llm"),
+                        )
 
+                        resp = self.llm(messages=messages, **llm_kwargs)
+                        content = resp.choices[0].message.content
+                        content = self._validate_content(content)
+
+                        llm_sp.set_attribute(
+                            "gen_ai.output.preview", (content or "")[:500]
+                        )
+                else:
                     resp = self.llm(messages=messages, **llm_kwargs)
                     content = resp.choices[0].message.content
-
-                    llm_sp.set_attribute(
-                        "gen_ai.output.preview", (content or "")[:500]
-                    )
-            else:
-                resp = self.llm(messages=messages, **llm_kwargs)
-                content = resp.choices[0].message.content
+                    content = self._validate_content(content)
+            except LLMCallError:
+                # Record the error on the span and re-raise
+                sp.set_attribute("error", "true")
+                sp.set_attribute("error.type", "LLMCallError")
+                raise
+            except Exception as exc:
+                # Unexpected provider error — record and raise as LLMCallError
+                sp.set_attribute("error", "true")
+                sp.set_attribute("error.type", type(exc).__name__)
+                raise LLMCallError(
+                    f"LLM provider call failed: {exc}"
+                ) from exc
 
             return content
 

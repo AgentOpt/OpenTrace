@@ -9,6 +9,7 @@ LangGraph ``StateGraph`` / ``CompiledGraph``.
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterator, Optional, Set
 
@@ -35,6 +36,8 @@ class InstrumentedGraph:
         Current prompt templates (keyed by param name).
     bindings : dict
         Mapping from param key -> ``Binding`` (for ``apply_updates``).
+    service_name : str
+        OTEL service / scope name.
     """
 
     graph: Any  # CompiledGraph
@@ -42,14 +45,57 @@ class InstrumentedGraph:
     tracing_llm: TracingLLM
     templates: Dict[str, str] = field(default_factory=dict)
     bindings: Dict[str, Binding] = field(default_factory=dict)
+    service_name: str = "langgraph-agent"
+
+    # Holds the active root span context for eval_fn to attach reward spans
+    _root_span: Any = field(default=None, repr=False, init=False)
+
+    @contextmanager
+    def _root_invocation_span(self, query_hint: str = ""):
+        """Context manager that creates a root invocation span (D9).
+
+        All node spans created inside this context become children
+        of the root span, producing a **single trace ID** per invocation.
+        """
+        span_name = f"{self.service_name}.invoke"
+        with self.session.tracer.start_as_current_span(span_name) as root_sp:
+            root_sp.set_attribute("langgraph.service", self.service_name)
+            if query_hint:
+                root_sp.set_attribute("langgraph.query", str(query_hint)[:200])
+            self._root_span = root_sp
+            try:
+                yield root_sp
+            finally:
+                self._root_span = None
 
     def invoke(self, state: Any, **kwargs: Any) -> Dict[str, Any]:
-        """Execute graph and capture telemetry."""
-        return self.graph.invoke(state, **kwargs)
+        """Execute graph under a root invocation span and capture telemetry.
+
+        A root span wraps the entire graph invocation so that all node
+        spans share a single trace ID (D9).
+        """
+        query_hint = ""
+        if isinstance(state, dict):
+            query_hint = str(state.get("query", ""))
+
+        with self._root_invocation_span(query_hint) as root_sp:
+            result = self.graph.invoke(state, **kwargs)
+            # Attach a summary attribute to the root span
+            if isinstance(result, dict) and "answer" in result:
+                root_sp.set_attribute(
+                    "langgraph.answer.preview",
+                    str(result["answer"])[:500],
+                )
+            return result
 
     def stream(self, state: Any, **kwargs: Any) -> Iterator[Dict[str, Any]]:
         """Stream graph execution with telemetry."""
-        yield from self.graph.stream(state, **kwargs)
+        query_hint = ""
+        if isinstance(state, dict):
+            query_hint = str(state.get("query", ""))
+
+        with self._root_invocation_span(query_hint):
+            yield from self.graph.stream(state, **kwargs)
 
 
 def instrument_graph(
@@ -134,4 +180,5 @@ def instrument_graph(
         tracing_llm=tracing_llm,
         templates=templates,
         bindings=bindings,
+        service_name=service_name,
     )

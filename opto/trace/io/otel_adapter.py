@@ -92,12 +92,31 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
             # Track the most recent span for temporal parenting
             prev_span_id = None
             
+            # Identify root invocation spans (e.g. "service.invoke") so we
+            # can exclude them from temporal chaining — they are structural
+            # parents, not data-flow nodes.
+            root_span_ids: set = set()
+            for _, sp in spans_with_time:
+                sp_name = sp.get("name", "")
+                if sp_name.endswith(".invoke"):
+                    root_span_ids.add(sp.get("spanId"))
+
             for start_time, sp in spans_with_time:
                 trace_id = sp.get("traceId") or trace_id
                 sid = sp.get("spanId")
                 psid = sp.get("parentSpanId")
-                orig_has_parent = bool(psid)
                 attrs = _attrs(sp.get("attributes", []))
+
+                # D10: Use trace.temporal_ignore to decide temporal chain
+                temporal_ignore = str(
+                    attrs.get("trace.temporal_ignore", "false")
+                ).strip().lower() in ("true", "1", "yes")
+
+                # Skip root invocation spans — they are structural wrappers,
+                # not data-flow nodes.
+                if sid in root_span_ids:
+                    continue
+
                 op = _op(attrs, sp)
                 name = _sanitize(sp.get("name") or sid)
                 params = _params(attrs)
@@ -109,20 +128,29 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                         {
                             "kind": "parameter",
                             "name": pname,
-                            "data": spec["value"],  # Use 'data' field for TGJ compatibility
+                            "data": spec["value"],
                             "trainable": bool(spec["trainable"]),
                             "info": {"otel": {"span_id": sid}},
                         },
                     )
                 inputs = _lift_inputs(attrs)
                 
-                # Use temporal hierarchy: if no explicit parent and use_temporal_hierarchy is enabled,
-                # make the previous span the parent (sequential execution flow)
-                if use_temporal_hierarchy and not psid and prev_span_id:
-                    psid = prev_span_id
-                
-                if psid and "parent" not in inputs:
-                    inputs["parent"] = f"{svc}:{psid}"
+                # Temporal hierarchy: connect to previous non-ignored span
+                # when use_temporal_hierarchy is enabled.
+                # With root invocation spans (D9), node spans have a
+                # structural parent.  We still want temporal chaining
+                # among sibling node spans, so we use prev_span_id
+                # regardless of whether psid is set — the key gate is
+                # temporal_ignore.
+                effective_psid = psid
+                if use_temporal_hierarchy and prev_span_id and not temporal_ignore:
+                    # If the OTEL parent is the root invocation span,
+                    # prefer temporal parent for data-flow graph.
+                    if not psid or psid in root_span_ids:
+                        effective_psid = prev_span_id
+
+                if effective_psid and "parent" not in inputs:
+                    inputs["parent"] = f"{svc}:{effective_psid}"
                 
                 # Connect parameters as inputs to the MessageNode
                 for pname in params.keys():
@@ -138,7 +166,7 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                         "otel": {
                             "trace_id": trace_id,
                             "span_id": sid,
-                            "parent_span_id": psid,
+                            "parent_span_id": effective_psid,
                             "service": svc,
                         }
                     },
@@ -151,8 +179,10 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                 node_id = f"{svc}:{sid}"
                 nodes[node_id] = rec
                 
-                # Update prev_span_id for next iteration (temporal parenting) # Only advance the temporal chain on spans that were not children in OTEL.
-                if not orig_has_parent:
+                # D10: Advance temporal chain only on spans NOT marked
+                # with trace.temporal_ignore (child LLM spans are ignored;
+                # node spans advance the chain).
+                if not temporal_ignore:
                     prev_span_id = sid
 
             docs.append(

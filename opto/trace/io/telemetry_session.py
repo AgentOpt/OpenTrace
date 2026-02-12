@@ -92,7 +92,8 @@ class TelemetrySession:
         Parameters
         ----------
         clear : bool
-            If *True*, clear the exporter after flushing.
+            If *True* (default), clear the exporter after flushing.
+            If *False*, peek at current spans without clearing (B5).
 
         Returns
         -------
@@ -102,16 +103,69 @@ class TelemetrySession:
         if not self.record_spans:
             return {"resourceSpans": []}
 
-        # Use the existing flush helper but we need to handle clear ourselves
-        # because _flush_otlp_raw always clears.
-        otlp = _flush_otlp_raw(self._exporter, scope_name=self.service_name)
+        # Delegate clear semantics to the low-level flush helper
+        otlp = _flush_otlp_raw(
+            self._exporter,
+            scope_name=self.service_name,
+            clear=clear,
+        )
 
-        if not clear:
-            # Re-export the same spans (flush_otlp_raw cleared them).
-            # This is a rare path; the common case is clear=True.
-            pass
+        # Apply span_attribute_filter if configured (B6)
+        if self.span_attribute_filter is not None:
+            otlp = self._apply_attribute_filter(otlp)
 
         return otlp
+
+    def _apply_attribute_filter(self, otlp: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply ``span_attribute_filter`` to all spans in the OTLP payload.
+
+        * If the filter returns ``{}``, the span is **dropped** entirely.
+        * Otherwise the returned dict replaces the span's attributes.
+        """
+        if self.span_attribute_filter is None:
+            return otlp
+
+        filtered_rs = []
+        for rs in otlp.get("resourceSpans", []):
+            filtered_ss = []
+            for ss in rs.get("scopeSpans", []):
+                filtered_spans = []
+                for sp in ss.get("spans", []):
+                    span_name = sp.get("name", "")
+                    # Build a plain dict from OTLP attributes
+                    attrs_dict: Dict[str, Any] = {}
+                    for a in sp.get("attributes", []):
+                        key = a.get("key")
+                        val = a.get("value", {})
+                        if isinstance(val, dict) and "stringValue" in val:
+                            attrs_dict[key] = val["stringValue"]
+                        else:
+                            attrs_dict[key] = str(val)
+
+                    new_attrs = self.span_attribute_filter(span_name, attrs_dict)
+
+                    if not new_attrs and new_attrs is not None:
+                        # Filter returned {} → drop this span
+                        continue
+
+                    if new_attrs is not None:
+                        # Rebuild OTLP attributes from the filtered dict
+                        sp = dict(sp)  # shallow copy
+                        sp["attributes"] = [
+                            {"key": k, "value": {"stringValue": str(v)}}
+                            for k, v in new_attrs.items()
+                        ]
+                    filtered_spans.append(sp)
+
+                ss_copy = dict(ss)
+                ss_copy["spans"] = filtered_spans
+                filtered_ss.append(ss_copy)
+
+            rs_copy = dict(rs)
+            rs_copy["scopeSpans"] = filtered_ss
+            filtered_rs.append(rs_copy)
+
+        return {"resourceSpans": filtered_rs}
 
     def flush_tgj(
         self,

@@ -42,6 +42,7 @@ from opto.trace.io.otel_semconv import (
 # -- lower-level -----------------------------------------------------------
 from opto.trace.io.langgraph_otel_runtime import (
     TracingLLM,
+    LLMCallError,
     InMemorySpanExporter,
     init_otel_runtime,
     flush_otlp,
@@ -71,6 +72,7 @@ __all__ = [
     "OptimizationResult",
     # Lower-level
     "TracingLLM",
+    "LLMCallError",
     "InMemorySpanExporter",
     "init_otel_runtime",
     "flush_otlp",
