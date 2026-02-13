@@ -2,8 +2,8 @@
 
 **Target PR:** [`AgentOpt/OpenTrace@experimental`](https://github.com/AgentOpt/OpenTrace/tree/experimental)  
 **Benchmark integration:** [`AgentOpt/Trace-Bench`](https://github.com/AgentOpt/Trace-Bench)  
-**Status:** Final – M0 deliverable (refined from draft)  
-**Last updated:** 2026-02-11
+**Status:** Final – M0 deliverable (revised per client feedback)  
+**Last updated:** 2026-02-13
 
 ------
 
@@ -101,8 +101,6 @@ The core idea: **isolate all new complexity into a single, easily testable modu
 
 **Data flow (new, optional path):**
 
-text
-
 Guide                            Evaluator
    │                                   │
    └─► returns Dict[str,float]         └─► per-example dicts → mean dict
@@ -135,7 +133,6 @@ ScoreLike = float | dict[str, float]
 ```
 
 Contract:
-
 * “Higher is better” by default.
 * Metrics to minimize must be specified via `ObjectiveConfig.minimize`. 
 
@@ -160,15 +157,21 @@ class ObjectiveConfig:
 **Validation rules** (enforced in `__post_init__`):
 
 - If `mode="weighted"`, `weights` must be provided and non‑empty.
-    
-- If `mode="pareto"`, `weights` is ignored (a warning may be logged).
-    
-- `minimize` can be a list/set of metric names that should be **minimised** (others are maximised).
-    
+- If `mode="pareto"`, `weights` are ignored for dominance calculations but may be used for `tie-break`- a warning is logged if weights are missing in that case.
+- `apply_minimize` can be a list/set of metric names that should be **minimised** (others are maximised).
 - `seed` is used only when `tie_break="random"`.
-    
 
-### 5.3 Score Normalisation & Utilities (in `objectives.py`)
+### 5.3 Sign Conventions
+
+To maintain a **uniform “higher is better”** rule across all internal comparisons:
+
+1. **Minimisation handling** – metrics listed in `minimize` are multiplied by `-1` via `apply_minimize()`. After this transformation, **higher scores are always better** for every metric.
+    
+2. **Weights** – because all metrics are already oriented “higher is better”, **weights should normally be non‑negative**. Negative weights are **not prohibited**, but they invert the intended direction and may cause counter‑intuitive results; users are advised against them.
+    
+This convention is applied **before** any weighted scalarization or Pareto dominance check.
+
+### 5.4 Score Normalization & Utilities (in `objectives.py`)
 
 All functions are **pure** and fully tested.
 
@@ -195,7 +198,7 @@ def pareto_front(
 ) -> List[int]:
     """Return indices of non‑dominated candidates, with deterministic tie‑break."""
 ```
-### 5.4 Guide Extensions (minimal, backward‑compatible)
+### 5.5 Guide Extensions (minimal, backward‑compatible)
 
 In `opto/trainer/guide.py`:
 
@@ -216,7 +219,7 @@ class BaseGuide(ABC):
 ```
 No change to `get_feedback` signature – **no breakage**.
 
-### 5.5 Evaluator Extensions
+### 5.6 Evaluator Extensions
 
 In `opto/trainer/evaluators.py`:
 
@@ -236,7 +239,7 @@ def aggregate_vector_scores(
 ```
 The existing `evaluate()` method remains unchanged for scalar‑only use.
 
-### 5.6 Trainer Upgrades – Selection Logic
+### 5.7 Trainer Upgrades – Selection Logic
 
 Both `BasicSearchAlgorithm` and `BeamsearchAlgorithm` gain an optional `objective_config: Optional[ObjectiveConfig] = None` parameter.
 
