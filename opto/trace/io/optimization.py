@@ -197,8 +197,12 @@ def _deduplicate_param_nodes(param_nodes: list) -> list:
 def _select_output_node(nodes: dict) -> Any:
     """Select the sink (final top-level) MessageNode (C8).
 
-    Excludes child spans (those with ``openai`` or ``chat.completion``
-    in their name) and picks the *last* top-level MessageNode.
+    Excludes child spans — identified by the ``trace.temporal_ignore``
+    attribute set during instrumentation — and picks the *last*
+    top-level MessageNode.
+
+    This is provider-agnostic: it does not assume any specific LLM
+    provider naming convention.
     """
     from opto.trace.nodes import MessageNode as _MN
 
@@ -207,13 +211,24 @@ def _select_output_node(nodes: dict) -> Any:
     if not msg_nodes:
         return None
 
-    # Filter out child LLM spans by name
+    # Filter out child spans using the trace.temporal_ignore marker
+    # that was set during instrumentation (see TracingLLM.node_call).
+    # Fall back to name-based heuristic only as a safety net.
     top_level = []
     for n in msg_nodes:
-        name = (getattr(n, "py_name", "") or "").lower()
-        # Exclude child LLM spans (openai.chat.completion, etc.)
-        if "openai" in name or "chat.completion" in name or "chat_completion" in name:
+        info = getattr(n, "info", None) or {}
+        otel_info = info.get("otel", {}) if isinstance(info, dict) else {}
+
+        # Primary gate: trace.temporal_ignore attribute
+        if str(otel_info.get("temporal_ignore", "false")).lower() in ("true", "1", "yes"):
             continue
+
+        # Secondary check: the node's description/data may carry the flag
+        desc = getattr(n, "description", None) or ""
+        if isinstance(desc, dict):
+            if str(desc.get("trace.temporal_ignore", "false")).lower() in ("true", "1", "yes"):
+                continue
+
         top_level.append(n)
 
     if not top_level:
@@ -241,6 +256,7 @@ def optimize_graph(
     bindings: Optional[Dict[str, Binding]] = None,
     apply_updates_flag: bool = True,
     include_log_doc: bool = False,
+    output_key: Optional[str] = None,
     on_iteration: Optional[
         Callable[[int, List[RunResult], Dict[str, Any]], None]
     ] = None,
@@ -278,6 +294,10 @@ def optimize_graph(
         If *True* (default), apply parameter updates each iteration.
     include_log_doc : bool
         If *True*, emit additional ``log_doc`` TGJ artefacts.
+    output_key : str, optional
+        Key in the result dict that holds the graph's final answer.
+        Used for error fallback and eval payload.  If *None*,
+        ``optimize_graph`` passes the full result dict to eval.
     on_iteration : callable, optional
         ``(iter_num, runs, updates_dict) -> None`` progress callback.
 
@@ -330,10 +350,12 @@ def optimize_graph(
                 "(no parameter updates)."
             )
 
+    _input_key = getattr(graph, "input_key", "query") or "query"
+
     def _make_state(query: Any) -> Dict[str, Any]:
         if isinstance(query, dict):
             return query
-        return {"query": query}
+        return {_input_key: query}
 
     # ---- iteration loop ---------------------------------------------------
 
@@ -363,7 +385,7 @@ def optimize_graph(
                     result = graph.graph.invoke(state)
                 except Exception as exc:
                     logger.warning("Graph invocation failed: %s", exc)
-                    result = {"answer": "", "_error": str(exc)}
+                    result = {"_error": str(exc)}
                     invocation_failed = True
                     root_sp.set_attribute("error", "true")
                     root_sp.set_attribute("error.message", str(exc)[:500])
@@ -372,8 +394,11 @@ def optimize_graph(
                 # but root span is still open → not yet in exporter).
                 otlp_peek = graph.session.flush_otlp(clear=False)
 
-                # Evaluate
-                answer = result if isinstance(result, str) else result
+                # Extract the output value (generic — no hardcoded key)
+                if output_key and isinstance(result, dict):
+                    answer = result.get(output_key, result)
+                else:
+                    answer = result
 
                 # A4: If invocation failed, force score=0
                 if invocation_failed:

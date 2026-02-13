@@ -168,6 +168,7 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                             "span_id": sid,
                             "parent_span_id": effective_psid,
                             "service": svc,
+                            "temporal_ignore": temporal_ignore,
                         }
                     },
                 }

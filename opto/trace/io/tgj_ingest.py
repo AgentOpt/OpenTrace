@@ -102,14 +102,18 @@ def _convert_otel_profile(doc: Dict[str,Any]) -> Dict[str,Any]:
                         inputs[k] = {"literal": v}
                 else:
                     inputs[k] = v
-            nodes_list.append({
+            msg_rec = {
                 "id": nid,
                 "kind": "message",
                 "name": name,
                 "description": f"[{rec.get('op','op')}] {rec.get('description', name)}".strip(),
                 "inputs": inputs,
                 "output": {"name": f"{name}:out", "value": rec.get("data")}
-            })
+            }
+            # Propagate info dict (contains otel metadata like temporal_ignore)
+            if rec.get("info"):
+                msg_rec["info"] = rec["info"]
+            nodes_list.append(msg_rec)
         elif kind == "value":
             nodes_list.append({
                 "id": nid,
@@ -177,6 +181,10 @@ def ingest_tgj(doc: Dict[str,Any], port_index: Optional[Dict[str,Node]] = None) 
                     info["inputs"] = {"args": args, "kwargs": kwargs}
                 if "output" in iinfo:
                     info["output"] = _as_node(iinfo["output"], nodes, ports, port_index)
+                # Preserve OTEL metadata (e.g. temporal_ignore) for
+                # downstream consumers like _select_output_node.
+                if "otel" in iinfo:
+                    info["otel"] = iinfo["otel"]
 
                 desc = rec.get("description", "[Node]")
                 if k == "exception":

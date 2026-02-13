@@ -44,10 +44,15 @@ class InMemorySpanExporter(SpanExporter):
 
 
 def init_otel_runtime(
-    service_name: str = "trace-langgraph-demo",
+    service_name: str = "trace-otel-runtime",
 ) -> Tuple[oteltrace.Tracer, InMemorySpanExporter]:
     """
-    Initialize a TracerProvider + in-memory exporter for demos.
+    Initialize a TracerProvider + in-memory exporter.
+
+    Parameters
+    ----------
+    service_name : str
+        OTEL service name.  Override for your application.
 
     Returns
     -------
@@ -179,9 +184,12 @@ class TracingLLM:
         ``(span, key, fn) -> None``.
     provider_name : str
         Provider name for ``gen_ai.provider.name`` attribute.
-        Should match the actual provider (e.g. ``"openrouter"``).
+        Should match the actual provider (e.g. ``"openai"``,
+        ``"openrouter"``, ``"anthropic"``).
     llm_span_name : str
-        Name for child LLM spans (e.g. ``"openai.chat.completion"``).
+        Name for child LLM spans.  Defaults to the generic
+        ``"llm.chat.completion"``.  Override to match your
+        provider convention (e.g. ``"openai.chat.completion"``).
     emit_llm_child_span : bool
         If *True*, emit Agent Lightning-compatible child spans.
     """
@@ -194,8 +202,8 @@ class TracingLLM:
         trainable_keys: Optional[Iterable[str]] = None,
         emit_code_param: Optional[Any] = None,
         # -- dual semconv additions --
-        provider_name: str = "openai",
-        llm_span_name: str = "openai.chat.completion",
+        provider_name: str = "llm",
+        llm_span_name: str = "llm.chat.completion",
         emit_llm_child_span: bool = True,
     ) -> None:
         self.llm = llm
@@ -353,9 +361,9 @@ class TracingLLM:
 
 
 DEFAULT_EVAL_METRIC_KEYS: Mapping[str, str] = {
+    "score": "eval.score",
     "answer_relevance": "eval.answer_relevance",
     "groundedness": "eval.groundedness",
-    "plan_quality": "eval.plan_quality",
 }
 
 
