@@ -201,6 +201,9 @@ def _make_instrumented(
         llm=StubLLM(),
         initial_templates=templates,
         emit_genai_child_spans=emit_genai_child_spans,
+        provider_name="openai",
+        llm_span_name="openai.chat.completion",
+        output_key="answer",
     )
     graph = build_mini_graph(ig.tracing_llm, ig.templates)
     ig.graph = graph.compile()

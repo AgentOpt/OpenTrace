@@ -203,6 +203,8 @@ def _make_instrumented(
     emit_genai_child_spans=True,
     llm=None,
     provider_name="openai",
+    llm_span_name="openai.chat.completion",
+    output_key="answer",
 ):
     if templates is None:
         templates = {
@@ -220,6 +222,8 @@ def _make_instrumented(
         initial_templates=templates,
         emit_genai_child_spans=emit_genai_child_spans,
         provider_name=provider_name,
+        llm_span_name=llm_span_name,
+        output_key=output_key,
     )
     graph = build_mini_graph(ig.tracing_llm, ig.templates)
     ig.graph = graph.compile()

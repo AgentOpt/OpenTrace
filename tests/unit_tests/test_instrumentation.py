@@ -121,10 +121,10 @@ class TestTracingLLMChildSpan:
         spans = otlp["resourceSpans"][0]["scopeSpans"][0]["spans"]
         names = [s["name"] for s in spans]
         assert "test_node" in names
-        assert "openai.chat.completion" in names
+        assert "llm.chat.completion" in names
 
         # Child span should have trace.temporal_ignore
-        child = [s for s in spans if s["name"] == "openai.chat.completion"][0]
+        child = [s for s in spans if s["name"] == "llm.chat.completion"][0]
         attrs = {a["key"]: a["value"]["stringValue"] for a in child["attributes"]}
         assert attrs.get("trace.temporal_ignore") == "true"
         assert "gen_ai.operation.name" in attrs
@@ -144,7 +144,7 @@ class TestTracingLLMChildSpan:
         spans = otlp["resourceSpans"][0]["scopeSpans"][0]["spans"]
         names = [s["name"] for s in spans]
         assert "test_node" in names
-        assert "openai.chat.completion" not in names
+        assert "llm.chat.completion" not in names
 
 
 class TestTemporalChaining:

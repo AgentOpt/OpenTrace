@@ -41,7 +41,10 @@ def _attrs_to_dict(attrs):
 def test_tracing_llm_records_prompt_and_user_query():
     tracer, exporter = init_otel_runtime("test-llm")
     llm = FakeLLM("ANSWER")
-    tllm = TracingLLM(llm=llm, tracer=tracer, trainable_keys={"planner"})
+    tllm = TracingLLM(
+        llm=llm, tracer=tracer, trainable_keys={"planner"},
+        emit_llm_child_span=False,  # test focuses on the node span only
+    )
 
     messages = [
         {"role": "system", "content": "sys"},
@@ -147,7 +150,15 @@ def test_extract_eval_metrics_from_otlp_happy_path():
         ]
     }
 
-    score, metrics, reasons = extract_eval_metrics_from_otlp(otlp)
+    # Pass explicit metric_keys matching the synthetic payload
+    custom_keys = {
+        "answer_relevance": "eval.answer_relevance",
+        "groundedness": "eval.groundedness",
+        "plan_quality": "eval.plan_quality",
+    }
+    score, metrics, reasons = extract_eval_metrics_from_otlp(
+        otlp, metric_keys=custom_keys
+    )
     assert score == 0.9
     assert metrics["answer_relevance"] == 0.8
     assert metrics["groundedness"] == 0.7

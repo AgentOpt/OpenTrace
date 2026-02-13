@@ -46,6 +46,8 @@ class InstrumentedGraph:
     templates: Dict[str, str] = field(default_factory=dict)
     bindings: Dict[str, Binding] = field(default_factory=dict)
     service_name: str = "langgraph-agent"
+    input_key: str = "query"
+    output_key: Optional[str] = None
 
     # Holds the active root span context for eval_fn to attach reward spans
     _root_span: Any = field(default=None, repr=False, init=False)
@@ -76,15 +78,15 @@ class InstrumentedGraph:
         """
         query_hint = ""
         if isinstance(state, dict):
-            query_hint = str(state.get("query", ""))
+            query_hint = str(state.get(self.input_key, ""))
 
         with self._root_invocation_span(query_hint) as root_sp:
             result = self.graph.invoke(state, **kwargs)
-            # Attach a summary attribute to the root span
-            if isinstance(result, dict) and "answer" in result:
+            # Attach a summary attribute to the root span (generic)
+            if isinstance(result, dict) and self.output_key and self.output_key in result:
                 root_sp.set_attribute(
-                    "langgraph.answer.preview",
-                    str(result["answer"])[:500],
+                    "langgraph.output.preview",
+                    str(result[self.output_key])[:500],
                 )
             return result
 
@@ -92,7 +94,7 @@ class InstrumentedGraph:
         """Stream graph execution with telemetry."""
         query_hint = ""
         if isinstance(state, dict):
-            query_hint = str(state.get("query", ""))
+            query_hint = str(state.get(self.input_key, ""))
 
         with self._root_invocation_span(query_hint):
             yield from self.graph.stream(state, **kwargs)
@@ -110,7 +112,10 @@ def instrument_graph(
     bindings: Optional[Dict[str, Binding]] = None,
     in_place: bool = False,
     initial_templates: Optional[Dict[str, str]] = None,
-    provider_name: str = "openai",
+    provider_name: str = "llm",
+    llm_span_name: str = "llm.chat.completion",
+    input_key: str = "query",
+    output_key: Optional[str] = None,
 ) -> InstrumentedGraph:
     """Wrap a LangGraph with automatic OTEL instrumentation.
 
@@ -142,6 +147,15 @@ def instrument_graph(
         Starting prompt templates ``{param_name: template_str}``.
     provider_name : str
         LLM provider name for ``gen_ai.provider.name``.
+    llm_span_name : str
+        Name for child LLM spans.  Defaults to ``"llm.chat.completion"``.
+        Override to match your provider (e.g. ``"openai.chat.completion"``).
+    input_key : str
+        Key in the input state dict used as a query hint for the root span.
+        Defaults to ``"query"``.  Override to match your graph's state schema.
+    output_key : str, optional
+        Key in the result dict that holds the graph's final answer.
+        If *None*, no preview is attached to the root span.
 
     Returns
     -------
@@ -171,6 +185,7 @@ def instrument_graph(
         tracer=session.tracer,
         trainable_keys=trainable_keys,
         provider_name=provider_name,
+        llm_span_name=llm_span_name,
         emit_llm_child_span=emit_genai_child_spans,
     )
 
@@ -181,4 +196,6 @@ def instrument_graph(
         templates=templates,
         bindings=bindings,
         service_name=service_name,
+        input_key=input_key,
+        output_key=output_key,
     )
