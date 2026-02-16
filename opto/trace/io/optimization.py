@@ -318,6 +318,9 @@ def optimize_graph(
     best_iteration = 0
     best_updates: Dict[str, Any] = {}
     best_parameters: Dict[str, Any] = _snapshot_parameters(effective_bindings)
+    # Track the updates applied *before* the current iteration so we know
+    # which updates produced the params used in each iteration.
+    last_applied_updates: Dict[str, Any] = {}
 
     # -- lazy imports for Trace framework --
     _ingest_tgj = None
@@ -363,6 +366,8 @@ def optimize_graph(
 
     for iteration in range(total_iters):
         is_baseline = iteration == 0
+        # Snapshot which updates were applied to produce this iteration's params
+        applied_updates_for_this_iter = dict(last_applied_updates)
         label = "baseline" if is_baseline else f"iteration {iteration}"
         logger.info("optimize_graph: running %s ...", label)
         print(f"  {'Running baseline' if is_baseline else f'Iteration {iteration}/{iterations}'}...")
@@ -459,6 +464,7 @@ def optimize_graph(
             best_score = avg_score
             best_iteration = iteration
             best_parameters = _snapshot_parameters(effective_bindings)
+            best_updates = dict(applied_updates_for_this_iter)
             marker = " * NEW BEST" if not is_baseline else ""
         else:
             marker = ""
@@ -537,7 +543,7 @@ def optimize_graph(
             if updates and apply_updates_flag:
                 try:
                     apply_updates(updates, effective_bindings, strict=False)
-                    best_updates = dict(updates)
+                    last_applied_updates = dict(updates)
                     logger.info("Applied updates: %s", sorted(updates.keys()))
                 except Exception as exc:
                     logger.warning("apply_updates failed: %s", exc, exc_info=True)

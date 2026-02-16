@@ -1,11 +1,11 @@
 {
   "mode": "stub",
-  "baseline_score": 1.0,
+  "baseline_score": 0.4000000000000001,
   "best_score": 1.0,
-  "best_iteration": 0,
+  "best_iteration": 2,
   "score_history": [
-    1.0,
-    1.0,
+    0.4000000000000001,
+    0.4000000000000001,
     1.0
   ],
   "final_parameters": {
