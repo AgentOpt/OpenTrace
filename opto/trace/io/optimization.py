@@ -312,6 +312,18 @@ def optimize_graph(
 
     eval_fn = eval_fn or _default_eval_fn
 
+    # If not provided, fall back to the graph's configured output_key.
+    # If both are provided and disagree, prefer the explicit argument.
+    graph_output_key = getattr(graph, "output_key", None)
+    if output_key is None:
+        output_key = graph_output_key
+    elif graph_output_key and output_key != graph_output_key:
+        logger.debug(
+            "optimize_graph: output_key=%r overrides graph.output_key=%r",
+            output_key,
+            graph_output_key,
+        )
+
     score_history: List[float] = []
     all_runs: List[List[RunResult]] = []
     best_score = float("-inf")
