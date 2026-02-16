@@ -11,13 +11,13 @@
           },
           "spans": [
             {
-              "traceId": "25549b8c0fbe1cc8ac092be71c54b9f2",
-              "spanId": "b520796c605f1200",
-              "parentSpanId": "93d6c8242a3747bb",
-              "name": "openai.chat.completion",
+              "traceId": "3ae7ea202eac154107075932ff481972",
+              "spanId": "7745a14e175bc292",
+              "parentSpanId": "b98c98d84ec6fa9d",
+              "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770883147483199900,
-              "endTimeUnixNano": 1770883147483199900,
+              "startTimeUnixNano": 1770989616785265700,
+              "endTimeUnixNano": 1770989616785265700,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -34,7 +34,7 @@
                 {
                   "key": "gen_ai.provider.name",
                   "value": {
-                    "stringValue": "openai"
+                    "stringValue": "stub"
                   }
                 },
                 {
@@ -46,19 +46,19 @@
                 {
                   "key": "gen_ai.output.preview",
                   "value": {
-                    "stringValue": "Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                    "stringValue": "Research the topic. Analyze results."
                   }
                 }
               ]
             },
             {
-              "traceId": "25549b8c0fbe1cc8ac092be71c54b9f2",
-              "spanId": "93d6c8242a3747bb",
-              "parentSpanId": "",
+              "traceId": "3ae7ea202eac154107075932ff481972",
+              "spanId": "b98c98d84ec6fa9d",
+              "parentSpanId": "23642d337478a6d7",
               "name": "planner",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770883147483199900,
-              "endTimeUnixNano": 1770883147483199900,
+              "startTimeUnixNano": 1770989616785265700,
+              "endTimeUnixNano": 1770989616785265700,
               "attributes": [
                 {
                   "key": "param.planner_prompt",
@@ -87,13 +87,13 @@
               ]
             },
             {
-              "traceId": "153a66cb95df54c362e2f9828f6c5aa7",
-              "spanId": "95c6e5896c67befc",
-              "parentSpanId": "08783148222bcd8a",
-              "name": "openai.chat.completion",
+              "traceId": "3ae7ea202eac154107075932ff481972",
+              "spanId": "52cfc441f0c0f369",
+              "parentSpanId": "0ab2282b4c35af0f",
+              "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770883147483199900,
-              "endTimeUnixNano": 1770883147483199900,
+              "startTimeUnixNano": 1770989616787538900,
+              "endTimeUnixNano": 1770989616788516700,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -110,7 +110,7 @@
                 {
                   "key": "gen_ai.provider.name",
                   "value": {
-                    "stringValue": "openai"
+                    "stringValue": "stub"
                   }
                 },
                 {
@@ -122,19 +122,19 @@
                 {
                   "key": "gen_ai.output.preview",
                   "value": {
-                    "stringValue": "Based on the plan, here is a comprehensive yet concise answer about the topic."
+                    "stringValue": "Based on the plan, here is a basic answer."
                   }
                 }
               ]
             },
             {
-              "traceId": "153a66cb95df54c362e2f9828f6c5aa7",
-              "spanId": "08783148222bcd8a",
-              "parentSpanId": "",
+              "traceId": "3ae7ea202eac154107075932ff481972",
+              "spanId": "0ab2282b4c35af0f",
+              "parentSpanId": "23642d337478a6d7",
               "name": "synthesizer",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770883147483199900,
-              "endTimeUnixNano": 1770883147483199900,
+              "startTimeUnixNano": 1770989616787538900,
+              "endTimeUnixNano": 1770989616788516700,
               "attributes": [
                 {
                   "key": "param.synthesizer_prompt",
@@ -157,7 +157,42 @@
                 {
                   "key": "inputs.gen_ai.prompt",
                   "value": {
-                    "stringValue": "Synthesize an answer for: What is reinforcement learning?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings."
+                    "stringValue": "Synthesize an answer for: What is reinforcement learning?\nPlan: Research the topic. Analyze results."
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "3ae7ea202eac154107075932ff481972",
+              "spanId": "23642d337478a6d7",
+              "parentSpanId": "",
+              "name": "m1-notebook.invoke",
+              "kind": "UNSPECIFIED",
+              "startTimeUnixNano": 1770989616779165600,
+              "endTimeUnixNano": 1770989616788516700,
+              "attributes": [
+                {
+                  "key": "langgraph.service",
+                  "value": {
+                    "stringValue": "m1-notebook"
+                  }
+                },
+                {
+                  "key": "langgraph.query",
+                  "value": {
+                    "stringValue": "What is reinforcement learning?"
+                  }
+                },
+                {
+                  "key": "eval.score",
+                  "value": {
+                    "stringValue": "0.4"
+                  }
+                },
+                {
+                  "key": "eval.feedback",
+                  "value": {
+                    "stringValue": "Structure: 0 steps, 148 chars, score=0.40"
                   }
                 }
               ]

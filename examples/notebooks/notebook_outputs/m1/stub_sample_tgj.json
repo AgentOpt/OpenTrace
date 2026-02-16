@@ -6,25 +6,26 @@
       "service": "m1-notebook"
     },
     "otel_meta": {
-      "trace_id": "153a66cb95df54c362e2f9828f6c5aa7"
+      "trace_id": "3ae7ea202eac154107075932ff481972"
     },
     "nodes": {
-      "m1-notebook:b520796c605f1200": {
+      "m1-notebook:7745a14e175bc292": {
         "kind": "msg",
-        "name": "openai.chat.completion",
+        "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:93d6c8242a3747bb"
+          "parent": "m1-notebook:b98c98d84ec6fa9d"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "25549b8c0fbe1cc8ac092be71c54b9f2",
-            "span_id": "b520796c605f1200",
-            "parent_span_id": "93d6c8242a3747bb",
-            "service": "m1-notebook"
+            "trace_id": "3ae7ea202eac154107075932ff481972",
+            "span_id": "7745a14e175bc292",
+            "parent_span_id": "b98c98d84ec6fa9d",
+            "service": "m1-notebook",
+            "temporal_ignore": true
           }
         }
       },
@@ -35,16 +36,17 @@
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "93d6c8242a3747bb"
+            "span_id": "b98c98d84ec6fa9d"
           }
         }
       },
-      "m1-notebook:93d6c8242a3747bb": {
+      "m1-notebook:b98c98d84ec6fa9d": {
         "kind": "msg",
         "name": "planner",
         "op": "llm_call",
         "inputs": {
           "gen_ai.prompt": "Create a concise plan for: What is reinforcement learning?",
+          "parent": "m1-notebook:23642d337478a6d7",
           "param_planner_prompt": "m1-notebook:param_planner_prompt"
         },
         "data": {
@@ -52,29 +54,31 @@
         },
         "info": {
           "otel": {
-            "trace_id": "25549b8c0fbe1cc8ac092be71c54b9f2",
-            "span_id": "93d6c8242a3747bb",
-            "parent_span_id": "",
-            "service": "m1-notebook"
+            "trace_id": "3ae7ea202eac154107075932ff481972",
+            "span_id": "b98c98d84ec6fa9d",
+            "parent_span_id": "23642d337478a6d7",
+            "service": "m1-notebook",
+            "temporal_ignore": false
           }
         }
       },
-      "m1-notebook:95c6e5896c67befc": {
+      "m1-notebook:52cfc441f0c0f369": {
         "kind": "msg",
-        "name": "openai.chat.completion",
+        "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:08783148222bcd8a"
+          "parent": "m1-notebook:0ab2282b4c35af0f"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "153a66cb95df54c362e2f9828f6c5aa7",
-            "span_id": "95c6e5896c67befc",
-            "parent_span_id": "08783148222bcd8a",
-            "service": "m1-notebook"
+            "trace_id": "3ae7ea202eac154107075932ff481972",
+            "span_id": "52cfc441f0c0f369",
+            "parent_span_id": "0ab2282b4c35af0f",
+            "service": "m1-notebook",
+            "temporal_ignore": true
           }
         }
       },
@@ -85,17 +89,17 @@
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "08783148222bcd8a"
+            "span_id": "0ab2282b4c35af0f"
           }
         }
       },
-      "m1-notebook:08783148222bcd8a": {
+      "m1-notebook:0ab2282b4c35af0f": {
         "kind": "msg",
         "name": "synthesizer",
         "op": "llm_call",
         "inputs": {
-          "gen_ai.prompt": "Synthesize an answer for: What is reinforcement learning?\nPlan: Step 1: Research the topic. Step 2: Identify key points. Step 3: Summarize findings.",
-          "parent": "m1-notebook:93d6c8242a3747bb",
+          "gen_ai.prompt": "Synthesize an answer for: What is reinforcement learning?\nPlan: Research the topic. Analyze results.",
+          "parent": "m1-notebook:b98c98d84ec6fa9d",
           "param_synthesizer_prompt": "m1-notebook:param_synthesizer_prompt"
         },
         "data": {
@@ -103,10 +107,11 @@
         },
         "info": {
           "otel": {
-            "trace_id": "153a66cb95df54c362e2f9828f6c5aa7",
-            "span_id": "08783148222bcd8a",
-            "parent_span_id": "93d6c8242a3747bb",
-            "service": "m1-notebook"
+            "trace_id": "3ae7ea202eac154107075932ff481972",
+            "span_id": "0ab2282b4c35af0f",
+            "parent_span_id": "b98c98d84ec6fa9d",
+            "service": "m1-notebook",
+            "temporal_ignore": false
           }
         }
       }
