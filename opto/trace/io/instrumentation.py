@@ -8,6 +8,8 @@ LangGraph ``StateGraph`` / ``CompiledGraph``.
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -179,11 +181,38 @@ def instrument_graph(
         for key in templates:
             bindings[key] = make_dict_binding(templates, key, kind="prompt")
 
+    # -- optional code parameter emission -----------------------------------
+    emit_code_param = None
+    if enable_code_optimization:
+        CODE_ATTR_MAX_CHARS = 10_000
+
+        def _emit_code_param(span, code_key: str, code_fn: Any) -> None:
+            try:
+                src = inspect.getsource(code_fn)
+            except Exception:
+                src = repr(code_fn)
+            digest = hashlib.sha256(
+                src.encode("utf-8", errors="ignore")
+            ).hexdigest()
+            was_truncated = False
+            if len(src) > CODE_ATTR_MAX_CHARS:
+                src = src[:CODE_ATTR_MAX_CHARS] + "\n# ... (truncated)"
+                was_truncated = True
+            span.set_attribute(f"param.__code_{code_key}", src)
+            span.set_attribute(f"param.__code_{code_key}.sha256", digest)
+            span.set_attribute(
+                f"param.__code_{code_key}.truncated", str(was_truncated)
+            )
+            span.set_attribute(f"param.__code_{code_key}.trainable", True)
+
+        emit_code_param = _emit_code_param
+
     # -- TracingLLM --
     tracing_llm = TracingLLM(
         llm=llm,
         tracer=session.tracer,
         trainable_keys=trainable_keys,
+        emit_code_param=emit_code_param,
         provider_name=provider_name,
         llm_span_name=llm_span_name,
         emit_llm_child_span=emit_genai_child_spans,
