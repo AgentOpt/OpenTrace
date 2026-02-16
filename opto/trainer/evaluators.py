@@ -2,6 +2,7 @@ from opto.trainer.utils import batch_run
 from opto.trace import ExecutionError
 import copy
 import numpy as np
+from opto.trainer.objectives import aggregate_score_dicts
 
 
 def evaluate(agent, guide, inputs, infos, min_score=None, num_samples=1, num_threads=None, description=None):
@@ -91,6 +92,9 @@ def evaluate_vector(agent, guide, inputs, infos, min_score=None,
 def aggregate_vector_scores(score_dicts):
     """Compute the per-metric mean across a list of score dicts.
 
+    Thin wrapper — delegates to objectives.aggregate_score_dicts
+    (Objective-side policy per reviewer).
+
     Args:
         score_dicts: List[Dict[str, float]]
 
@@ -98,17 +102,4 @@ def aggregate_vector_scores(score_dicts):
         Dict[str, float] with the mean value for each metric key.
         Empty dict if input is empty.
     """
-    if not score_dicts:
-        return {}
-
-    all_keys = set()
-    for sd in score_dicts:
-        all_keys.update(sd.keys())
-
-    result = {}
-    for key in sorted(all_keys):
-        values = [sd[key] for sd in score_dicts
-                  if key in sd and sd[key] is not None]
-        if values:
-            result[key] = float(np.mean(values))
-    return result
+    return aggregate_score_dicts(score_dicts)

@@ -172,7 +172,7 @@ Both converge to the same abstraction: **given a list of `(score, params)` pairs
 Isolate all multi-objective logic into one new module (`opto/trainer/objectives.py`) containing **pure functions**:
 
 ```
-normalize_score()   →  scalar ↔ dict conversion
+to_score_dict()     →  scalar/dict to dict conversion (neutral name)
 apply_minimize()    →  flip signs for minimize metrics
 weighted_scalarize()→  dict → float via weighted sum
 pareto_rank()       →  dominance ranking + tie-break
@@ -209,8 +209,8 @@ Trainer selection (objectives.py)
 The entire vector-score path is **opt-in**:
 
 1. If `objective_config` is `None` → existing scalar path, no new code executed.
-2. If guide returns `float` and `objective_config` is provided → `normalize_score()` wraps it as `{"score": float}`, weights default to `{"score": 1.0}`.
-3. If guide returns `Dict[str, float]` and `objective_config` is `None` → `mean(values)` used as scalar fallback, preserving scalar selection.
+2. If guide returns `float` and `objective_config` is provided → `to_score_dict()` wraps it as `{"score": float}`, weights default to `{"score": 1.0}`.
+3. If guide returns `Dict[str, float]` and `objective_config` is `None` → `ValueError` is raised (no hidden hard-coded dict→scalar reduction). Pass an explicit `ObjectiveConfig(mode="scalar", scalarize_dict="mean")` to reduce via mean, or `scalarize_dict="score"` to use a single key.
 
 ---
 
@@ -356,7 +356,7 @@ def aggregate_vector_scores(scores: list) -> Union[float, Dict[str, float]]:
 
     - If all scores are float: returns np.mean (existing behavior).
     - If all scores are dict: returns per-metric mean dict.
-    - Mixed float/dict: normalizes all to dict via normalize_score(), then averages.
+    - Mixed float/dict: normalizes all to dict via to_score_dict(), then averages.
 
     Args:
         scores: List of float or Dict[str, float] values.
@@ -384,13 +384,14 @@ ScoreLike = Union[float, Dict[str, float]]
 
 # --- Pure utility functions ---
 
-def normalize_score(score: ScoreLike) -> Dict[str, float]:
-    """Convert any score to dict form.
+def to_score_dict(score: ScoreLike) -> Dict[str, float]:
+    """Convert any score to dict form (neutral name).
 
     - int/float/bool → {"score": float(value)}
     - Dict[str, float] → returned as-is (validated: all values finite)
 
     Handles int (LLMJudge returns 0/1) and bool (test guides) via isinstance(score, (int, float, bool)).
+    Backward-compatible alias: `normalize_score = to_score_dict`
 
     Raises:
         TypeError: if score is not int, float, bool, or dict
@@ -504,7 +505,7 @@ def select_top_k(candidates: List[Tuple[ScoreLike, any]],
 
 | File | Contents | Milestone |
 |------|----------|-----------|
-| `opto/trainer/objectives.py` | `ObjectiveConfig`, `normalize_score`, `apply_minimize`, `weighted_scalarize`, `dominates`, `pareto_rank`, `select_best`, `select_top_k` | M1 |
+| `opto/trainer/objectives.py` | `ObjectiveConfig`, `to_score_dict`, `apply_minimize`, `weighted_scalarize`, `dominates`, `pareto_rank`, `select_best`, `select_top_k`, `score_dict_to_scalar`, `to_scalar_score`, `aggregate_score_dicts` | M1 |
 | `tests/test_objectives.py` | Unit tests for all functions in objectives.py | M1 |
 | `tests/test_evaluators_vector.py` | Tests for evaluate_vector + aggregate_vector_scores | M1 |
 | `tests/test_trainers_multiobjective.py` | Integration tests for BasicSearch + Beamsearch with ObjectiveConfig | M2 |
@@ -539,9 +540,9 @@ def select_top_k(candidates: List[Tuple[ScoreLike, any]],
 
 | Case | Behavior |
 |------|----------|
-| `score = 0.85` (float) | `normalize_score()` → `{"score": 0.85}` |
-| `score = 1` (int) | `normalize_score()` → `{"score": 1.0}` (LLMJudge returns int 0/1) |
-| `score = True` (bool) | `normalize_score()` → `{"score": 1.0}` (test guides return bool) |
+| `score = 0.85` (float) | `to_score_dict()` → `{"score": 0.85}` |
+| `score = 1` (int) | `to_score_dict()` → `{"score": 1.0}` (LLMJudge returns int 0/1) |
+| `score = True` (bool) | `to_score_dict()` → `{"score": 1.0}` (test guides return bool) |
 | `score = {"accuracy": 0.9, "latency_ms": 120.0}` | Returned as-is after validation |
 | `score = {}` (empty dict) | `ValueError("Score dict must not be empty")` |
 | `score = {"accuracy": float('nan')}` | `ValueError("Score dict contains non-finite value")` |
@@ -724,11 +725,11 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 
 | Test | Validates |
 |------|-----------|
-| `test_normalize_score_from_float` | `0.85` → `{"score": 0.85}` |
-| `test_normalize_score_from_dict` | `{"a": 1.0, "b": 2.0}` → same dict |
-| `test_normalize_score_empty_dict_raises` | `{}` → `ValueError` |
-| `test_normalize_score_nan_raises` | `{"a": float('nan')}` → `ValueError` |
-| `test_normalize_score_wrong_type_raises` | `"text"` → `TypeError` |
+| `test_to_score_dict_from_float` | `0.85` → `{"score": 0.85}` |
+| `test_to_score_dict_from_dict` | `{"a": 1.0, "b": 2.0}` → same dict |
+| `test_to_score_dict_empty_dict_raises` | `{}` → `ValueError` |
+| `test_to_score_dict_nan_raises` | `{"a": float('nan')}` → `ValueError` |
+| `test_to_score_dict_wrong_type_raises` | `"text"` → `TypeError` |
 | `test_apply_minimize` | `{"acc": 0.9, "lat": 100}` with `minimize={"lat"}` → `{"acc": 0.9, "lat": -100}` |
 | `test_apply_minimize_empty_set` | No metrics negated |
 | `test_weighted_scalarize_basic` | `{"a": 0.8, "b": 0.2}` with `weights={"a": 0.7, "b": 0.3}` → `0.7*0.8 + 0.3*0.2` |
@@ -793,12 +794,15 @@ Each notebook contains:
 
 ## 11. Design Decisions (Resolved)
 
+> **Post-review update (Ching-An, Feb 2026):** All dict→scalar reduction is now controlled by `ObjectiveConfig.scalarize_dict` (values: `"score"`, `"mean"`, `"weighted"`). Guide produces raw metrics only. `normalize_score` renamed to `to_score_dict` (neutral name; backward-compat alias kept). `aggregate_score_dicts()` moved from evaluators to objectives.py (Objective-side policy). Dict scores with `config=None` now raise `ValueError` (no hidden hard-coded reduction).
+
 ### D1: Where to implement scalar→dict normalization?
 
-**Decision: Option A — `Guide.get_score_dict()` helper + `objectives.normalize_score()`**
+**Decision: Option A — `Guide.get_score_dict()` helper + `objectives.to_score_dict()`**
 
 - `get_score_dict()` on Guide provides a clean entry point for subclasses.
-- `normalize_score()` in objectives.py is the canonical utility (pure function, testable).
+- `to_score_dict()` in objectives.py is the canonical utility (pure function, testable). Renamed from `normalize_score` per Ching-An's review (neutral name; backward-compat alias kept).
+- All dict→scalar reduction is controlled by `ObjectiveConfig` (via `scalarize_dict` field). No hidden hard-coded defaults.
 - Avoids widening `get_feedback()` return type (higher churn, breaks typing).
 
 ### D2: Pareto selection definition

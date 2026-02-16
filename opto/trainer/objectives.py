@@ -41,6 +41,12 @@ class ObjectiveConfig:
             - "lexicographic": sort by metric names alphabetically.
             - "random_seeded": seeded random shuffle.
         seed: Random seed for deterministic tie-breaking.
+
+        scalarize_dict: How to reduce dict scores to a scalar (when mode="scalar").
+            - "score": use score_key (default; avoids hidden behavior)
+            - "mean": mean(values) (explicitly requested; diagnostic/backcompat)
+            - "weighted": weighted_scalarize() (explicitly requested)
+        score_key: Key used when scalarize_dict="score" (default: "score")
     """
     mode: str = "scalar"
     weights: Dict[str, float] = field(default_factory=dict)
@@ -49,6 +55,8 @@ class ObjectiveConfig:
     pareto_metrics: Optional[Tuple[str, ...]] = None
     tie_break: str = "weighted"
     seed: int = 0
+    scalarize_dict: str = "score"
+    score_key: str = "score"
 
     def __post_init__(self):
         if isinstance(self.minimize, set):
@@ -62,6 +70,13 @@ class ObjectiveConfig:
                 f"tie_break must be 'weighted', 'lexicographic', or "
                 f"'random_seeded', got '{self.tie_break}'"
             )
+        if self.scalarize_dict not in ("score", "mean", "weighted"):
+            raise ValueError(
+                f"scalarize_dict must be 'score', 'mean', or 'weighted', "
+                f"got '{self.scalarize_dict}'"
+            )
+        if not isinstance(self.score_key, str) or not self.score_key:
+            raise ValueError("score_key must be a non-empty string")
         for k, v in self.weights.items():
             if v < 0:
                 raise ValueError(f"Weight for '{k}' must be non-negative, got {v}")
@@ -75,7 +90,7 @@ class ObjectiveConfig:
 # Pure utility functions
 # ---------------------------------------------------------------------------
 
-def normalize_score(score: ScoreLike) -> Dict[str, float]:
+def to_score_dict(score: ScoreLike) -> Dict[str, float]:
     """Convert any score to dict form.
 
     - bool/int/float -> {"score": float(value)}
@@ -105,6 +120,60 @@ def normalize_score(score: ScoreLike) -> Dict[str, float]:
         f"Score must be int, float, bool, or Dict[str, float], "
         f"got {type(score).__name__}"
     )
+
+
+# Backward-compatible alias (deprecated name)
+normalize_score = to_score_dict
+
+
+def score_dict_to_scalar(score_dict: Dict[str, float],
+                         config: ObjectiveConfig) -> float:
+    """Reduce a score dict to a scalar according to ObjectiveConfig.
+
+    Applies apply_minimize first, then reduces per config.scalarize_dict:
+      - "score": return sd[config.score_key]
+      - "mean": return mean(sd.values())
+      - "weighted": return weighted_scalarize(sd, config.weights, ...)
+
+    This exists to avoid hard-coding any dict->scalar behavior in Guide/Evaluator.
+    """
+    sd = to_score_dict(score_dict)
+    sd = apply_minimize(sd, config.minimize)
+
+    if config.scalarize_dict == "score":
+        if config.score_key not in sd:
+            raise ValueError(
+                f"Dict score missing key '{config.score_key}'. "
+                "Either include it, or set ObjectiveConfig.scalarize_dict "
+                "to 'mean' or 'weighted'."
+            )
+        return float(sd[config.score_key])
+
+    if config.scalarize_dict == "mean":
+        return float(np.mean(list(sd.values())))
+
+    if config.scalarize_dict == "weighted":
+        return float(weighted_scalarize(sd, config.weights, config.missing_value))
+
+    raise ValueError(f"Unknown scalarize_dict: {config.scalarize_dict}")
+
+
+def to_scalar_score(score: ScoreLike,
+                    config: Optional[ObjectiveConfig]) -> float:
+    """Convert scalar or dict score to scalar using ObjectiveConfig.
+
+    Scalar scores pass through as float(score). Dict scores require
+    an explicit ObjectiveConfig to define reduction (no hidden defaults).
+    """
+    if isinstance(score, dict):
+        if config is None:
+            raise ValueError(
+                "Dict score encountered but ObjectiveConfig is None. "
+                "Pass ObjectiveConfig(mode='scalar', scalarize_dict=...) "
+                "to define reduction."
+            )
+        return score_dict_to_scalar(score, config)
+    return float(score)
 
 
 def apply_minimize(score_dict: Dict[str, float],
@@ -198,20 +267,15 @@ def select_best(candidates: List[Tuple[ScoreLike, Any]],
 
     Notes:
         When *config* is None or mode='scalar', dict scores are collapsed to
-        mean(values) for backward compatibility.  For explicit multi-objective
-        control, pass an ObjectiveConfig with mode='weighted' or 'pareto'
-        and appropriate weights.
+        a scalar using ObjectiveConfig.scalarize_dict. If dict scores are
+        present and config is None, a ValueError is raised (no hidden
+        hard-coded reduction).
     """
     if config is None or config.mode == "scalar":
-        scores = []
-        for score, _ in candidates:
-            if isinstance(score, dict):
-                scores.append(np.mean(list(score.values())))
-            else:
-                scores.append(float(score))
+        scores = [to_scalar_score(score, config) for score, _ in candidates]
         return int(np.argmax(scores))
 
-    score_dicts = [normalize_score(s) for s, _ in candidates]
+    score_dicts = [to_score_dict(s) for s, _ in candidates]
     score_dicts = [apply_minimize(sd, config.minimize) for sd in score_dicts]
 
     if config.mode == "weighted":
@@ -265,20 +329,15 @@ def select_top_k(candidates: List[Tuple[ScoreLike, Any]],
 
     Notes:
         When *config* is None or mode='scalar', dict scores are collapsed to
-        mean(values) for backward compatibility.  For explicit multi-objective
-        control, pass an ObjectiveConfig with mode='weighted' or 'pareto'
-        and appropriate weights.
+        a scalar using ObjectiveConfig.scalarize_dict. If dict scores are
+        present and config is None, a ValueError is raised (no hidden
+        hard-coded reduction).
     """
     if config is None or config.mode == "scalar":
-        scores = []
-        for score, _ in candidates:
-            if isinstance(score, dict):
-                scores.append(np.mean(list(score.values())))
-            else:
-                scores.append(float(score))
+        scores = [to_scalar_score(score, config) for score, _ in candidates]
         return list(np.argsort(scores)[::-1][:k])
 
-    score_dicts = [normalize_score(s) for s, _ in candidates]
+    score_dicts = [to_score_dict(s) for s, _ in candidates]
     score_dicts = [apply_minimize(sd, config.minimize) for sd in score_dicts]
 
     if config.mode == "weighted":
@@ -322,3 +381,22 @@ def select_top_k(candidates: List[Tuple[ScoreLike, Any]],
         return result[:k]
 
     raise ValueError(f"Unknown mode: {config.mode}")
+
+
+def aggregate_score_dicts(score_dicts: List[Dict[str, float]]) -> Dict[str, float]:
+    """Compute per-metric mean across a list of score dicts.
+
+    This is Objective-side policy (per reviewer): evaluators call this
+    rather than defining aggregation logic themselves.
+    """
+    if not score_dicts:
+        return {}
+    all_keys = set()
+    for sd in score_dicts:
+        all_keys.update(sd.keys())
+    result: Dict[str, float] = {}
+    for key in sorted(all_keys):
+        values = [sd[key] for sd in score_dicts if key in sd and sd[key] is not None]
+        if values:
+            result[key] = float(np.mean(values))
+    return result

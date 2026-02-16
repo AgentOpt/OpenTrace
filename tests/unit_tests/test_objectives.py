@@ -2,77 +2,139 @@
 import pytest
 import numpy as np
 from opto.trainer.objectives import (
-    ObjectiveConfig, normalize_score, apply_minimize, weighted_scalarize,
+    ObjectiveConfig, to_score_dict, apply_minimize, weighted_scalarize,
     dominates, pareto_rank, select_best, select_top_k,
+    score_dict_to_scalar, to_scalar_score, aggregate_score_dicts,
 )
 
 
 # ---------------------------------------------------------------------------
-# normalize_score
+# to_score_dict (alias normalize_score kept for backwards-compat)
 # ---------------------------------------------------------------------------
 
-def test_normalize_score_float():
-    assert normalize_score(0.85) == {"score": 0.85}
+def test_to_score_dict_float():
+    assert to_score_dict(0.85) == {"score": 0.85}
 
 
-def test_normalize_score_zero():
-    assert normalize_score(0.0) == {"score": 0.0}
+def test_to_score_dict_zero():
+    assert to_score_dict(0.0) == {"score": 0.0}
 
 
-def test_normalize_score_int():
-    assert normalize_score(1) == {"score": 1.0}
+def test_to_score_dict_int():
+    assert to_score_dict(1) == {"score": 1.0}
 
 
-def test_normalize_score_int_zero():
-    assert normalize_score(0) == {"score": 0.0}
+def test_to_score_dict_int_zero():
+    assert to_score_dict(0) == {"score": 0.0}
 
 
-def test_normalize_score_bool_true():
-    assert normalize_score(True) == {"score": 1.0}
+def test_to_score_dict_bool_true():
+    assert to_score_dict(True) == {"score": 1.0}
 
 
-def test_normalize_score_bool_false():
-    assert normalize_score(False) == {"score": 0.0}
+def test_to_score_dict_bool_false():
+    assert to_score_dict(False) == {"score": 0.0}
 
 
-def test_normalize_score_dict():
-    result = normalize_score({"acc": 0.9, "lat": 50.0})
+def test_to_score_dict_dict():
+    result = to_score_dict({"acc": 0.9, "lat": 50.0})
     assert result == {"acc": 0.9, "lat": 50.0}
 
 
-def test_normalize_score_dict_with_int_values():
-    result = normalize_score({"acc": 1, "lat": 0})
+def test_to_score_dict_dict_with_int_values():
+    result = to_score_dict({"acc": 1, "lat": 0})
     assert result == {"acc": 1.0, "lat": 0.0}
 
 
-def test_normalize_score_empty_dict_raises():
+def test_to_score_dict_empty_dict_raises():
     with pytest.raises(ValueError, match="must not be empty"):
-        normalize_score({})
+        to_score_dict({})
 
 
-def test_normalize_score_nan_raises():
+def test_to_score_dict_nan_raises():
     with pytest.raises(ValueError, match="finite"):
-        normalize_score({"a": float("nan")})
+        to_score_dict({"a": float("nan")})
 
 
-def test_normalize_score_inf_raises():
+def test_to_score_dict_inf_raises():
     with pytest.raises(ValueError, match="finite"):
-        normalize_score(float("inf"))
+        to_score_dict(float("inf"))
 
 
-def test_normalize_score_neg_inf_raises():
+def test_to_score_dict_neg_inf_raises():
     with pytest.raises(ValueError, match="finite"):
-        normalize_score(float("-inf"))
+        to_score_dict(float("-inf"))
 
 
-def test_normalize_score_string_raises():
+def test_to_score_dict_string_raises():
     with pytest.raises(TypeError, match="str"):
-        normalize_score("bad")
+        to_score_dict("bad")
 
 
-def test_normalize_score_none_raises():
+def test_to_score_dict_none_raises():
     with pytest.raises(TypeError):
-        normalize_score(None)
+        to_score_dict(None)
+
+
+def test_backward_compat_alias():
+    """normalize_score still works as alias."""
+    from opto.trainer.objectives import normalize_score
+    assert normalize_score(0.5) == {"score": 0.5}
+
+
+# ---------------------------------------------------------------------------
+# score_dict_to_scalar / to_scalar_score
+# ---------------------------------------------------------------------------
+
+def test_score_dict_to_scalar_score_key():
+    config = ObjectiveConfig(scalarize_dict="score")
+    assert score_dict_to_scalar({"score": 0.9, "extra": 0.1}, config) == pytest.approx(0.9)
+
+
+def test_score_dict_to_scalar_score_key_missing_raises():
+    config = ObjectiveConfig(scalarize_dict="score")
+    with pytest.raises(ValueError, match="missing key"):
+        score_dict_to_scalar({"acc": 0.9}, config)
+
+
+def test_score_dict_to_scalar_mean():
+    config = ObjectiveConfig(scalarize_dict="mean")
+    result = score_dict_to_scalar({"a": 0.8, "b": 0.2}, config)
+    assert result == pytest.approx(0.5)
+
+
+def test_score_dict_to_scalar_weighted():
+    config = ObjectiveConfig(scalarize_dict="weighted", weights={"a": 0.7, "b": 0.3})
+    result = score_dict_to_scalar({"a": 1.0, "b": 0.5}, config)
+    assert result == pytest.approx(0.7 * 1.0 + 0.3 * 0.5)
+
+
+def test_to_scalar_score_float_passthrough():
+    assert to_scalar_score(0.75, None) == pytest.approx(0.75)
+
+
+def test_to_scalar_score_dict_none_config_raises():
+    with pytest.raises(ValueError, match="ObjectiveConfig is None"):
+        to_scalar_score({"a": 0.5}, None)
+
+
+def test_to_scalar_score_dict_with_config():
+    config = ObjectiveConfig(scalarize_dict="mean")
+    assert to_scalar_score({"a": 0.8, "b": 0.2}, config) == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# aggregate_score_dicts
+# ---------------------------------------------------------------------------
+
+def test_aggregate_score_dicts_basic():
+    result = aggregate_score_dicts([{"a": 1.0, "b": 0.5}, {"a": 0.0, "b": 1.0}])
+    assert result["a"] == pytest.approx(0.5)
+    assert result["b"] == pytest.approx(0.75)
+
+
+def test_aggregate_score_dicts_empty():
+    assert aggregate_score_dicts([]) == {}
 
 
 # ---------------------------------------------------------------------------
@@ -195,12 +257,29 @@ def test_select_best_scalar_mode():
     assert select_best(candidates, config) == 1
 
 
-def test_select_best_scalar_with_dict_scores():
-    """Scalar mode with dict scores uses mean of values."""
-    config = ObjectiveConfig(mode="scalar")
+def test_select_best_scalar_with_dict_scores_requires_config():
+    """Dict scores require explicit scalarization config (no hidden hard-coded mean)."""
+    candidates = [({"a": 0.5, "b": 0.3}, "X")]
+    with pytest.raises(ValueError, match="ObjectiveConfig is None"):
+        select_best(candidates, None)
+
+
+def test_select_best_scalar_with_dict_scores_score_key_default():
+    """Default scalarize_dict='score' uses the 'score' key."""
+    config = ObjectiveConfig(mode="scalar")  # scalarize_dict="score" by default
     candidates = [
-        ({"a": 0.5, "b": 0.3}, "X"),  # mean = 0.4
-        ({"a": 0.8, "b": 0.6}, "Y"),  # mean = 0.7
+        ({"score": 0.4, "a": 0.5}, "X"),
+        ({"score": 0.7, "a": 0.8}, "Y"),
+    ]
+    assert select_best(candidates, config) == 1
+
+
+def test_select_best_scalar_with_dict_scores_mean_configurable():
+    """Explicit scalarize_dict='mean' uses mean of all values."""
+    config = ObjectiveConfig(mode="scalar", scalarize_dict="mean")
+    candidates = [
+        ({"a": 0.5, "b": 0.3}, "X"),  # mean 0.4
+        ({"a": 0.8, "b": 0.6}, "Y"),  # mean 0.7
     ]
     assert select_best(candidates, config) == 1
 
@@ -349,6 +428,8 @@ def test_config_default():
     assert config.mode == "scalar"
     assert config.weights == {}
     assert config.minimize == frozenset()
+    assert config.scalarize_dict == "score"
+    assert config.score_key == "score"
 
 
 def test_config_set_to_frozenset():
@@ -375,6 +456,16 @@ def test_config_bad_tie_break_raises():
 def test_config_empty_pareto_metrics_raises():
     with pytest.raises(ValueError, match="non-empty"):
         ObjectiveConfig(pareto_metrics=())
+
+
+def test_config_bad_scalarize_dict_raises():
+    with pytest.raises(ValueError, match="scalarize_dict"):
+        ObjectiveConfig(scalarize_dict="bad")
+
+
+def test_config_empty_score_key_raises():
+    with pytest.raises(ValueError, match="score_key"):
+        ObjectiveConfig(score_key="")
 
 
 def test_config_frozen():
