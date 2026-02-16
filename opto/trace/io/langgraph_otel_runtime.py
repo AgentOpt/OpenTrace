@@ -321,9 +321,11 @@ class TracingLLM:
             )
 
             # -- invoke LLM, optionally under a child span --
+            llm_sp_ref = None
             try:
                 if self.emit_llm_child_span:
                     with self.tracer.start_as_current_span(self.llm_span_name) as llm_sp:
+                        llm_sp_ref = llm_sp
                         # Tag child span so TGJ adapter skips temporal chaining
                         llm_sp.set_attribute("trace.temporal_ignore", "true")
                         llm_sp.set_attribute("gen_ai.operation.name", "chat")
@@ -345,14 +347,21 @@ class TracingLLM:
                     content = resp.choices[0].message.content
                     content = self._validate_content(content)
             except LLMCallError:
-                # Record the error on the span and re-raise
+                # Record the error on both parent and child spans
                 sp.set_attribute("error", "true")
                 sp.set_attribute("error.type", "LLMCallError")
+                if llm_sp_ref is not None:
+                    llm_sp_ref.set_attribute("error", "true")
+                    llm_sp_ref.set_attribute("error.type", "LLMCallError")
                 raise
             except Exception as exc:
-                # Unexpected provider error — record and raise as LLMCallError
+                # Unexpected provider error — record on both spans
+                err_type = type(exc).__name__
                 sp.set_attribute("error", "true")
-                sp.set_attribute("error.type", type(exc).__name__)
+                sp.set_attribute("error.type", err_type)
+                if llm_sp_ref is not None:
+                    llm_sp_ref.set_attribute("error", "true")
+                    llm_sp_ref.set_attribute("error.type", err_type)
                 raise LLMCallError(
                     f"LLM provider call failed: {exc}"
                 ) from exc

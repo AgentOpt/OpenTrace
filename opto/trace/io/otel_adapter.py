@@ -149,6 +149,11 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                     if not psid or psid in root_span_ids:
                         effective_psid = prev_span_id
 
+                # If our effective parent is a skipped root invocation span,
+                # do not emit a parent edge that would dangle in TGJ.
+                if effective_psid and effective_psid in root_span_ids:
+                    effective_psid = None
+
                 if effective_psid and "parent" not in inputs:
                     inputs["parent"] = f"{svc}:{effective_psid}"
                 
