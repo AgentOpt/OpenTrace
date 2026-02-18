@@ -301,30 +301,22 @@ class Guide:
     # ... existing methods unchanged ...
 
     def get_score_dict(self, query: str, response: str, reference=None, **kwargs) -> Dict[str, float]:
-        """Return the evaluation score as a dictionary.
+        """Return evaluation score as a dict (multi-objective selection path).
 
-        Wraps get_feedback() for backward compatibility:
-        - If get_feedback returns (float, str): returns {"score": float}
-        - If get_feedback returns (dict, str):  returns dict directly
+        Default implementation wraps the scalar training score from get_feedback() as:
+            {"score": float_value}
 
-        Subclasses returning multi-metric scores should override get_feedback()
-        to return (Dict[str, float], str) instead of (float, str).
+        Guides that need multiple metrics should override *get_score_dict()* and return
+        e.g. {"accuracy": 0.9, "brevity": 0.8, "latency_s": 0.05}.
+
+        Note: get_feedback() should remain scalar (float) for training-loop backward
+        compatibility. If a subclass returns a dict from get_feedback(), metric() and
+        scalar evaluators may break; prefer overriding get_score_dict().
         """
         score, _ = self.get_feedback(query, response, reference, **kwargs)
         if isinstance(score, dict):
-            return score
+            return {k: float(v) for k, v in score.items()}
         return {"score": float(score)}
-
-    def metric(self, query: str, response: str, reference=None, **kwargs) -> float:
-        """Always returns float. For dict scores, returns mean of values as scalar fallback.
-
-        This ensures evaluate() and the training loop (which call metric()) remain
-        completely safe. Dict scores only flow through get_score_dict() → evaluate_vector().
-        """
-        score, _ = self.get_feedback(query, response, reference, **kwargs)
-        if isinstance(score, dict):
-            return float(np.mean(list(score.values())))
-        return float(score)
 ```
 
 **Why this approach:**
