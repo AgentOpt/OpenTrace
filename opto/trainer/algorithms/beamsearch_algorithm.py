@@ -3,7 +3,9 @@ import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.trainer.utils import async_run, batch_run
 from opto.optimizers.utils import print_color
-from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, evaluate, batchify
+from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, evaluate, batchify, _objective_scalar
+from opto.trainer.evaluators import evaluate_vector, aggregate_vector_scores
+from opto.trainer.objectives import ObjectiveConfig, select_top_k, apply_minimize, weighted_scalarize
 
 
 class BeamsearchAlgorithm(MinibatchAlgorithm):
@@ -20,6 +22,7 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
               guide,
               train_dataset,
               *,
+              objective_config=None,  # ObjectiveConfig for multi-objective selection (None = scalar)
               validate_dataset=None,  # dataset for selecting the best candidates
               validate_guide=None,    # guide for validation
               validation_dataset_size=5,  # size of validation minibatch for each evaluation
@@ -39,8 +42,11 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
               ):
         """
         Performs beam search to find optimal parameters.
-        
+
         Args:
+            objective_config: ObjectiveConfig for multi-objective selection.
+                None or mode='scalar' uses existing scalar comparison (backward-compatible).
+                mode='weighted' or 'pareto' enables vector scoring in select().
             beam_width: Number of candidates to keep at each level of the beam search
             num_proposals: Number of proposals to generate per beam candidate
             max_depth: Maximum depth of the beam search
@@ -50,6 +56,7 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
             test_frequency: How often to evaluate on test set (every N steps)
             Other parameters are the same as MinibatchAlgorithm.train()
         """
+        self.objective_config = objective_config
         self.total_samples = 0
 
         print_color(f"Running BeamsearchAlgorithm with beam_width={beam_width}, max_depth={max_depth}", 'blue')
@@ -168,7 +175,18 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
                 self.logger.log('Average validation score', np.mean(scores), step_num, color='cyan')
                 self.logger.log('Min validation score', min(scores), step_num, color='yellow')
                 self.logger.log('Max validation score', max(scores), step_num, color='magenta')
-                
+
+                # Log per-metric values when using vector scoring
+                if (getattr(self, 'objective_config', None) is not None
+                        and self.objective_config.mode != "scalar"
+                        and hasattr(self, '_last_selected_score_dicts')
+                        and self._last_selected_score_dicts):
+                    best_score_dict = self._last_selected_score_dicts[best_idx]
+                    if isinstance(best_score_dict, dict):
+                        for metric_name, metric_val in best_score_dict.items():
+                            self.logger.log(f'Validation score/{metric_name}', metric_val,
+                                            step_num, color='green')
+
                 # Evaluate on test set every test_frequency steps
                 if test_dataset is not None and ((depth + 1) % test_frequency == 0):
                     # Update agent with best parameters from this depth
@@ -370,7 +388,7 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
         
         return candidates
 
-    def select(self, 
+    def select(self,
                candidates: List[Dict],
                validate_guide,
                validation_mini_dataset,
@@ -380,7 +398,7 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
                return_scores: bool = False) -> Union[List[Dict], Tuple[List[Dict], List[float]]]:
         """
         Evaluates all candidates and selects the top beam_width candidates based on validation scores.
-        
+
         Args:
             candidates: List of parameter dictionaries for each candidate
             validate_guide: Guide for validation
@@ -389,63 +407,111 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
             num_threads: Number of threads to use
             min_score: Minimum score when errors occur
             return_scores: Whether to return scores along with parameters
-            
+
         Returns:
             If return_scores is False: List of selected candidates' parameters
             If return_scores is True: Tuple of (list of parameters, list of scores)
         """
+        use_vector = (getattr(self, 'objective_config', None) is not None
+                      and self.objective_config.mode != "scalar")
+
         # Store current parameters to restore later
         current_params = {p: copy.deepcopy(p.data) for p in self.optimizer.parameters}
-        
-        # List to store (score, params) pairs
-        scored_candidates = []
-        
-        # Evaluate each candidate
-        for candidate_idx, candidate_params in enumerate(candidates):
-            self.optimizer.update(candidate_params)
-            
-            # Evaluate on validation minibatch using evaluate function
-            validation_scores = evaluate(
-                self.agent,
-                validate_guide,
-                validation_mini_dataset['inputs'],
-                validation_mini_dataset['infos'],
-                min_score=min_score,
-                num_threads=num_threads,
-                description=f"Validating candidate {candidate_idx+1}/{len(candidates)}"
-            )
-            
-            validation_score = np.mean(validation_scores) if all([s is not None for s in validation_scores]) else -np.inf
-            scored_candidates.append((validation_score, candidate_params))
-            
-            print_color(f"Candidate {candidate_idx+1}: Validation score: {validation_score:.4f}", 'cyan')
-        
-        # Restore original parameters
-        self.optimizer.update(current_params)
-        
-        # Extract scores for logging
-        scores = [score for score, _ in scored_candidates]
-        
-        # If the number of candidates is less than or equal to beam_width, keep all of them
-        if len(scored_candidates) <= beam_width:
-            print_color(f"Keeping all {len(scored_candidates)} candidates as num_candidates <= beam_width. Scores: {[f'{s:.4f}' for s in scores]}", 'green')
-            selected_params = [params for _, params in scored_candidates]
+
+        if use_vector:
+            # --- Vector path: multi-objective selection ---
+            scored_candidates = []       # (scalar_score, params) for logging/return
+            vector_candidates = []       # (score_dict, params) for multi-objective ranking
+
+            for candidate_idx, candidate_params in enumerate(candidates):
+                self.optimizer.update(candidate_params)
+
+                score_dicts = evaluate_vector(
+                    self.agent,
+                    validate_guide,
+                    validation_mini_dataset['inputs'],
+                    validation_mini_dataset['infos'],
+                    min_score=min_score,
+                    num_threads=num_threads,
+                    description=f"Validating candidate {candidate_idx+1}/{len(candidates)} (vector)"
+                )
+                score_dict = aggregate_vector_scores(score_dicts)
+                scalar_score = _objective_scalar(score_dict, self.objective_config)
+
+                scored_candidates.append((scalar_score, candidate_params))
+                vector_candidates.append((score_dict, candidate_params))
+
+                print_color(f"Candidate {candidate_idx+1}: Validation score: {scalar_score:.4f} {score_dict}", 'cyan')
+
+            # Restore original parameters
+            self.optimizer.update(current_params)
+
+            scores = [s for s, _ in scored_candidates]
+
+            if len(scored_candidates) <= beam_width:
+                print_color(f"Keeping all {len(scored_candidates)} candidates as num_candidates <= beam_width. Scores: {[f'{s:.4f}' for s in scores]}", 'green')
+                selected_params = [params for _, params in scored_candidates]
+                # Store score_dicts for per-metric logging in train()
+                self._last_selected_score_dicts = [sd for sd, _ in vector_candidates]
+                if return_scores:
+                    return selected_params, scores
+                return selected_params
+
+            # Multi-objective ranking via select_top_k
+            top_indices = select_top_k(vector_candidates, self.objective_config, k=beam_width)
+            selected_params = [vector_candidates[i][1] for i in top_indices]
+            selected_scores = [scores[i] for i in top_indices]
+            # Store score_dicts for per-metric logging in train()
+            self._last_selected_score_dicts = [vector_candidates[i][0] for i in top_indices]
+
+            print_color(f"Selected top {beam_width} beams with scores: {[f'{s:.4f}' for s in selected_scores]}", 'green')
             if return_scores:
-                return selected_params, scores
+                return selected_params, selected_scores
             return selected_params
-        
-        # Sort candidates by score (descending)
-        sorted_candidates = sorted(scored_candidates, key=lambda x: x[0], reverse=True)
-        
-        # Select top beam_width candidates
-        selected_candidates = sorted_candidates[:beam_width]
-        selected_scores = [score for score, _ in selected_candidates]
-        selected_params = [params for _, params in selected_candidates]
-        
-        print_color(f"Selected top {beam_width} beams with scores: {[f'{s:.4f}' for s in selected_scores]}", 'green')
-        if return_scores:
-            return selected_params, selected_scores
-        return selected_params
+
+        else:
+            # --- Scalar path: completely unchanged ---
+            scored_candidates = []
+
+            for candidate_idx, candidate_params in enumerate(candidates):
+                self.optimizer.update(candidate_params)
+
+                validation_scores = evaluate(
+                    self.agent,
+                    validate_guide,
+                    validation_mini_dataset['inputs'],
+                    validation_mini_dataset['infos'],
+                    min_score=min_score,
+                    num_threads=num_threads,
+                    description=f"Validating candidate {candidate_idx+1}/{len(candidates)}"
+                )
+
+                validation_score = np.mean(validation_scores) if all([s is not None for s in validation_scores]) else -np.inf
+                scored_candidates.append((validation_score, candidate_params))
+
+                print_color(f"Candidate {candidate_idx+1}: Validation score: {validation_score:.4f}", 'cyan')
+
+            # Restore original parameters
+            self.optimizer.update(current_params)
+
+            scores = [score for score, _ in scored_candidates]
+
+            if len(scored_candidates) <= beam_width:
+                print_color(f"Keeping all {len(scored_candidates)} candidates as num_candidates <= beam_width. Scores: {[f'{s:.4f}' for s in scores]}", 'green')
+                selected_params = [params for _, params in scored_candidates]
+                if return_scores:
+                    return selected_params, scores
+                return selected_params
+
+            sorted_candidates = sorted(scored_candidates, key=lambda x: x[0], reverse=True)
+            selected_candidates = sorted_candidates[:beam_width]
+            selected_scores = [score for score, _ in selected_candidates]
+            selected_params = [params for _, params in selected_candidates]
+
+            print_color(f"Selected top {beam_width} beams with scores: {[f'{s:.4f}' for s in selected_scores]}", 'green')
+            if return_scores:
+                return selected_params, selected_scores
+            return selected_params
 
 
 
@@ -464,6 +530,7 @@ class BeamsearchHistoryAlgorithm(BeamsearchAlgorithm):
               guide,
               train_dataset,
               *,
+              objective_config=None,  # ObjectiveConfig for multi-objective selection (None = scalar)
               validate_dataset=None,
               validate_guide=None,
               validation_dataset_size=5,
@@ -487,7 +554,8 @@ class BeamsearchHistoryAlgorithm(BeamsearchAlgorithm):
                   Default is 1, which keeps only the best candidate.
             Other args are the same as BeamsearchAlgorithm.train()
         """
-        self.total_samples = 0    
+        self.objective_config = objective_config
+        self.total_samples = 0
         self.min_score = kwargs.get('min_score', 0)
         print_color(f"Running BeamsearchHistoryAlgorithm with beam_width={beam_width}, max_depth={max_depth}, max_history_size={max_history_size}", 'blue')
 
