@@ -11,13 +11,13 @@
           },
           "spans": [
             {
-              "traceId": "3ae7ea202eac154107075932ff481972",
-              "spanId": "7745a14e175bc292",
-              "parentSpanId": "b98c98d84ec6fa9d",
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "56956ad90dea9623",
+              "parentSpanId": "f70e8c88a91dc995",
               "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770989616785265700,
-              "endTimeUnixNano": 1770989616785265700,
+              "startTimeUnixNano": 1771526767793730200,
+              "endTimeUnixNano": 1771526767793730200,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -46,24 +46,24 @@
                 {
                   "key": "gen_ai.output.preview",
                   "value": {
-                    "stringValue": "Research the topic. Analyze results."
+                    "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}}"
                   }
                 }
               ]
             },
             {
-              "traceId": "3ae7ea202eac154107075932ff481972",
-              "spanId": "b98c98d84ec6fa9d",
-              "parentSpanId": "23642d337478a6d7",
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "f70e8c88a91dc995",
+              "parentSpanId": "7d39dd1508a65685",
               "name": "planner",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770989616785265700,
-              "endTimeUnixNano": 1770989616785265700,
+              "startTimeUnixNano": 1771526767793730200,
+              "endTimeUnixNano": 1771526767793730200,
               "attributes": [
                 {
                   "key": "param.planner_prompt",
                   "value": {
-                    "stringValue": "Create a concise plan for: {query}"
+                    "stringValue": "Create a JSON plan for: {query}. Use web_researcher and synthesizer; include wikidata_researcher if IDs are requested."
                   }
                 },
                 {
@@ -81,19 +81,25 @@
                 {
                   "key": "inputs.gen_ai.prompt",
                   "value": {
-                    "stringValue": "Create a concise plan for: What is reinforcement learning?"
+                    "stringValue": "Create a JSON plan for: Summarize the causes and key events of the French Revolution.. Use web_researcher and synthesizer; include wikidata_researcher if IDs are requested."
+                  }
+                },
+                {
+                  "key": "inputs.user_query",
+                  "value": {
+                    "stringValue": "Summarize the causes and key events of the French Revolution."
                   }
                 }
               ]
             },
             {
-              "traceId": "3ae7ea202eac154107075932ff481972",
-              "spanId": "52cfc441f0c0f369",
-              "parentSpanId": "0ab2282b4c35af0f",
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "a6d90771cfa1706c",
+              "parentSpanId": "086b65165e7c54a3",
               "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770989616787538900,
-              "endTimeUnixNano": 1770989616788516700,
+              "startTimeUnixNano": 1771526767794329400,
+              "endTimeUnixNano": 1771526767794834800,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -122,24 +128,112 @@
                 {
                   "key": "gen_ai.output.preview",
                   "value": {
-                    "stringValue": "Based on the plan, here is a basic answer."
+                    "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'c\"}"
                   }
                 }
               ]
             },
             {
-              "traceId": "3ae7ea202eac154107075932ff481972",
-              "spanId": "0ab2282b4c35af0f",
-              "parentSpanId": "23642d337478a6d7",
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "086b65165e7c54a3",
+              "parentSpanId": "7d39dd1508a65685",
+              "name": "executor",
+              "kind": "UNSPECIFIED",
+              "startTimeUnixNano": 1771526767794329400,
+              "endTimeUnixNano": 1771526767794834800,
+              "attributes": [
+                {
+                  "key": "param.executor_prompt",
+                  "value": {
+                    "stringValue": "Given step {step} of plan: {plan_step} for query: {query}. Return JSON {goto,query}."
+                  }
+                },
+                {
+                  "key": "param.executor_prompt.trainable",
+                  "value": {
+                    "stringValue": "True"
+                  }
+                },
+                {
+                  "key": "gen_ai.model",
+                  "value": {
+                    "stringValue": "stub-llm"
+                  }
+                },
+                {
+                  "key": "inputs.gen_ai.prompt",
+                  "value": {
+                    "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events of the french revolu'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
+                  }
+                },
+                {
+                  "key": "inputs.step",
+                  "value": {
+                    "stringValue": "1"
+                  }
+                },
+                {
+                  "key": "inputs.user_query",
+                  "value": {
+                    "stringValue": "Summarize the causes and key events of the French Revolution."
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "c4deca5f8c05f5dd",
+              "parentSpanId": "b2ad20e21aedbd6f",
+              "name": "llm.chat.completion",
+              "kind": "UNSPECIFIED",
+              "startTimeUnixNano": 1771526767795369100,
+              "endTimeUnixNano": 1771526767795369100,
+              "attributes": [
+                {
+                  "key": "trace.temporal_ignore",
+                  "value": {
+                    "stringValue": "true"
+                  }
+                },
+                {
+                  "key": "gen_ai.operation.name",
+                  "value": {
+                    "stringValue": "chat"
+                  }
+                },
+                {
+                  "key": "gen_ai.provider.name",
+                  "value": {
+                    "stringValue": "stub"
+                  }
+                },
+                {
+                  "key": "gen_ai.request.model",
+                  "value": {
+                    "stringValue": "stub-llm"
+                  }
+                },
+                {
+                  "key": "gen_ai.output.preview",
+                  "value": {
+                    "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis, social inequality, and Enlightenment ideas. Key events include the Storming of the Bastille (July 14, 1789), the Declaration of the Rights of Man, the Reign of Terror, and Napoleon's rise to power."
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "b2ad20e21aedbd6f",
+              "parentSpanId": "7d39dd1508a65685",
               "name": "synthesizer",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770989616787538900,
-              "endTimeUnixNano": 1770989616788516700,
+              "startTimeUnixNano": 1771526767795369100,
+              "endTimeUnixNano": 1771526767795369100,
               "attributes": [
                 {
                   "key": "param.synthesizer_prompt",
                   "value": {
-                    "stringValue": "Synthesize an answer for: {query}\nPlan: {plan}"
+                    "stringValue": "Answer: {query}\nContext:\n{contexts}\nIf asked for IDs, include Wikidata QIDs."
                   }
                 },
                 {
@@ -157,19 +251,48 @@
                 {
                   "key": "inputs.gen_ai.prompt",
                   "value": {
-                    "stringValue": "Synthesize an answer for: What is reinforcement learning?\nPlan: Research the topic. Analyze results."
+                    "stringValue": "Answer: Summarize the causes and key events of the French Revolution.\nContext:\n\nIf asked for IDs, include Wikidata QIDs."
+                  }
+                },
+                {
+                  "key": "inputs.user_query",
+                  "value": {
+                    "stringValue": "Summarize the causes and key events of the French Revolution."
                   }
                 }
               ]
             },
             {
-              "traceId": "3ae7ea202eac154107075932ff481972",
-              "spanId": "23642d337478a6d7",
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "c4983190bc530580",
+              "parentSpanId": "7d39dd1508a65685",
+              "name": "evaluator",
+              "kind": "UNSPECIFIED",
+              "startTimeUnixNano": 1771526767795897900,
+              "endTimeUnixNano": 1771526767795897900,
+              "attributes": [
+                {
+                  "key": "eval.score",
+                  "value": {
+                    "stringValue": "0.35"
+                  }
+                },
+                {
+                  "key": "eval.reasons",
+                  "value": {
+                    "stringValue": "sufficient_detail"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
+              "spanId": "7d39dd1508a65685",
               "parentSpanId": "",
               "name": "m1-notebook.invoke",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1770989616779165600,
-              "endTimeUnixNano": 1770989616788516700,
+              "startTimeUnixNano": 1771526767792571300,
+              "endTimeUnixNano": 1771526767796435000,
               "attributes": [
                 {
                   "key": "langgraph.service",
@@ -180,19 +303,19 @@
                 {
                   "key": "langgraph.query",
                   "value": {
-                    "stringValue": "What is reinforcement learning?"
+                    "stringValue": "Summarize the causes and key events of the French Revolution."
                   }
                 },
                 {
                   "key": "eval.score",
                   "value": {
-                    "stringValue": "0.4"
+                    "stringValue": "0.7500000000000001"
                   }
                 },
                 {
                   "key": "eval.feedback",
                   "value": {
-                    "stringValue": "Structure: 0 steps, 148 chars, score=0.40"
+                    "stringValue": "plan_steps=2, score=0.75"
                   }
                 }
               ]

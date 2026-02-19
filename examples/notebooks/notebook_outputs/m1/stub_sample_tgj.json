@@ -6,24 +6,24 @@
       "service": "m1-notebook"
     },
     "otel_meta": {
-      "trace_id": "3ae7ea202eac154107075932ff481972"
+      "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f"
     },
     "nodes": {
-      "m1-notebook:7745a14e175bc292": {
+      "m1-notebook:56956ad90dea9623": {
         "kind": "msg",
         "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:b98c98d84ec6fa9d"
+          "parent": "m1-notebook:f70e8c88a91dc995"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "3ae7ea202eac154107075932ff481972",
-            "span_id": "7745a14e175bc292",
-            "parent_span_id": "b98c98d84ec6fa9d",
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "56956ad90dea9623",
+            "parent_span_id": "f70e8c88a91dc995",
             "service": "m1-notebook",
             "temporal_ignore": true
           }
@@ -32,21 +32,21 @@
       "m1-notebook:param_planner_prompt": {
         "kind": "parameter",
         "name": "planner_prompt",
-        "data": "Create a concise plan for: {query}",
+        "data": "Create a JSON plan for: {query}. Use web_researcher and synthesizer; include wikidata_researcher if IDs are requested.",
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "b98c98d84ec6fa9d"
+            "span_id": "f70e8c88a91dc995"
           }
         }
       },
-      "m1-notebook:b98c98d84ec6fa9d": {
+      "m1-notebook:f70e8c88a91dc995": {
         "kind": "msg",
         "name": "planner",
         "op": "llm_call",
         "inputs": {
-          "gen_ai.prompt": "Create a concise plan for: What is reinforcement learning?",
-          "parent": "m1-notebook:23642d337478a6d7",
+          "gen_ai.prompt": "Create a JSON plan for: Summarize the causes and key events of the French Revolution.. Use web_researcher and synthesizer; include wikidata_researcher if IDs are requested.",
+          "user_query": "m1-notebook:Summarize the causes and key events of the French Revolution.",
           "param_planner_prompt": "m1-notebook:param_planner_prompt"
         },
         "data": {
@@ -54,29 +54,84 @@
         },
         "info": {
           "otel": {
-            "trace_id": "3ae7ea202eac154107075932ff481972",
-            "span_id": "b98c98d84ec6fa9d",
-            "parent_span_id": "23642d337478a6d7",
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "f70e8c88a91dc995",
+            "parent_span_id": null,
             "service": "m1-notebook",
             "temporal_ignore": false
           }
         }
       },
-      "m1-notebook:52cfc441f0c0f369": {
+      "m1-notebook:a6d90771cfa1706c": {
         "kind": "msg",
         "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:0ab2282b4c35af0f"
+          "parent": "m1-notebook:086b65165e7c54a3"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "3ae7ea202eac154107075932ff481972",
-            "span_id": "52cfc441f0c0f369",
-            "parent_span_id": "0ab2282b4c35af0f",
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "a6d90771cfa1706c",
+            "parent_span_id": "086b65165e7c54a3",
+            "service": "m1-notebook",
+            "temporal_ignore": true
+          }
+        }
+      },
+      "m1-notebook:param_executor_prompt": {
+        "kind": "parameter",
+        "name": "executor_prompt",
+        "data": "Given step {step} of plan: {plan_step} for query: {query}. Return JSON {goto,query}.",
+        "trainable": true,
+        "info": {
+          "otel": {
+            "span_id": "086b65165e7c54a3"
+          }
+        }
+      },
+      "m1-notebook:086b65165e7c54a3": {
+        "kind": "msg",
+        "name": "executor",
+        "op": "llm_call",
+        "inputs": {
+          "gen_ai.prompt": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events of the french revolu'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}.",
+          "step": "m1-notebook:1",
+          "user_query": "m1-notebook:Summarize the causes and key events of the French Revolution.",
+          "parent": "m1-notebook:f70e8c88a91dc995",
+          "param_executor_prompt": "m1-notebook:param_executor_prompt"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "086b65165e7c54a3",
+            "parent_span_id": "f70e8c88a91dc995",
+            "service": "m1-notebook",
+            "temporal_ignore": false
+          }
+        }
+      },
+      "m1-notebook:c4deca5f8c05f5dd": {
+        "kind": "msg",
+        "name": "llm.chat.completion",
+        "op": "unspecified",
+        "inputs": {
+          "parent": "m1-notebook:b2ad20e21aedbd6f"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "c4deca5f8c05f5dd",
+            "parent_span_id": "b2ad20e21aedbd6f",
             "service": "m1-notebook",
             "temporal_ignore": true
           }
@@ -85,21 +140,22 @@
       "m1-notebook:param_synthesizer_prompt": {
         "kind": "parameter",
         "name": "synthesizer_prompt",
-        "data": "Synthesize an answer for: {query}\nPlan: {plan}",
+        "data": "Answer: {query}\nContext:\n{contexts}\nIf asked for IDs, include Wikidata QIDs.",
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "0ab2282b4c35af0f"
+            "span_id": "b2ad20e21aedbd6f"
           }
         }
       },
-      "m1-notebook:0ab2282b4c35af0f": {
+      "m1-notebook:b2ad20e21aedbd6f": {
         "kind": "msg",
         "name": "synthesizer",
         "op": "llm_call",
         "inputs": {
-          "gen_ai.prompt": "Synthesize an answer for: What is reinforcement learning?\nPlan: Research the topic. Analyze results.",
-          "parent": "m1-notebook:b98c98d84ec6fa9d",
+          "gen_ai.prompt": "Answer: Summarize the causes and key events of the French Revolution.\nContext:\n\nIf asked for IDs, include Wikidata QIDs.",
+          "user_query": "m1-notebook:Summarize the causes and key events of the French Revolution.",
+          "parent": "m1-notebook:086b65165e7c54a3",
           "param_synthesizer_prompt": "m1-notebook:param_synthesizer_prompt"
         },
         "data": {
@@ -107,9 +163,29 @@
         },
         "info": {
           "otel": {
-            "trace_id": "3ae7ea202eac154107075932ff481972",
-            "span_id": "0ab2282b4c35af0f",
-            "parent_span_id": "b98c98d84ec6fa9d",
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "b2ad20e21aedbd6f",
+            "parent_span_id": "086b65165e7c54a3",
+            "service": "m1-notebook",
+            "temporal_ignore": false
+          }
+        }
+      },
+      "m1-notebook:c4983190bc530580": {
+        "kind": "msg",
+        "name": "evaluator",
+        "op": "unspecified",
+        "inputs": {
+          "parent": "m1-notebook:b2ad20e21aedbd6f"
+        },
+        "data": {
+          "message_id": null
+        },
+        "info": {
+          "otel": {
+            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
+            "span_id": "c4983190bc530580",
+            "parent_span_id": "b2ad20e21aedbd6f",
             "service": "m1-notebook",
             "temporal_ignore": false
           }
