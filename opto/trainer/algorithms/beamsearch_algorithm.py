@@ -308,8 +308,10 @@ class BeamsearchAlgorithm(MinibatchAlgorithm):
                 print_color(f"Depth {depth}: Test score = {score:.4f}", 'cyan')
             
         # For API consistency with other algorithms
-        return metrics, final_test_score if final_test_score is not None else 0.0
-    
+        # Prefer test score when available; fall back to the validation score
+        # from the final select() call (not 0.0, which hides the real result).
+        return metrics, final_test_score if final_test_score is not None else final_validation_score
+
     def _sample_minibatch(self, dataset, batch_size):
         """Sample a minibatch from the dataset."""
         indices = np.random.choice(len(dataset['inputs']), min(batch_size, len(dataset['inputs'])), replace=False)
@@ -752,7 +754,9 @@ class BeamsearchHistoryAlgorithm(BeamsearchAlgorithm):
             for d, s in zip(metrics['test_depths'], metrics['test_scores']):
                 print_color(f"Depth {d}: Test score = {s:.4f}", 'cyan')
 
-        return metrics, final_test_score if final_test_score is not None else -np.inf
+        # Prefer test score when available; fall back to the validation score
+        # from the final select() call.
+        return metrics, final_test_score if final_test_score is not None else final_validation_score
 
     def expand(self,
                beam_params: Dict,
