@@ -1,15 +1,16 @@
 {
   "mode": "stub",
-  "baseline_score": 0.4000000000000001,
-  "best_score": 1.0,
+  "baseline_score": 0.7500000000000001,
+  "best_score": 0.9499999999999998,
   "best_iteration": 2,
   "score_history": [
-    0.4000000000000001,
-    0.4000000000000001,
-    1.0
+    0.7500000000000001,
+    0.7500000000000001,
+    0.9499999999999998
   ],
   "final_parameters": {
-    "planner_prompt": "OPTIMIZED: Create a thorough, step-by-step plan for: {query}",
-    "synthesizer_prompt": "Synthesize an answer for: {query}\nPlan: {plan}"
+    "planner_prompt": "Create a thorough, step-by-step JSON plan for: {query}. Use web_researcher, wikidata_researcher, synthesizer.",
+    "executor_prompt": "Given step {step} of plan: {plan_step} for query: {query}. Return JSON {goto,query}.",
+    "synthesizer_prompt": "Answer: {query}\nContext:\n{contexts}\nIf asked for IDs, include Wikidata QIDs."
   }
 }

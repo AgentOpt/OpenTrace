@@ -1,0 +1,552 @@
+--- a/opto/trace/io/otel_adapter.py
++++ b/opto/trace/io/otel_adapter.py
+@@ -149,6 +149,10 @@
+                     # prefer temporal parent for data-flow graph.
+                     if not psid or psid in root_span_ids:
+                         effective_psid = prev_span_id
++
++                # Avoid dangling TGJ parent refs to skipped root invocation spans
++                if effective_psid and effective_psid in root_span_ids:
++                    effective_psid = None
+ 
+                 if effective_psid and "parent" not in inputs:
+                     inputs["parent"] = f"{svc}:{effective_psid}"
+
+--- a/opto/trace/io/langgraph_otel_runtime.py
++++ b/opto/trace/io/langgraph_otel_runtime.py
+@@ -334,9 +334,20 @@
+                             getattr(self.llm, "model", "llm"),
+                         )
+ 
+-                        resp = self.llm(messages=messages, **llm_kwargs)
+-                        content = resp.choices[0].message.content
+-                        content = self._validate_content(content)
++                        try:
++                            resp = self.llm(messages=messages, **llm_kwargs)
++                            content = resp.choices[0].message.content
++                            content = self._validate_content(content)
++                        except LLMCallError as e:
++                            llm_sp.set_attribute("error", "true")
++                            llm_sp.set_attribute("error.type", "LLMCallError")
++                            llm_sp.set_attribute("error.message", str(e)[:500])
++                            raise
++                        except Exception as exc:
++                            llm_sp.set_attribute("error", "true")
++                            llm_sp.set_attribute("error.type", type(exc).__name__)
++                            llm_sp.set_attribute("error.message", str(exc)[:500])
++                            raise
+ 
+                         llm_sp.set_attribute(
+                             "gen_ai.output.preview", (content or "")[:500]
+@@ -345,10 +356,11 @@
+                     resp = self.llm(messages=messages, **llm_kwargs)
+                     content = resp.choices[0].message.content
+                     content = self._validate_content(content)
+-            except LLMCallError:
++            except LLMCallError as e:
+                 # Record the error on the span and re-raise
+                 sp.set_attribute("error", "true")
+                 sp.set_attribute("error.type", "LLMCallError")
++                sp.set_attribute("error.message", str(e)[:500])
+                 raise
+             except Exception as exc:
+                 # Unexpected provider error — record and raise as LLMCallError
+                 sp.set_attribute("error", "true")
+                 sp.set_attribute("error.type", type(exc).__name__)
++                sp.set_attribute("error.message", str(exc)[:500])
+                 raise LLMCallError(f"LLM provider call failed: {exc}") from exc
+ 
+             return content
+
+--- a/opto/trace/io/optimization.py
++++ b/opto/trace/io/optimization.py
+@@ -313,12 +313,17 @@
+ 
+     eval_fn = eval_fn or _default_eval_fn
+ 
++    # If caller didn't provide output_key, fall back to the graph's configured output_key.
++    if output_key is None:
++        output_key = getattr(graph, "output_key", None)
++
+     score_history: List[float] = []
+     all_runs: List[List[RunResult]] = []
+     best_score = float("-inf")
+     best_iteration = 0
+     best_updates: Dict[str, Any] = {}
+     best_parameters: Dict[str, Any] = _snapshot_parameters(effective_bindings)
++    last_applied_updates: Dict[str, Any] = {}
+ 
+     # -- lazy imports for Trace framework --
+     _ingest_tgj = None
+@@ -366,6 +371,7 @@
+     total_iters = iterations + 1  # baseline + N iterations
+ 
+     for iteration in range(total_iters):
+         is_baseline = iteration == 0
++        applied_updates_for_this_iter = dict(last_applied_updates)
+         label = "baseline" if is_baseline else f"iter_{iteration}"
+ 
+         runs: List[RunResult] = []
+@@ -504,6 +510,7 @@
+         if avg_score > best_score:
+             best_score = avg_score
+             best_iteration = iteration
+             best_parameters = _snapshot_parameters(effective_bindings)
++            best_updates = dict(applied_updates_for_this_iter)
+             marker = " * NEW BEST" if not is_baseline else ""
+             logger.info(
+                 "Iteration %d avg_score=%.4f%s", iteration, avg_score, marker
+@@ -621,7 +628,7 @@
+             if updates and apply_updates_flag:
+                 try:
+                     apply_updates(updates, effective_bindings, strict=False)
+-                    best_updates = dict(updates)
++                    last_applied_updates = dict(updates)
+                     logger.info("Applied updates: %s", sorted(updates.keys()))
+                 except Exception as exc:
+                     logger.warning("apply_updates failed: %s", exc, exc_info=True)
+
+--- a/examples/notebooks/01_m1_instrument_and_optimize.ipynb
++++ b/examples/notebooks/01_m1_instrument_and_optimize.ipynb
+@@ -8,7 +8,7 @@
+       "source": [
+         "# M1: Instrument & Optimize a LangGraph Agent\n",
+         "\n",
+-        "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mjehanzaib999/NewTrace/blob/feature/M1-instrument-and-optimize/examples/notebooks/01_m1_instrument_and_optimize.ipynb)\n",
++        "[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/OpenTrace/blob/main/examples/notebooks/01_m1_instrument_and_optimize.ipynb)\n",
+         "\n",
+         "This notebook demonstrates the **M1 core value proposition**: drop-in OTEL\n",
+         "instrumentation and end-to-end optimization for any LangGraph agent.\n",
+@@ -93,23 +93,29 @@
+         "!pip install -q langgraph>=1.0.0 opentelemetry-api>=1.38.0 opentelemetry-sdk>=1.38.0 \\\n",
+         "    python-dotenv>=1.0.0 requests>=2.28.0 typing_extensions>=4.0.0 graphviz>=0.20.1\n",
+         "\n",
+-        "# Install Trace (the project itself) in editable mode\n",
+-        "# If running on Colab, install from the repo\n",
++        "# Install OpenTrace (the project itself) in editable mode\n",
++        "# If running on Colab, install from the repo and checkout OPENTRACE_REF\n",
+         "import os\n",
+         "try:\n",
+-        "    import google.colab\n",
++        "    import google.colab  # noqa: F401\n",
+         "    IN_COLAB = True\n",
+-        "    if not os.path.exists(\"/content/NewTrace\"):\n",
+-        "        !git clone --branch feature/M1-instrument-and-optimize \\\n",
+-        "            https://github.com/mjehanzaib999/NewTrace.git /content/NewTrace\n",
+-        "    !pip install -q -e /content/NewTrace\n",
++        "\n",
++        "    OPENTRACE_REPO = \"https://github.com/AgentOpt/OpenTrace.git\"\n",
++        "    OPENTRACE_REF = os.environ.get(\"OPENTRACE_REF\", \"main\")\n",
++        "\n",
++        "    if not os.path.exists(\"/content/OpenTrace\"):\n",
++        "        !git clone {OPENTRACE_REPO} /content/OpenTrace\n",
++        "    !git -C /content/OpenTrace checkout {OPENTRACE_REF}\n",
++        "    !pip install -q -e /content/OpenTrace\n",
++        "\n",
++        "    print(f\"[INFO] OpenTrace ref: {OPENTRACE_REF}\")\n",
+         "except ImportError:\n",
+         "    IN_COLAB = False\n",
+         "    # Assume local dev: project already installed via pip install -e .\n",
+@@ -158,15 +164,18 @@
+         "    import google.colab\n",
+         "    from google.colab import drive\n",
+         "    drive.mount(\"/content/drive\", force_remount=False)\n",
+-        "    base = \"/content/drive/MyDrive/NewTrace_runs/M1\"\n",
++        "\n",
++        "    OPENTRACE_REF = os.environ.get(\"OPENTRACE_REF\", \"main\")\n",
++        "    base = f\"/content/drive/MyDrive/OpenTrace_runs/M1/{OPENTRACE_REF}\"\n",
+         "    os.makedirs(base, exist_ok=True)\n",
++        "\n",
+         "    RUN_FOLDER = os.path.join(base, f\"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}\")\n",
+         "    os.makedirs(RUN_FOLDER, exist_ok=True)\n",
+-        "    print(f\"Run folder (Google Drive): {RUN_FOLDER}\")\n",
++        "    print(f\"Run folder (Google Drive, OpenTrace): {RUN_FOLDER}\")\n",
+         "except Exception:\n",
+         "    RUN_FOLDER = os.path.abspath(os.path.join(os.getcwd(), \"notebook_outputs\", \"m1\"))\n",
+         "    os.makedirs(RUN_FOLDER, exist_ok=True)\n",
+@@ -306,68 +315,255 @@
+       ],
+       "source": [
+         "from typing import Any, Dict, List, Optional\n",
+-        "from typing_extensions import TypedDict\n",
++        "from typing_extensions import TypedDict, Literal\n",
+         "from langgraph.graph import StateGraph, START, END\n",
+-        "\n",
++        "from langgraph.types import Command\n",
++        "\n",
++        "# Keep the notebook aligned with JSON_OTEL_trace_optim_demo_LANGGRAPH.py\n",
++        "DEMO_QUERIES = [\n",
++        "    \"Summarize the causes and key events of the French Revolution.\",\n",
++        "    \"Give 3 factual relationships about Tesla, Inc. with entity IDs.\",\n",
++        "    \"What is the Wikidata ID for CRISPR and list 2 related entities?\",\n",
++        "]\n",
+         "\n",
+         "class AgentState(TypedDict, total=False):\n",
+         "    query: str\n",
+-        "    plan: str\n",
+-        "    answer: str\n",
++        "    plan: Dict[str, Any]\n",
++        "    current_step: int\n",
++        "    contexts: List[str]\n",
++        "    agent_query: str\n",
++        "    final_answer: str\n",
++        "    eval_score: float\n",
++        "    eval_feedback: str\n",
+         "\n",
++        "def wikipedia_search(query: str) -> str:\n",
++        "    \"\"\"Wikipedia tool. Falls back gracefully if wikipedia package/network is unavailable.\"\"\"\n",
++        "    try:\n",
++        "        import wikipedia\n",
++        "        wikipedia.set_lang(\"en\")\n",
++        "        hits = wikipedia.search(query, results=2)\n",
++        "        out = []\n",
++        "        for h in hits:\n",
++        "            try:\n",
++        "                s = wikipedia.summary(h, sentences=3, auto_suggest=False, redirect=True)\n",
++        "                out.append(f\"### {h}\\n{s}\")\n",
++        "            except Exception:\n",
++        "                continue\n",
++        "        return \"\\n\\n\".join(out) or \"No Wikipedia results.\"\n",
++        "    except Exception:\n",
++        "        return \"Wikipedia search unavailable.\"\n",
++        "\n",
++        "def wikidata_search(query: str) -> str:\n",
++        "    \"\"\"Wikidata search tool (wbsearchentities).\"\"\"\n",
++        "    import requests\n",
++        "    try:\n",
++        "        r = requests.get(\n",
++        "            \"https://www.wikidata.org/w/api.php\",\n",
++        "            params={\n",
++        "                \"action\": \"wbsearchentities\",\n",
++        "                \"format\": \"json\",\n",
++        "                \"language\": \"en\",\n",
++        "                \"search\": query[:100],\n",
++        "                \"limit\": 5,\n",
++        "            },\n",
++        "            timeout=10,\n",
++        "        )\n",
++        "        r.raise_for_status()\n",
++        "        data = r.json()\n",
++        "        results = [\n",
++        "            f\"- {item.get('label','')}: {item.get('description','')} ({item.get('id','')})\"\n",
++        "            for item in data.get(\"search\", [])\n",
++        "        ]\n",
++        "        return \"\\n\".join(results) if results else \"No Wikidata entities found.\"\n",
++        "    except Exception:\n",
++        "        return f\"Wikidata search unavailable. Query: {query[:50]}...\"\n",
+         "\n",
+-        "def build_graph(tracing_llm, templates: Dict[str, str]) -> StateGraph:\n",
+-        "    \"\"\"Build a 2-node LangGraph (planner → synthesizer).\"\"\"\n",
++        "def build_graph(tracing_llm, templates: Dict[str, str]):\n",
++        "    \"\"\"\n",
++        "    Build a multi-node LangGraph aligned with JSON_OTEL_trace_optim_demo_LANGGRAPH.py:\n",
++        "    planner -> executor -> (web_researcher|wikidata_researcher|synthesizer) -> evaluator\n",
++        "    \"\"\"\n",
+         "\n",
+-        "    def planner_node(state: AgentState) -> Dict[str, Any]:\n",
+-        "        template = templates.get(\n",
+-        "            \"planner_prompt\",\n",
+-        "            \"Create a concise plan for: {query}\",\n",
+-        "        )\n",
+-        "        prompt = template.replace(\"{query}\", state.get(\"query\", \"\"))\n",
+-        "        response = tracing_llm.node_call(\n",
+-        "            span_name=\"planner\",\n",
+-        "            template_name=\"planner_prompt\",\n",
+-        "            template=template,\n",
+-        "            optimizable_key=\"planner\",\n",
+-        "            messages=[\n",
+-        "                {\"role\": \"system\", \"content\": \"You are a planning agent. Output a 3-step plan.\"},\n",
+-        "                {\"role\": \"user\", \"content\": prompt},\n",
+-        "            ],\n",
+-        "        )\n",
+-        "        return {\"plan\": response}\n",
++        "    def planner_node(state: AgentState) -> Command[Literal[\"executor\"]]:\n",
++        "        template = templates.get(\n",
++        "            \"planner_prompt\",\n",
++        "            \"Return JSON plan with steps for query: {query}. Use agents: web_researcher, wikidata_researcher, synthesizer.\",\n",
++        "        )\n",
++        "        prompt = template.replace(\"{query}\", state.get(\"query\", \"\"))\n",
++        "\n",
++        "        raw = tracing_llm.node_call(\n",
++        "            span_name=\"planner\",\n",
++        "            template_name=\"planner_prompt\",\n",
++        "            template=template,\n",
++        "            optimizable_key=\"planner\",\n",
++        "            user_query=state.get(\"query\", \"\"),\n",
++        "            extra_inputs={\"user_query\": state.get(\"query\", \"\")},\n",
++        "            messages=[\n",
++        "                {\"role\": \"system\", \"content\": \"Return JSON only. Keys: 1,2,... each step has {agent,action,goal,query}.\"},\n",
++        "                {\"role\": \"user\", \"content\": prompt},\n",
++        "            ],\n",
++        "            max_tokens=400,\n",
++        "            temperature=0,\n",
++        "        )\n",
++        "        plan: Dict[str, Any]\n",
++        "        try:\n",
++        "            import json\n",
++        "            plan = json.loads(raw)\n",
++        "        except Exception:\n",
++        "            q = (state.get(\"query\", \"\") or \"\").lower()\n",
++        "            plan = {\n",
++        "                \"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": state.get(\"query\", \"\")},\n",
++        "                \"2\": {\"agent\": \"wikidata_researcher\" if (\"wikidata\" in q or \"entity id\" in q or \"id\" in q) else \"synthesizer\",\n",
++        "                      \"action\": \"search\" if (\"wikidata\" in q or \"entity id\" in q or \"id\" in q) else \"answer\",\n",
++        "                      \"goal\": \"entities or final answer\", \"query\": state.get(\"query\", \"\")},\n",
++        "                \"3\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": state.get(\"query\", \"\")},\n",
++        "            }\n",
++        "\n",
++        "        return Command(update={\"plan\": plan, \"current_step\": 1, \"contexts\": []}, goto=\"executor\")\n",
+         "\n",
+-        "    def synthesizer_node(state: AgentState) -> Dict[str, Any]:\n",
+-        "        template = templates.get(\n",
+-        "            \"synthesizer_prompt\",\n",
+-        "            \"Synthesize an answer for: {query}\\nPlan: {plan}\",\n",
+-        "        )\n",
+-        "        prompt = (\n",
+-        "            template\n",
+-        "            .replace(\"{query}\", state.get(\"query\", \"\"))\n",
+-        "            .replace(\"{plan}\", state.get(\"plan\", \"\"))\n",
+-        "        )\n",
+-        "        response = tracing_llm.node_call(\n",
+-        "            span_name=\"synthesizer\",\n",
+-        "            template_name=\"synthesizer_prompt\",\n",
+-        "            template=template,\n",
+-        "            optimizable_key=\"synthesizer\",\n",
+-        "            messages=[\n",
+-        "                {\"role\": \"system\", \"content\": \"You are a synthesis agent. Give a concise answer.\"},\n",
+-        "                {\"role\": \"user\", \"content\": prompt},\n",
+-        "            ],\n",
+-        "        )\n",
+-        "        return {\"answer\": response}\n",
++        "    def executor_node(state: AgentState) -> Command[Literal[\"web_researcher\", \"wikidata_researcher\", \"synthesizer\"]]:\n",
++        "        step = int(state.get(\"current_step\", 1) or 1)\n",
++        "        plan = state.get(\"plan\", {}) or {}\n",
++        "        plan_step = plan.get(str(step), {})\n",
++        "        if not plan_step:\n",
++        "            return Command(update={}, goto=\"synthesizer\")\n",
++        "\n",
++        "        template = templates.get(\n",
++        "            \"executor_prompt\",\n",
++        "            \"Given step {step} of plan: {plan_step}\\nFor query: {query}\\nReturn JSON: {goto,query}. goto in [web_researcher,wikidata_researcher,synthesizer].\",\n",
++        "        )\n",
++        "        prompt = (\n",
++        "            template.replace(\"{step}\", str(step))\n",
++        "            .replace(\"{plan_step}\", str(plan_step))\n",
++        "            .replace(\"{query}\", state.get(\"query\", \"\"))\n",
++        "        )\n",
++        "\n",
++        "        raw = tracing_llm.node_call(\n",
++        "            span_name=\"executor\",\n",
++        "            template_name=\"executor_prompt\",\n",
++        "            template=template,\n",
++        "            optimizable_key=\"executor\",\n",
++        "            user_query=state.get(\"query\", \"\"),\n",
++        "            extra_inputs={\"step\": str(step), \"user_query\": state.get(\"query\", \"\")},\n",
++        "            messages=[\n",
++        "                {\"role\": \"system\", \"content\": \"Return JSON only with keys goto and query.\"},\n",
++        "                {\"role\": \"user\", \"content\": prompt},\n",
++        "            ],\n",
++        "            max_tokens=200,\n",
++        "            temperature=0,\n",
++        "        )\n",
++        "\n",
++        "        goto = str(plan_step.get(\"agent\", \"synthesizer\"))\n",
++        "        q2 = str(plan_step.get(\"query\", state.get(\"query\", \"\")))\n",
++        "        try:\n",
++        "            import json\n",
++        "            d = json.loads(raw)\n",
++        "            goto = str(d.get(\"goto\", goto))\n",
++        "            q2 = str(d.get(\"query\", q2))\n",
++        "        except Exception:\n",
++        "            pass\n",
++        "\n",
++        "        if goto not in (\"web_researcher\", \"wikidata_researcher\", \"synthesizer\"):\n",
++        "            goto = \"synthesizer\"\n",
++        "\n",
++        "        return Command(update={\"agent_query\": q2}, goto=goto)\n",
++        "\n",
++        "    def web_researcher_node(state: AgentState) -> Command[Literal[\"executor\"]]:\n",
++        "        q = state.get(\"agent_query\", state.get(\"query\", \"\"))\n",
++        "        with tracing_llm.tracer.start_as_current_span(\"web_researcher\") as sp:\n",
++        "            sp.set_attribute(\"inputs.user_query\", state.get(\"query\", \"\"))\n",
++        "            sp.set_attribute(\"inputs.agent_query\", q)\n",
++        "            ctx = wikipedia_search(q)\n",
++        "            sp.set_attribute(\"outputs.context.preview\", (ctx or \"\")[:500])\n",
++        "        contexts = list(state.get(\"contexts\", []) or [])\n",
++        "        contexts.append(ctx)\n",
++        "        step = int(state.get(\"current_step\", 1) or 1) + 1\n",
++        "        return Command(update={\"contexts\": contexts, \"current_step\": step}, goto=\"executor\")\n",
++        "\n",
++        "    def wikidata_researcher_node(state: AgentState) -> Command[Literal[\"executor\"]]:\n",
++        "        q = state.get(\"agent_query\", state.get(\"query\", \"\"))\n",
++        "        with tracing_llm.tracer.start_as_current_span(\"wikidata_researcher\") as sp:\n",
++        "            sp.set_attribute(\"inputs.user_query\", state.get(\"query\", \"\"))\n",
++        "            sp.set_attribute(\"inputs.agent_query\", q)\n",
++        "            ctx = wikidata_search(q)\n",
++        "            sp.set_attribute(\"outputs.context.preview\", (ctx or \"\")[:500])\n",
++        "        contexts = list(state.get(\"contexts\", []) or [])\n",
++        "        contexts.append(ctx)\n",
++        "        step = int(state.get(\"current_step\", 1) or 1) + 1\n",
++        "        return Command(update={\"contexts\": contexts, \"current_step\": step}, goto=\"executor\")\n",
++        "\n",
++        "    def synthesizer_node(state: AgentState) -> Command[Literal[\"evaluator\"]]:\n",
++        "        template = templates.get(\n",
++        "            \"synthesizer_prompt\",\n",
++        "            \"Answer the query: {query}\\nContext:\\n{contexts}\\nIf asked for IDs, include them. Be factual.\",\n",
++        "        )\n",
++        "        contexts = \"\\n\\n\".join(state.get(\"contexts\", []) or [])\n",
++        "        prompt = template.replace(\"{query}\", state.get(\"query\", \"\")).replace(\"{contexts}\", contexts[:4000])\n",
++        "\n",
++        "        ans = tracing_llm.node_call(\n",
++        "            span_name=\"synthesizer\",\n",
++        "            template_name=\"synthesizer_prompt\",\n",
++        "            template=template,\n",
++        "            optimizable_key=\"synthesizer\",\n",
++        "            user_query=state.get(\"query\", \"\"),\n",
++        "            extra_inputs={\"user_query\": state.get(\"query\", \"\")},\n",
++        "            messages=[\n",
++        "                {\"role\": \"system\", \"content\": \"You are a careful assistant.\"},\n",
++        "                {\"role\": \"user\", \"content\": prompt},\n",
++        "            ],\n",
++        "            max_tokens=500,\n",
++        "            temperature=0,\n",
++        "        )\n",
++        "        return Command(update={\"final_answer\": ans}, goto=\"evaluator\")\n",
++        "\n",
++        "    def evaluator_node(state: AgentState) -> Command[Literal[\"__end__\"]]:\n",
++        "        import re\n",
++        "        q = (state.get(\"query\", \"\") or \"\").lower()\n",
++        "        ans = (state.get(\"final_answer\", \"\") or \"\")\n",
++        "        ctx = \"\\n\".join(state.get(\"contexts\", []) or \"\")\n",
++        "        wants_ids = (\"wikidata\" in q) or (\"entity id\" in q) or (\"id\" in q and \"tesla\" in q)\n",
++        "        has_qid = bool(re.search(r\"\\bQ\\d{2,}\\b\", ans))\n",
++        "        uses_ctx = len(ctx.strip()) > 0\n",
++        "        score = 0.25\n",
++        "        reasons = []\n",
++        "        if uses_ctx:\n",
++        "            score += 0.25\n",
++        "            reasons.append(\"uses_context\")\n",
++        "        if wants_ids and has_qid:\n",
++        "            score += 0.35\n",
++        "            reasons.append(\"has_qids\")\n",
++        "        if \"french revolution\" in q and len(ans) > 200:\n",
++        "            score += 0.10\n",
++        "            reasons.append(\"sufficient_detail\")\n",
++        "        score = min(score, 0.95)\n",
++        "        feedback = {\"score\": score, \"reasons\": reasons}\n",
++        "        with tracing_llm.tracer.start_as_current_span(\"evaluator\") as sp:\n",
++        "            sp.set_attribute(\"eval.score\", str(score))\n",
++        "            sp.set_attribute(\"eval.reasons\", \",\".join(reasons))\n",
++        "        return Command(update={\"eval_score\": score, \"eval_feedback\": str(feedback)}, goto=END)\n",
+         "\n",
+-        "    graph = StateGraph(AgentState)\n",
+-        "    graph.add_node(\"planner\", planner_node)\n",
+-        "    graph.add_node(\"synthesizer\", synthesizer_node)\n",
+-        "    graph.add_edge(START, \"plann\n",
++        "    workflow = StateGraph(AgentState)\n",
++        "    workflow.add_node(\"planner\", planner_node)\n",
++        "    workflow.add_node(\"executor\", executor_node)\n",
++        "    workflow.add_node(\"web_researcher\", web_researcher_node)\n",
++        "    workflow.add_node(\"wikidata_researcher\", wikidata_researcher_node)\n",
++        "    workflow.add_node(\"synthesizer\", synthesizer_node)\n",
++        "    workflow.add_node(\"evaluator\", evaluator_node)\n",
++        "\n",
++        "    workflow.add_edge(START, \"planner\")\n",
++        "    workflow.add_edge(\"synthesizer\", \"evaluator\")\n",
++        "\n",
++        "    return workflow.compile()\n",
+         "\n"
+       ]
+     },
+@@ -474,17 +678,19 @@
+         "from opto.trace.io import instrument_graph, apply_updates\n",
+         "\n",
+         "INITIAL_TEMPLATES = {\n",
+-        "    \"planner_prompt\":      \"Create a thorough, step-by-step JSON plan for: {query}. Use web_researcher, wikidata_researcher, synthesizer.\",\n",
++        "    \"planner_prompt\":      \"Create a JSON plan for: {query}. Use web_researcher and synthesizer; include wikidata_researcher if IDs are requested.\",\n",
+         "    \"executor_prompt\":     \"Given step {step} of plan: {plan_step} for query: {query}. Return JSON {goto,query}.\",\n",
+         "    \"synthesizer_prompt\":  \"Answer: {query}\\nContext:\\n{contexts}\\nIf asked for IDs, include Wikidata QIDs.\",\n",
+         "}\n",
+         "\n",
+         "ig = instrument_graph(\n",
+         "    graph=None,\n",
+         "    service_name=\"m1-notebook\",\n",
+-        "    trainable_keys={\"planner\", \"executor\", \"synthesizer\"},\n",
++        "    trainable_keys={\"planner\", \"executor\", \"synthesizer\"},\n",
+         "    llm=StubLLM(),\n",
+         "    initial_templates=INITIAL_TEMPLATES,\n",
+         "    emit_genai_child_spans=True,\n",
+@@ -768,20 +974,20 @@
+         "# ---- Eval_fn: prefer evaluator score produced by the graph; fallback to structure scoring ----\n",
+         "def stub_eval_fn(payload):\n",
+         "    result = payload.get(\"result\") or {}\n",
+-        "    ans = str(payload.get(\"answer\", \"\") or \"\")\n",
++        "    ans = str(payload.get(\"answer\", \"\") or \"\")\n",
+         "    if ans.strip().startswith(\"[ERROR]\") or not ans.strip():\n",
+         "        return EvalResult(score=0.0, feedback=\"LLM failure/empty answer\")\n",
+         "\n",
+-        "    if isinstance(result, dict) and \"eval_score\" in result:\n",
+-        "        try:\n",
+-        "            s = float(result.get(\"eval_score\") or 0.0)\n",
+-        "            return EvalResult(score=s, feedback=str(result.get(\"eval_feedback\",\"\"))[:500])\n",
+-        "        except Exception:\n",
+-        "            pass\n",
+-        "\n",
+-        "    q = str(payload.get(\"query\",\"\") or \"\").lower()\n",
+-        "    wants_ids = (\"wikidata\" in q) or (\"entity id\" in q) or (\"tesla\" in q and \"id\" in q)\n",
+-        "    has_qid = (\"q\" in ans.lower()) and any(ch.isdigit() for ch in ans)\n",
+-        "    score = 0.25 + (0.45 if wants_ids and has_qid else 0.0) + min(len(ans)/800.0, 0.25)\n",
+-        "    score = min(score, 0.95)\n",
+-        "    return EvalResult(score=score, feedback=f\"fallback score={score:.2f}\")\n",
++        "    plan = {}\n",
++        "    if isinstance(result, dict):\n",
++        "        plan = result.get(\"plan\", {}) or {}\n",
++        "    plan_steps = len(list(plan.keys())) if isinstance(plan, dict) else 0\n",
++        "\n",
++        "    # Score: base + reward plan richness (up to 3 steps) + small reward for length\n",
++        "    score = 0.2 + 0.2 * min(plan_steps, 3) + min(len(ans) / 1200.0, 0.15)\n",
++        "    score = min(score, 0.95)\n",
++        "    return EvalResult(score=score, feedback=f\"plan_steps={plan_steps}, score={score:.2f}\")\n",
+         "\n",
+         "print(\"Mock optimizer and eval_fn ready.\")\n",
+         "\n"
+       ]
+     },
+@@ -903,18 +1109,24 @@
+         "        if resp.status_code != 200:\n",
+         "            raise RuntimeError(f\"OpenRouter HTTP {resp.status_code}: {resp.text[:1000]}\")\n",
+         "        data = resp.json()\n",
+         "        return self._wrap(data)\n",
+@@ -1027,6 +1239,10 @@
+         "    live_ig = instrument_graph(\n",
+         "        graph=None,\n",
+         "        service_name=\"m1-live\",\n",
+         "        trainable_keys={\"planner\", \"executor\", \"synthesizer\"},\n",
+         "        llm=live_llm,\n",
+         "        initial_templates=live_templates,\n",
+         "        emit_genai_child_spans=True,\n",
++        "        provider_name=\"openrouter\",\n",
++        "        llm_span_name=\"openrouter.chat.completion\",\n",
+         "    )\n",
+@@ -1054,6 +1270,18 @@
+         "    if LIVE_OK:\n",
+         "        live_otlp = live_ig.session.flush_otlp(clear=True)\n",
+         "        live_spans = live_otlp[\"resourceSpans\"][0][\"scopeSpans\"][0][\"spans\"]\n",
+         "        trace_ids = {sp.get(\"traceId\") for sp in live_spans}\n",
+         "        has_root = any(str(sp.get(\"name\",\"\")) .endswith(\".invoke\") for sp in live_spans)\n",
+         "        print(f\"\\nSpans captured: {len(live_spans)}  unique_trace_ids={len(trace_ids)}  has_root_invoke={has_root}\")\n",
+         "        if len(trace_ids) != 1 or not has_root:\n",
+         "            raise RuntimeError(\"Trace invariants failed: expected single traceId and root *.invoke span.\")\n",
+         "\n",
+         "        print(\"\\n[OK] Live LLM trace validated (HTTP 200 + non-empty answer + trace invariants).\")\n"
+       ]
+     }
+   ],
+   "metadata": {
+     "language_info": {
+       "name": "python"
+     }
+   },
+   "nbformat": 4,
+   "nbformat_minor": 5
+ }
