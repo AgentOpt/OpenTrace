@@ -2,7 +2,7 @@
   {
     "iteration": "baseline",
     "query_index": 0,
-    "score": 0.7500000000000001,
+    "score": 0.4148,
     "otlp": {
       "resourceSpans": [
         {
@@ -16,13 +16,13 @@
               },
               "spans": [
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "56956ad90dea9623",
-                  "parentSpanId": "f70e8c88a91dc995",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "e1efcfe7e9da6462",
+                  "parentSpanId": "8113398fe044d1ab",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767793730200,
-                  "endTimeUnixNano": 1771526767793730200,
+                  "startTimeUnixNano": 1771612601471565700,
+                  "endTimeUnixNano": 1771612601472567200,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -51,19 +51,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}}"
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events \"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events \"}}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "f70e8c88a91dc995",
-                  "parentSpanId": "7d39dd1508a65685",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "8113398fe044d1ab",
+                  "parentSpanId": "4a3ae931f962b0f8",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767793730200,
-                  "endTimeUnixNano": 1771526767793730200,
+                  "startTimeUnixNano": 1771612601471565700,
+                  "endTimeUnixNano": 1771612601472567200,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -98,13 +98,13 @@
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "a6d90771cfa1706c",
-                  "parentSpanId": "086b65165e7c54a3",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "3209c782053affc2",
+                  "parentSpanId": "c49ccb0aef325d8a",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767794329400,
-                  "endTimeUnixNano": 1771526767794834800,
+                  "startTimeUnixNano": 1771612601473566600,
+                  "endTimeUnixNano": 1771612601474564800,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -139,13 +139,13 @@
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "086b65165e7c54a3",
-                  "parentSpanId": "7d39dd1508a65685",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "c49ccb0aef325d8a",
+                  "parentSpanId": "4a3ae931f962b0f8",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767794329400,
-                  "endTimeUnixNano": 1771526767794834800,
+                  "startTimeUnixNano": 1771612601473566600,
+                  "endTimeUnixNano": 1771612601474564800,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -168,7 +168,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events of the french revolu'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events '} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -186,13 +186,13 @@
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "c4deca5f8c05f5dd",
-                  "parentSpanId": "b2ad20e21aedbd6f",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "4b335139744b73ea",
+                  "parentSpanId": "2f661e23ec36ff97",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767795369100,
-                  "endTimeUnixNano": 1771526767795369100,
+                  "startTimeUnixNano": 1771612601475240400,
+                  "endTimeUnixNano": 1771612601475240400,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -221,19 +221,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis, social inequality, and Enlightenment ideas. Key events include the Storming of the Bastille (July 14, 1789), the Declaration of the Rights of Man, the Reign of Terror, and Napoleon's rise to power."
+                        "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis and social inequality. Key events include the Storming of the Bastille and Napoleon's rise."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "b2ad20e21aedbd6f",
-                  "parentSpanId": "7d39dd1508a65685",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "2f661e23ec36ff97",
+                  "parentSpanId": "4a3ae931f962b0f8",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767795369100,
-                  "endTimeUnixNano": 1771526767795369100,
+                  "startTimeUnixNano": 1771612601475240400,
+                  "endTimeUnixNano": 1771612601475240400,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -268,36 +268,36 @@
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "c4983190bc530580",
-                  "parentSpanId": "7d39dd1508a65685",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "5e63df011e9d76b4",
+                  "parentSpanId": "4a3ae931f962b0f8",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767795897900,
-                  "endTimeUnixNano": 1771526767795897900,
+                  "startTimeUnixNano": 1771612601476754800,
+                  "endTimeUnixNano": 1771612601476754800,
                   "attributes": [
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.35"
+                        "stringValue": "0.25"
                       }
                     },
                     {
                       "key": "eval.reasons",
                       "value": {
-                        "stringValue": "sufficient_detail"
+                        "stringValue": ""
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-                  "spanId": "7d39dd1508a65685",
+                  "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+                  "spanId": "4a3ae931f962b0f8",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767792571300,
-                  "endTimeUnixNano": 1771526767796435000,
+                  "startTimeUnixNano": 1771612601469565800,
+                  "endTimeUnixNano": 1771612601478286200,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -314,13 +314,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.7500000000000001"
+                        "stringValue": "0.4148"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=2, score=0.75"
+                        "stringValue": "plan_steps=2, len=153, score=0.4148"
                       }
                     }
                   ]
@@ -335,7 +335,7 @@
   {
     "iteration": "baseline",
     "query_index": 1,
-    "score": 0.7500000000000001,
+    "score": 0.528,
     "otlp": {
       "resourceSpans": [
         {
@@ -349,13 +349,13 @@
               },
               "spans": [
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "d007d6bbf13460ed",
-                  "parentSpanId": "ce6b1697d0dfd790",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "a40dfec80ee2e73b",
+                  "parentSpanId": "f2aa46fc8468c048",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767798454700,
-                  "endTimeUnixNano": 1771526767799451600,
+                  "startTimeUnixNano": 1771612601481306000,
+                  "endTimeUnixNano": 1771612601481306000,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -384,19 +384,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: give 3 factual relationships about tesla, inc. with enti\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: give 3 factual relationships about tesla, inc. with enti\"}}"
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: give 3 factual relationships about t\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: give 3 factual relationships about t\"}}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "ce6b1697d0dfd790",
-                  "parentSpanId": "8b82bd960cc53ee6",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "f2aa46fc8468c048",
+                  "parentSpanId": "cfb57f9c574ea849",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767798454700,
-                  "endTimeUnixNano": 1771526767799451600,
+                  "startTimeUnixNano": 1771612601481306000,
+                  "endTimeUnixNano": 1771612601481306000,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -431,13 +431,13 @@
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "9230344f240fd948",
-                  "parentSpanId": "c9683e3d38444ce4",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "adf2efde5a46ffca",
+                  "parentSpanId": "6395e48ac655ba57",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767799967300,
-                  "endTimeUnixNano": 1771526767799967300,
+                  "startTimeUnixNano": 1771612601482299200,
+                  "endTimeUnixNano": 1771612601483301300,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -472,13 +472,13 @@
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "c9683e3d38444ce4",
-                  "parentSpanId": "8b82bd960cc53ee6",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "6395e48ac655ba57",
+                  "parentSpanId": "cfb57f9c574ea849",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767799967300,
-                  "endTimeUnixNano": 1771526767799967300,
+                  "startTimeUnixNano": 1771612601482299200,
+                  "endTimeUnixNano": 1771612601483301300,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -501,7 +501,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: give 3 factual relationships about tesla, inc. with enti'} for query: Give 3 factual relationships about Tesla, Inc. with entity IDs.. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: give 3 factual relationships about t'} for query: Give 3 factual relationships about Tesla, Inc. with entity IDs.. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -519,13 +519,13 @@
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "269b285c66651742",
-                  "parentSpanId": "73c5769614aa1a1c",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "76848eaba17a43c7",
+                  "parentSpanId": "bc904234a9d3d6e8",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767799967300,
-                  "endTimeUnixNano": 1771526767799967300,
+                  "startTimeUnixNano": 1771612601483301300,
+                  "endTimeUnixNano": 1771612601483301300,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -554,19 +554,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "Tesla, Inc. (Q478214) is an American electric vehicle manufacturer. Key relationships: 1) Founded by Elon Musk (Q317521). 2) Headquartered in Austin, Texas (Q16559). 3) Produces the Model S, Model 3, Model X, and Model Y vehicles."
+                        "stringValue": "Tesla, Inc. (Q478214) was founded by Elon Musk (Q317521). It is headquartered in Austin, Texas (Q16559)."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "73c5769614aa1a1c",
-                  "parentSpanId": "8b82bd960cc53ee6",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "bc904234a9d3d6e8",
+                  "parentSpanId": "cfb57f9c574ea849",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767799967300,
-                  "endTimeUnixNano": 1771526767799967300,
+                  "startTimeUnixNano": 1771612601483301300,
+                  "endTimeUnixNano": 1771612601483301300,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -601,13 +601,13 @@
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "b8a74b40e31a53db",
-                  "parentSpanId": "8b82bd960cc53ee6",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "5a619632d682ee86",
+                  "parentSpanId": "cfb57f9c574ea849",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767800982000,
-                  "endTimeUnixNano": 1771526767800982000,
+                  "startTimeUnixNano": 1771612601484301200,
+                  "endTimeUnixNano": 1771612601484301200,
                   "attributes": [
                     {
                       "key": "eval.score",
@@ -624,13 +624,13 @@
                   ]
                 },
                 {
-                  "traceId": "1d98f4b3a3472626591f2649d9c5b1f7",
-                  "spanId": "8b82bd960cc53ee6",
+                  "traceId": "86a42046f635376f776bcd3b877896d7",
+                  "spanId": "cfb57f9c574ea849",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767797452200,
-                  "endTimeUnixNano": 1771526767800982000,
+                  "startTimeUnixNano": 1771612601479297000,
+                  "endTimeUnixNano": 1771612601485382300,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -647,13 +647,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.7500000000000001"
+                        "stringValue": "0.528"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=2, score=0.75"
+                        "stringValue": "plan_steps=2, len=104, score=0.5280"
                       }
                     }
                   ]
@@ -668,7 +668,7 @@
   {
     "iteration": "baseline",
     "query_index": 2,
-    "score": 0.7500000000000001,
+    "score": 0.475,
     "otlp": {
       "resourceSpans": [
         {
@@ -682,13 +682,13 @@
               },
               "spans": [
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "40fe73d94f7e3d81",
-                  "parentSpanId": "71f340e906f3cf97",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "3d85930a8bf47e8d",
+                  "parentSpanId": "90c8a1b443953880",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767802497300,
-                  "endTimeUnixNano": 1771526767802497300,
+                  "startTimeUnixNano": 1771612601488789200,
+                  "endTimeUnixNano": 1771612601489299500,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -717,19 +717,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: what is the wikidata id for crispr and list 2 related en\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: what is the wikidata id for crispr and list 2 related en\"}}"
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: what is the wikidata id for crispr a\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: what is the wikidata id for crispr a\"}}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "71f340e906f3cf97",
-                  "parentSpanId": "b5db1c4b08c2e1c2",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "90c8a1b443953880",
+                  "parentSpanId": "09c6bf12de0c19da",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767802497300,
-                  "endTimeUnixNano": 1771526767802497300,
+                  "startTimeUnixNano": 1771612601488789200,
+                  "endTimeUnixNano": 1771612601489299500,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -764,13 +764,13 @@
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "7efef8889fd1c63a",
-                  "parentSpanId": "23f67d72d57405b2",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "f07e7aaf5510713e",
+                  "parentSpanId": "a0d68e6c35c8e214",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767803511700,
-                  "endTimeUnixNano": 1771526767803511700,
+                  "startTimeUnixNano": 1771612601491314200,
+                  "endTimeUnixNano": 1771612601491314200,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -805,13 +805,13 @@
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "23f67d72d57405b2",
-                  "parentSpanId": "b5db1c4b08c2e1c2",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "a0d68e6c35c8e214",
+                  "parentSpanId": "09c6bf12de0c19da",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767803511700,
-                  "endTimeUnixNano": 1771526767803511700,
+                  "startTimeUnixNano": 1771612601491314200,
+                  "endTimeUnixNano": 1771612601491314200,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -834,7 +834,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: what is the wikidata id for crispr and list 2 related en'} for query: What is the Wikidata ID for CRISPR and list 2 related entities?. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: what is the wikidata id for crispr a'} for query: What is the Wikidata ID for CRISPR and list 2 related entities?. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -852,13 +852,13 @@
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "f5881121c919981c",
-                  "parentSpanId": "00bcb63e99c205fa",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "b33f3d3d399bccd9",
+                  "parentSpanId": "259caed102465ba9",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767804515100,
-                  "endTimeUnixNano": 1771526767804515100,
+                  "startTimeUnixNano": 1771612601493316200,
+                  "endTimeUnixNano": 1771612601493316200,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -887,19 +887,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "CRISPR (Q22328579) is a gene-editing technology. Related entities: 1) Cas9 protein (Q24721710) - the molecular scissors. 2) Jennifer Doudna (Q467958) - co-discoverer of CRISPR-Cas9."
+                        "stringValue": "CRISPR (Q910344) is a gene-editing technology. Related: Cas9 (Q24721675), Jennifer Doudna (Q467524)."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "00bcb63e99c205fa",
-                  "parentSpanId": "b5db1c4b08c2e1c2",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "259caed102465ba9",
+                  "parentSpanId": "09c6bf12de0c19da",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767803511700,
-                  "endTimeUnixNano": 1771526767804515100,
+                  "startTimeUnixNano": 1771612601493316200,
+                  "endTimeUnixNano": 1771612601493316200,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -934,13 +934,13 @@
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "a8c695a9a938168b",
-                  "parentSpanId": "b5db1c4b08c2e1c2",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "1148b519a021ad9b",
+                  "parentSpanId": "09c6bf12de0c19da",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767804515100,
-                  "endTimeUnixNano": 1771526767804515100,
+                  "startTimeUnixNano": 1771612601494320000,
+                  "endTimeUnixNano": 1771612601494320000,
                   "attributes": [
                     {
                       "key": "eval.score",
@@ -957,13 +957,13 @@
                   ]
                 },
                 {
-                  "traceId": "ae835123e82f80b1d97d9c9789bc5c46",
-                  "spanId": "b5db1c4b08c2e1c2",
+                  "traceId": "edfc2a42288fea641eba653b19e1c381",
+                  "spanId": "09c6bf12de0c19da",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767801982200,
-                  "endTimeUnixNano": 1771526767805511500,
+                  "startTimeUnixNano": 1771612601485891700,
+                  "endTimeUnixNano": 1771612601495323900,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -980,13 +980,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.7500000000000001"
+                        "stringValue": "0.475"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=2, score=0.75"
+                        "stringValue": "plan_steps=2, len=100, score=0.4750"
                       }
                     }
                   ]
@@ -1001,7 +1001,7 @@
   {
     "iteration": "iteration_1",
     "query_index": 0,
-    "score": 0.7500000000000001,
+    "score": 0.4148,
     "otlp": {
       "resourceSpans": [
         {
@@ -1015,13 +1015,13 @@
               },
               "spans": [
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "ccbf5f33042eb3e3",
-                  "parentSpanId": "af955d8c9bc55a6a",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "44761db46490e675",
+                  "parentSpanId": "f0ecf36b100bea29",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767806511500,
-                  "endTimeUnixNano": 1771526767806511500,
+                  "startTimeUnixNano": 1771612601498952100,
+                  "endTimeUnixNano": 1771612601499422900,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1050,19 +1050,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}}"
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events \"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events \"}}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "af955d8c9bc55a6a",
-                  "parentSpanId": "1e04d139a579a61f",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "f0ecf36b100bea29",
+                  "parentSpanId": "e2e4c24f5cb6eb55",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767806511500,
-                  "endTimeUnixNano": 1771526767806511500,
+                  "startTimeUnixNano": 1771612601498952100,
+                  "endTimeUnixNano": 1771612601499422900,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -1097,13 +1097,13 @@
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "db7db858a93ff586",
-                  "parentSpanId": "1f4dae6aa7b7494a",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "9d89345d7a0a9b92",
+                  "parentSpanId": "391e6a0ba92e3e84",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767807511600,
-                  "endTimeUnixNano": 1771526767807511600,
+                  "startTimeUnixNano": 1771612601501050300,
+                  "endTimeUnixNano": 1771612601501050300,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1138,13 +1138,13 @@
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "1f4dae6aa7b7494a",
-                  "parentSpanId": "1e04d139a579a61f",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "391e6a0ba92e3e84",
+                  "parentSpanId": "e2e4c24f5cb6eb55",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767807511600,
-                  "endTimeUnixNano": 1771526767807511600,
+                  "startTimeUnixNano": 1771612601501050300,
+                  "endTimeUnixNano": 1771612601501050300,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -1167,7 +1167,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events of the french revolu'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events '} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -1185,13 +1185,13 @@
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "f18d973047502b8d",
-                  "parentSpanId": "b4e8b9da447b2d43",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "7e70eee263acf7e1",
+                  "parentSpanId": "69e75d569ead17db",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767807511600,
-                  "endTimeUnixNano": 1771526767807511600,
+                  "startTimeUnixNano": 1771612601502069600,
+                  "endTimeUnixNano": 1771612601502069600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1220,19 +1220,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis, social inequality, and Enlightenment ideas. Key events include the Storming of the Bastille (July 14, 1789), the Declaration of the Rights of Man, the Reign of Terror, and Napoleon's rise to power."
+                        "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis and social inequality. Key events include the Storming of the Bastille and Napoleon's rise."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "b4e8b9da447b2d43",
-                  "parentSpanId": "1e04d139a579a61f",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "69e75d569ead17db",
+                  "parentSpanId": "e2e4c24f5cb6eb55",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767807511600,
-                  "endTimeUnixNano": 1771526767807511600,
+                  "startTimeUnixNano": 1771612601502069600,
+                  "endTimeUnixNano": 1771612601502069600,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -1267,36 +1267,36 @@
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "d851076fcd333940",
-                  "parentSpanId": "1e04d139a579a61f",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "73baf03838c7a9bd",
+                  "parentSpanId": "e2e4c24f5cb6eb55",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767808511200,
-                  "endTimeUnixNano": 1771526767808511200,
+                  "startTimeUnixNano": 1771612601503069700,
+                  "endTimeUnixNano": 1771612601503069700,
                   "attributes": [
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.35"
+                        "stringValue": "0.25"
                       }
                     },
                     {
                       "key": "eval.reasons",
                       "value": {
-                        "stringValue": "sufficient_detail"
+                        "stringValue": ""
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "4508497a41358b4723c6a76d31cf671e",
-                  "spanId": "1e04d139a579a61f",
+                  "traceId": "cb0b602e0f96784c7fc97f8f56065fc5",
+                  "spanId": "e2e4c24f5cb6eb55",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767805511500,
-                  "endTimeUnixNano": 1771526767808511200,
+                  "startTimeUnixNano": 1771612601496845700,
+                  "endTimeUnixNano": 1771612601508596700,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -1313,13 +1313,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.7500000000000001"
+                        "stringValue": "0.4148"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=2, score=0.75"
+                        "stringValue": "plan_steps=2, len=153, score=0.4148"
                       }
                     }
                   ]
@@ -1334,7 +1334,7 @@
   {
     "iteration": "iteration_1",
     "query_index": 1,
-    "score": 0.7500000000000001,
+    "score": 0.528,
     "otlp": {
       "resourceSpans": [
         {
@@ -1348,13 +1348,13 @@
               },
               "spans": [
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "403a6a2198681016",
-                  "parentSpanId": "6a2132d24c7245bc",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "551a068352382816",
+                  "parentSpanId": "a54a860eea844378",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767810030500,
-                  "endTimeUnixNano": 1771526767810030500,
+                  "startTimeUnixNano": 1771612601511105900,
+                  "endTimeUnixNano": 1771612601511105900,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1383,19 +1383,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: give 3 factual relationships about tesla, inc. with enti\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: give 3 factual relationships about tesla, inc. with enti\"}}"
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: give 3 factual relationships about t\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: give 3 factual relationships about t\"}}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "6a2132d24c7245bc",
-                  "parentSpanId": "c6ef9129b1caaedb",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "a54a860eea844378",
+                  "parentSpanId": "97186e541c4fc09d",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767810030500,
-                  "endTimeUnixNano": 1771526767810030500,
+                  "startTimeUnixNano": 1771612601511105900,
+                  "endTimeUnixNano": 1771612601511105900,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -1430,13 +1430,13 @@
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "bc8604783a0e82e6",
-                  "parentSpanId": "34fbb2e5f3b39b6f",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "201a14d404f6aba3",
+                  "parentSpanId": "14b1ff0b4a152abf",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767811044800,
-                  "endTimeUnixNano": 1771526767811044800,
+                  "startTimeUnixNano": 1771612601513120100,
+                  "endTimeUnixNano": 1771612601513120100,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1471,13 +1471,13 @@
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "34fbb2e5f3b39b6f",
-                  "parentSpanId": "c6ef9129b1caaedb",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "14b1ff0b4a152abf",
+                  "parentSpanId": "97186e541c4fc09d",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767811044800,
-                  "endTimeUnixNano": 1771526767811044800,
+                  "startTimeUnixNano": 1771612601513120100,
+                  "endTimeUnixNano": 1771612601513120100,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -1500,7 +1500,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: give 3 factual relationships about tesla, inc. with enti'} for query: Give 3 factual relationships about Tesla, Inc. with entity IDs.. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: give 3 factual relationships about t'} for query: Give 3 factual relationships about Tesla, Inc. with entity IDs.. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -1518,13 +1518,13 @@
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "3b83b429b4dd8d69",
-                  "parentSpanId": "ce12db68bbfad862",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "dc144eb0d9923bcb",
+                  "parentSpanId": "8a3ce0a559e32684",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767811044800,
-                  "endTimeUnixNano": 1771526767811044800,
+                  "startTimeUnixNano": 1771612601513120100,
+                  "endTimeUnixNano": 1771612601514642600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1553,19 +1553,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "Tesla, Inc. (Q478214) is an American electric vehicle manufacturer. Key relationships: 1) Founded by Elon Musk (Q317521). 2) Headquartered in Austin, Texas (Q16559). 3) Produces the Model S, Model 3, Model X, and Model Y vehicles."
+                        "stringValue": "Tesla, Inc. (Q478214) was founded by Elon Musk (Q317521). It is headquartered in Austin, Texas (Q16559)."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "ce12db68bbfad862",
-                  "parentSpanId": "c6ef9129b1caaedb",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "8a3ce0a559e32684",
+                  "parentSpanId": "97186e541c4fc09d",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767811044800,
-                  "endTimeUnixNano": 1771526767811044800,
+                  "startTimeUnixNano": 1771612601513120100,
+                  "endTimeUnixNano": 1771612601514642600,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -1600,13 +1600,13 @@
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "f63910ad814a148e",
-                  "parentSpanId": "c6ef9129b1caaedb",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "3ab1c336131504dc",
+                  "parentSpanId": "97186e541c4fc09d",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767811044800,
-                  "endTimeUnixNano": 1771526767811044800,
+                  "startTimeUnixNano": 1771612601516762500,
+                  "endTimeUnixNano": 1771612601516762500,
                   "attributes": [
                     {
                       "key": "eval.score",
@@ -1623,13 +1623,13 @@
                   ]
                 },
                 {
-                  "traceId": "8036df5313186107ee8b3f71e5ffdf0d",
-                  "spanId": "c6ef9129b1caaedb",
+                  "traceId": "ca50cf65d31214e1326fc646b525077f",
+                  "spanId": "97186e541c4fc09d",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767809514800,
-                  "endTimeUnixNano": 1771526767813186800,
+                  "startTimeUnixNano": 1771612601508596700,
+                  "endTimeUnixNano": 1771612601517776800,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -1646,13 +1646,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.7500000000000001"
+                        "stringValue": "0.528"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=2, score=0.75"
+                        "stringValue": "plan_steps=2, len=104, score=0.5280"
                       }
                     }
                   ]
@@ -1667,7 +1667,7 @@
   {
     "iteration": "iteration_1",
     "query_index": 2,
-    "score": 0.7500000000000001,
+    "score": 0.475,
     "otlp": {
       "resourceSpans": [
         {
@@ -1681,13 +1681,13 @@
               },
               "spans": [
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "8fa8c89fcf1907d7",
-                  "parentSpanId": "1b34c6cf3cd73471",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "86d7ca58769b18ce",
+                  "parentSpanId": "c32a184ee8d47f35",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767815199700,
-                  "endTimeUnixNano": 1771526767815199700,
+                  "startTimeUnixNano": 1771612601520299600,
+                  "endTimeUnixNano": 1771612601520299600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1716,19 +1716,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: what is the wikidata id for crispr and list 2 related en\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: what is the wikidata id for crispr and list 2 related en\"}}"
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: what is the wikidata id for crispr a\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: what is the wikidata id for crispr a\"}}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "1b34c6cf3cd73471",
-                  "parentSpanId": "bd79ff8705704d63",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "c32a184ee8d47f35",
+                  "parentSpanId": "f227d299c5cbffbf",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767815199700,
-                  "endTimeUnixNano": 1771526767815199700,
+                  "startTimeUnixNano": 1771612601519297800,
+                  "endTimeUnixNano": 1771612601520299600,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -1763,13 +1763,13 @@
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "aa257a77f3e3131a",
-                  "parentSpanId": "0e4fe77bbdc63472",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "389bab8fb5be6a6e",
+                  "parentSpanId": "4779f125af0a10bf",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767816203100,
-                  "endTimeUnixNano": 1771526767816203100,
+                  "startTimeUnixNano": 1771612601524827800,
+                  "endTimeUnixNano": 1771612601524827800,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1804,13 +1804,13 @@
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "0e4fe77bbdc63472",
-                  "parentSpanId": "bd79ff8705704d63",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "4779f125af0a10bf",
+                  "parentSpanId": "f227d299c5cbffbf",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767816203100,
-                  "endTimeUnixNano": 1771526767816203100,
+                  "startTimeUnixNano": 1771612601524827800,
+                  "endTimeUnixNano": 1771612601524827800,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -1833,7 +1833,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: what is the wikidata id for crispr and list 2 related en'} for query: What is the Wikidata ID for CRISPR and list 2 related entities?. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: what is the wikidata id for crispr a'} for query: What is the Wikidata ID for CRISPR and list 2 related entities?. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -1851,13 +1851,13 @@
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "570e144edbd32a78",
-                  "parentSpanId": "f2de7aad968be60d",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "b5e9f60a3826bd98",
+                  "parentSpanId": "35333fbd74fbfdd9",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767817203400,
-                  "endTimeUnixNano": 1771526767817203400,
+                  "startTimeUnixNano": 1771612601525827400,
+                  "endTimeUnixNano": 1771612601526829700,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -1886,19 +1886,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "CRISPR (Q22328579) is a gene-editing technology. Related entities: 1) Cas9 protein (Q24721710) - the molecular scissors. 2) Jennifer Doudna (Q467958) - co-discoverer of CRISPR-Cas9."
+                        "stringValue": "CRISPR (Q910344) is a gene-editing technology. Related: Cas9 (Q24721675), Jennifer Doudna (Q467524)."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "f2de7aad968be60d",
-                  "parentSpanId": "bd79ff8705704d63",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "35333fbd74fbfdd9",
+                  "parentSpanId": "f227d299c5cbffbf",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767816203100,
-                  "endTimeUnixNano": 1771526767817203400,
+                  "startTimeUnixNano": 1771612601525827400,
+                  "endTimeUnixNano": 1771612601526829700,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -1933,13 +1933,13 @@
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "aacc674b19d7a166",
-                  "parentSpanId": "bd79ff8705704d63",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "e16356356d0a60f7",
+                  "parentSpanId": "f227d299c5cbffbf",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767817203400,
-                  "endTimeUnixNano": 1771526767817203400,
+                  "startTimeUnixNano": 1771612601527337500,
+                  "endTimeUnixNano": 1771612601527337500,
                   "attributes": [
                     {
                       "key": "eval.score",
@@ -1956,13 +1956,13 @@
                   ]
                 },
                 {
-                  "traceId": "1b1a1c316405b1e8197f7964cb1967d8",
-                  "spanId": "bd79ff8705704d63",
+                  "traceId": "6ef3005f6fdc743815b300b0412774a4",
+                  "spanId": "f227d299c5cbffbf",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767813186800,
-                  "endTimeUnixNano": 1771526767818202600,
+                  "startTimeUnixNano": 1771612601519111100,
+                  "endTimeUnixNano": 1771612601527842900,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -1979,13 +1979,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.7500000000000001"
+                        "stringValue": "0.475"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=2, score=0.75"
+                        "stringValue": "plan_steps=2, len=100, score=0.4750"
                       }
                     }
                   ]
@@ -2000,7 +2000,7 @@
   {
     "iteration": "iteration_2",
     "query_index": 0,
-    "score": 0.95,
+    "score": 0.5148,
     "otlp": {
       "resourceSpans": [
         {
@@ -2014,13 +2014,13 @@
               },
               "spans": [
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "98a3153fed63dbaa",
-                  "parentSpanId": "02481912d026f374",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "b01396302b0656ce",
+                  "parentSpanId": "1a1a8c379aa6d3b0",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767822887100,
-                  "endTimeUnixNano": 1771526767822887100,
+                  "startTimeUnixNano": 1771612601534021400,
+                  "endTimeUnixNano": 1771612601534021400,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2049,19 +2049,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"gather primary context\", \"query\": \"create a thorough, step-by-step json plan for: summarize the causes and key even\"}, \"2\": {\"agent\": \"wikidata_researcher\", \"action\": \"search\", \"goal\": \"find entity IDs\", \"query\": \"create a thorough, step-by-step json plan for: summarize the causes and key even\"}, \"3\": {\"agent\": \"web_researcher\", \"action\": \"verify\", \"goal\": \"cross-check facts\", \"query\": \"create a thorough, step-by-step json plan for: "
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"deep_search\", \"goal\": \"gather comprehensive background\", \"query\": \"create a thorough, step-by-step json plan for: summarize the\"}, \"2\": {\"agent\": \"web_researcher\", \"action\": \"verify\", \"goal\": \"cross-reference facts\", \"query\": \"create a thorough, step-by-step json plan for: summarize the\"}, \"3\": {\"agent\": \"synthesizer\", \"action\": \"compose\", \"goal\": \"write detailed answer with evidence\", \"query\": \"create a thorough, step-by-step json plan for: summarize"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "02481912d026f374",
-                  "parentSpanId": "c11ab19acc18565a",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "1a1a8c379aa6d3b0",
+                  "parentSpanId": "76efc1534957daf4",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767822887100,
-                  "endTimeUnixNano": 1771526767822887100,
+                  "startTimeUnixNano": 1771612601534021400,
+                  "endTimeUnixNano": 1771612601534021400,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -2096,13 +2096,13 @@
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "4f68dab55ad06d70",
-                  "parentSpanId": "ddf66d934845db31",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "46cfbcddbf419391",
+                  "parentSpanId": "133d4c847b9bfee3",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767823491200,
-                  "endTimeUnixNano": 1771526767824003000,
+                  "startTimeUnixNano": 1771612601535040600,
+                  "endTimeUnixNano": 1771612601535040600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2131,19 +2131,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'g\"}"
+                        "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'deep_search', 'goal\"}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "ddf66d934845db31",
-                  "parentSpanId": "c11ab19acc18565a",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "133d4c847b9bfee3",
+                  "parentSpanId": "76efc1534957daf4",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767823491200,
-                  "endTimeUnixNano": 1771526767824003000,
+                  "startTimeUnixNano": 1771612601535040600,
+                  "endTimeUnixNano": 1771612601535040600,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -2166,7 +2166,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'gather primary context', 'query': 'create a thorough, step-by-step json plan for: summarize the causes and key even'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'deep_search', 'goal': 'gather comprehensive background', 'query': 'create a thorough, step-by-step json plan for: summarize the'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -2184,13 +2184,13 @@
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "bc40c8dca8136edf",
-                  "parentSpanId": "c8fb496f0d8827ec",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "c382867f388fc4b9",
+                  "parentSpanId": "e8eb8a88de85fcad",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767824611500,
-                  "endTimeUnixNano": 1771526767824611500,
+                  "startTimeUnixNano": 1771612601536041600,
+                  "endTimeUnixNano": 1771612601536041600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2219,19 +2219,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis, social inequality, and Enlightenment ideas. Key events include the Storming of the Bastille (July 14, 1789), the Declaration of the Rights of Man, the Reign of Terror, and Napoleon's rise to power."
+                        "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis and social inequality. Key events include the Storming of the Bastille and Napoleon's rise."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "c8fb496f0d8827ec",
-                  "parentSpanId": "c11ab19acc18565a",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "e8eb8a88de85fcad",
+                  "parentSpanId": "76efc1534957daf4",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767824555700,
-                  "endTimeUnixNano": 1771526767824611500,
+                  "startTimeUnixNano": 1771612601536041600,
+                  "endTimeUnixNano": 1771612601536041600,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -2266,36 +2266,36 @@
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "f9ff92d6cbec52b9",
-                  "parentSpanId": "c11ab19acc18565a",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "5479149f42e611d2",
+                  "parentSpanId": "76efc1534957daf4",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767825123600,
-                  "endTimeUnixNano": 1771526767825123600,
+                  "startTimeUnixNano": 1771612601536041600,
+                  "endTimeUnixNano": 1771612601536041600,
                   "attributes": [
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.35"
+                        "stringValue": "0.25"
                       }
                     },
                     {
                       "key": "eval.reasons",
                       "value": {
-                        "stringValue": "sufficient_detail"
+                        "stringValue": ""
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "7b776024a9e1ce3c3e7028fe3d3423a3",
-                  "spanId": "c11ab19acc18565a",
+                  "traceId": "d1c1ecc4ae5a550ec64735988ceb2097",
+                  "spanId": "76efc1534957daf4",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767821849100,
-                  "endTimeUnixNano": 1771526767825674200,
+                  "startTimeUnixNano": 1771612601532505900,
+                  "endTimeUnixNano": 1771612601537551200,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -2312,13 +2312,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.95"
+                        "stringValue": "0.5148"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=4, score=0.95"
+                        "stringValue": "plan_steps=3, len=153, score=0.5148"
                       }
                     }
                   ]
@@ -2333,7 +2333,7 @@
   {
     "iteration": "iteration_2",
     "query_index": 1,
-    "score": 0.95,
+    "score": 0.728,
     "otlp": {
       "resourceSpans": [
         {
@@ -2347,13 +2347,13 @@
               },
               "spans": [
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "7fc74afb70e48c4c",
-                  "parentSpanId": "703c2bddce14601c",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "1dea33adbc6e26a8",
+                  "parentSpanId": "0f93665debd32f21",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767826763800,
-                  "endTimeUnixNano": 1771526767826763800,
+                  "startTimeUnixNano": 1771612601542584600,
+                  "endTimeUnixNano": 1771612601542584600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2382,19 +2382,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"gather primary context\", \"query\": \"create a thorough, step-by-step json plan for: give 3 factual relationships abou\"}, \"2\": {\"agent\": \"wikidata_researcher\", \"action\": \"search\", \"goal\": \"find entity IDs\", \"query\": \"create a thorough, step-by-step json plan for: give 3 factual relationships abou\"}, \"3\": {\"agent\": \"web_researcher\", \"action\": \"verify\", \"goal\": \"cross-check facts\", \"query\": \"create a thorough, step-by-step json plan for: "
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"deep_search\", \"goal\": \"gather comprehensive background\", \"query\": \"create a thorough, step-by-step json plan for: give 3 factua\"}, \"2\": {\"agent\": \"wikidata_researcher\", \"action\": \"entity_lookup\", \"goal\": \"retrieve entity IDs and relationships\", \"query\": \"create a thorough, step-by-step json plan for: give 3 factua\"}, \"3\": {\"agent\": \"web_researcher\", \"action\": \"verify\", \"goal\": \"cross-reference entity data\", \"query\": \"create a thorough, step-by-step js"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "703c2bddce14601c",
-                  "parentSpanId": "1e0c432bb6e30d7c",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "0f93665debd32f21",
+                  "parentSpanId": "c95c84a344a0ec25",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767826763800,
-                  "endTimeUnixNano": 1771526767826763800,
+                  "startTimeUnixNano": 1771612601541582200,
+                  "endTimeUnixNano": 1771612601542584600,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -2429,13 +2429,13 @@
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "cb5229dfe4e4595a",
-                  "parentSpanId": "dd3e57f3e075d730",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "06e261332903fdd7",
+                  "parentSpanId": "8506e53882301504",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767827311500,
-                  "endTimeUnixNano": 1771526767827858100,
+                  "startTimeUnixNano": 1771612601543580500,
+                  "endTimeUnixNano": 1771612601543580500,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2464,19 +2464,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'g\"}"
+                        "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'deep_search', 'goal\"}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "dd3e57f3e075d730",
-                  "parentSpanId": "1e0c432bb6e30d7c",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "8506e53882301504",
+                  "parentSpanId": "c95c84a344a0ec25",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767827311500,
-                  "endTimeUnixNano": 1771526767827947900,
+                  "startTimeUnixNano": 1771612601543580500,
+                  "endTimeUnixNano": 1771612601543580500,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -2499,7 +2499,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'gather primary context', 'query': 'create a thorough, step-by-step json plan for: give 3 factual relationships abou'} for query: Give 3 factual relationships about Tesla, Inc. with entity IDs.. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'deep_search', 'goal': 'gather comprehensive background', 'query': 'create a thorough, step-by-step json plan for: give 3 factua'} for query: Give 3 factual relationships about Tesla, Inc. with entity IDs.. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -2517,13 +2517,13 @@
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "10992950819c83f2",
-                  "parentSpanId": "34325df3fc2535e6",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "a8bbb00f18fe513c",
+                  "parentSpanId": "bcfcd6c883c9d9e3",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767828993400,
-                  "endTimeUnixNano": 1771526767829518000,
+                  "startTimeUnixNano": 1771612601546112400,
+                  "endTimeUnixNano": 1771612601546112400,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2552,19 +2552,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "Tesla, Inc. (Q478214) is an American electric vehicle manufacturer. Key relationships: 1) Founded by Elon Musk (Q317521). 2) Headquartered in Austin, Texas (Q16559). 3) Produces the Model S, Model 3, Model X, and Model Y vehicles."
+                        "stringValue": "Tesla, Inc. (Q478214) was founded by Elon Musk (Q317521). It is headquartered in Austin, Texas (Q16559)."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "34325df3fc2535e6",
-                  "parentSpanId": "1e0c432bb6e30d7c",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "bcfcd6c883c9d9e3",
+                  "parentSpanId": "c95c84a344a0ec25",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767828993400,
-                  "endTimeUnixNano": 1771526767829518000,
+                  "startTimeUnixNano": 1771612601546112400,
+                  "endTimeUnixNano": 1771612601546112400,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -2599,13 +2599,13 @@
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "0a77bf547ba6cf31",
-                  "parentSpanId": "1e0c432bb6e30d7c",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "a8ad725e9ac836e5",
+                  "parentSpanId": "c95c84a344a0ec25",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767830900400,
-                  "endTimeUnixNano": 1771526767830900400,
+                  "startTimeUnixNano": 1771612601547632000,
+                  "endTimeUnixNano": 1771612601547632000,
                   "attributes": [
                     {
                       "key": "eval.score",
@@ -2622,13 +2622,13 @@
                   ]
                 },
                 {
-                  "traceId": "345615a3c53d53a3b3af924d9d2d16eb",
-                  "spanId": "1e0c432bb6e30d7c",
+                  "traceId": "b872a8bce541a06ef105e8468984d5c3",
+                  "spanId": "c95c84a344a0ec25",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767825674200,
-                  "endTimeUnixNano": 1771526767831413200,
+                  "startTimeUnixNano": 1771612601538872400,
+                  "endTimeUnixNano": 1771612601548645800,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -2645,13 +2645,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.95"
+                        "stringValue": "0.728"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=4, score=0.95"
+                        "stringValue": "plan_steps=4, len=104, score=0.7280"
                       }
                     }
                   ]
@@ -2666,7 +2666,7 @@
   {
     "iteration": "iteration_2",
     "query_index": 2,
-    "score": 0.95,
+    "score": 0.675,
     "otlp": {
       "resourceSpans": [
         {
@@ -2680,13 +2680,13 @@
               },
               "spans": [
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "e1211cdd2e257174",
-                  "parentSpanId": "ba5276569b8c91bc",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "e6e7e495ef472e5e",
+                  "parentSpanId": "cc36f4d886c9b273",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767832425500,
-                  "endTimeUnixNano": 1771526767833424200,
+                  "startTimeUnixNano": 1771612601551657600,
+                  "endTimeUnixNano": 1771612601551657600,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2715,19 +2715,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"gather primary context\", \"query\": \"create a thorough, step-by-step json plan for: what is the wikidata id for crisp\"}, \"2\": {\"agent\": \"wikidata_researcher\", \"action\": \"search\", \"goal\": \"find entity IDs\", \"query\": \"create a thorough, step-by-step json plan for: what is the wikidata id for crisp\"}, \"3\": {\"agent\": \"web_researcher\", \"action\": \"verify\", \"goal\": \"cross-check facts\", \"query\": \"create a thorough, step-by-step json plan for: "
+                        "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"deep_search\", \"goal\": \"gather comprehensive background\", \"query\": \"create a thorough, step-by-step json plan for: what is the w\"}, \"2\": {\"agent\": \"wikidata_researcher\", \"action\": \"entity_lookup\", \"goal\": \"retrieve entity IDs and relationships\", \"query\": \"create a thorough, step-by-step json plan for: what is the w\"}, \"3\": {\"agent\": \"web_researcher\", \"action\": \"verify\", \"goal\": \"cross-reference entity data\", \"query\": \"create a thorough, step-by-step js"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "ba5276569b8c91bc",
-                  "parentSpanId": "a4576520d08fb855",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "cc36f4d886c9b273",
+                  "parentSpanId": "82008e75554b6fcb",
                   "name": "planner",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767832425500,
-                  "endTimeUnixNano": 1771526767833424200,
+                  "startTimeUnixNano": 1771612601551120500,
+                  "endTimeUnixNano": 1771612601551657600,
                   "attributes": [
                     {
                       "key": "param.planner_prompt",
@@ -2762,13 +2762,13 @@
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "bb6f6065aba7f2bc",
-                  "parentSpanId": "d00b25ea5fb88403",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "78c061391db329d5",
+                  "parentSpanId": "5d40938fa1930383",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767833424200,
-                  "endTimeUnixNano": 1771526767833424200,
+                  "startTimeUnixNano": 1771612601552734700,
+                  "endTimeUnixNano": 1771612601552734700,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2797,19 +2797,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'g\"}"
+                        "stringValue": "{\"goto\": \"synthesizer\", \"query\": \"given step 1 of plan: {'agent': 'web_researcher', 'action': 'deep_search', 'goal\"}"
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "d00b25ea5fb88403",
-                  "parentSpanId": "a4576520d08fb855",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "5d40938fa1930383",
+                  "parentSpanId": "82008e75554b6fcb",
                   "name": "executor",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767833424200,
-                  "endTimeUnixNano": 1771526767833424200,
+                  "startTimeUnixNano": 1771612601552734700,
+                  "endTimeUnixNano": 1771612601552734700,
                   "attributes": [
                     {
                       "key": "param.executor_prompt",
@@ -2832,7 +2832,7 @@
                     {
                       "key": "inputs.gen_ai.prompt",
                       "value": {
-                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'gather primary context', 'query': 'create a thorough, step-by-step json plan for: what is the wikidata id for crisp'} for query: What is the Wikidata ID for CRISPR and list 2 related entities?. Return JSON {goto,query}."
+                        "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'deep_search', 'goal': 'gather comprehensive background', 'query': 'create a thorough, step-by-step json plan for: what is the w'} for query: What is the Wikidata ID for CRISPR and list 2 related entities?. Return JSON {goto,query}."
                       }
                     },
                     {
@@ -2850,13 +2850,13 @@
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "0cdca12f5ada4e2e",
-                  "parentSpanId": "c909e50a75dc73c5",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "fe7109978766dcf7",
+                  "parentSpanId": "8f85ce379388dd19",
                   "name": "llm.chat.completion",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767834781400,
-                  "endTimeUnixNano": 1771526767834781400,
+                  "startTimeUnixNano": 1771612601553823900,
+                  "endTimeUnixNano": 1771612601554373500,
                   "attributes": [
                     {
                       "key": "trace.temporal_ignore",
@@ -2885,19 +2885,19 @@
                     {
                       "key": "gen_ai.output.preview",
                       "value": {
-                        "stringValue": "CRISPR (Q22328579) is a gene-editing technology. Related entities: 1) Cas9 protein (Q24721710) - the molecular scissors. 2) Jennifer Doudna (Q467958) - co-discoverer of CRISPR-Cas9."
+                        "stringValue": "CRISPR (Q910344) is a gene-editing technology. Related: Cas9 (Q24721675), Jennifer Doudna (Q467524)."
                       }
                     }
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "c909e50a75dc73c5",
-                  "parentSpanId": "a4576520d08fb855",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "8f85ce379388dd19",
+                  "parentSpanId": "82008e75554b6fcb",
                   "name": "synthesizer",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767834781400,
-                  "endTimeUnixNano": 1771526767834781400,
+                  "startTimeUnixNano": 1771612601553823900,
+                  "endTimeUnixNano": 1771612601554373500,
                   "attributes": [
                     {
                       "key": "param.synthesizer_prompt",
@@ -2932,13 +2932,13 @@
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "6d0b7f1b6308a912",
-                  "parentSpanId": "a4576520d08fb855",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "dddd31ca24bf34e4",
+                  "parentSpanId": "82008e75554b6fcb",
                   "name": "evaluator",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767834781400,
-                  "endTimeUnixNano": 1771526767834781400,
+                  "startTimeUnixNano": 1771612601555990000,
+                  "endTimeUnixNano": 1771612601555990000,
                   "attributes": [
                     {
                       "key": "eval.score",
@@ -2955,13 +2955,13 @@
                   ]
                 },
                 {
-                  "traceId": "9c265f3f3c4a83c7cfb61c64999ab832",
-                  "spanId": "a4576520d08fb855",
+                  "traceId": "9cd30d508c5a4b89a6682e14cfb778fa",
+                  "spanId": "82008e75554b6fcb",
                   "parentSpanId": "",
                   "name": "m1-notebook.invoke",
                   "kind": "UNSPECIFIED",
-                  "startTimeUnixNano": 1771526767831413200,
-                  "endTimeUnixNano": 1771526767835778400,
+                  "startTimeUnixNano": 1771612601549650100,
+                  "endTimeUnixNano": 1771612601557513900,
                   "attributes": [
                     {
                       "key": "langgraph.service",
@@ -2978,13 +2978,13 @@
                     {
                       "key": "eval.score",
                       "value": {
-                        "stringValue": "0.95"
+                        "stringValue": "0.675"
                       }
                     },
                     {
                       "key": "eval.feedback",
                       "value": {
-                        "stringValue": "plan_steps=4, score=0.95"
+                        "stringValue": "plan_steps=4, len=100, score=0.6750"
                       }
                     }
                   ]

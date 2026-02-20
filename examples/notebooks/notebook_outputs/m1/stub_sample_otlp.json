@@ -11,13 +11,13 @@
           },
           "spans": [
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "56956ad90dea9623",
-              "parentSpanId": "f70e8c88a91dc995",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "e1efcfe7e9da6462",
+              "parentSpanId": "8113398fe044d1ab",
               "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767793730200,
-              "endTimeUnixNano": 1771526767793730200,
+              "startTimeUnixNano": 1771612601471565700,
+              "endTimeUnixNano": 1771612601472567200,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -46,19 +46,19 @@
                 {
                   "key": "gen_ai.output.preview",
                   "value": {
-                    "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events of the french revolu\"}}"
+                    "stringValue": "{\"1\": {\"agent\": \"web_researcher\", \"action\": \"search\", \"goal\": \"collect context\", \"query\": \"create a json plan for: summarize the causes and key events \"}, \"2\": {\"agent\": \"synthesizer\", \"action\": \"answer\", \"goal\": \"final answer\", \"query\": \"create a json plan for: summarize the causes and key events \"}}"
                   }
                 }
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "f70e8c88a91dc995",
-              "parentSpanId": "7d39dd1508a65685",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "8113398fe044d1ab",
+              "parentSpanId": "4a3ae931f962b0f8",
               "name": "planner",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767793730200,
-              "endTimeUnixNano": 1771526767793730200,
+              "startTimeUnixNano": 1771612601471565700,
+              "endTimeUnixNano": 1771612601472567200,
               "attributes": [
                 {
                   "key": "param.planner_prompt",
@@ -93,13 +93,13 @@
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "a6d90771cfa1706c",
-              "parentSpanId": "086b65165e7c54a3",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "3209c782053affc2",
+              "parentSpanId": "c49ccb0aef325d8a",
               "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767794329400,
-              "endTimeUnixNano": 1771526767794834800,
+              "startTimeUnixNano": 1771612601473566600,
+              "endTimeUnixNano": 1771612601474564800,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -134,13 +134,13 @@
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "086b65165e7c54a3",
-              "parentSpanId": "7d39dd1508a65685",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "c49ccb0aef325d8a",
+              "parentSpanId": "4a3ae931f962b0f8",
               "name": "executor",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767794329400,
-              "endTimeUnixNano": 1771526767794834800,
+              "startTimeUnixNano": 1771612601473566600,
+              "endTimeUnixNano": 1771612601474564800,
               "attributes": [
                 {
                   "key": "param.executor_prompt",
@@ -163,7 +163,7 @@
                 {
                   "key": "inputs.gen_ai.prompt",
                   "value": {
-                    "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events of the french revolu'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
+                    "stringValue": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events '} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}."
                   }
                 },
                 {
@@ -181,13 +181,13 @@
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "c4deca5f8c05f5dd",
-              "parentSpanId": "b2ad20e21aedbd6f",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "4b335139744b73ea",
+              "parentSpanId": "2f661e23ec36ff97",
               "name": "llm.chat.completion",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767795369100,
-              "endTimeUnixNano": 1771526767795369100,
+              "startTimeUnixNano": 1771612601475240400,
+              "endTimeUnixNano": 1771612601475240400,
               "attributes": [
                 {
                   "key": "trace.temporal_ignore",
@@ -216,19 +216,19 @@
                 {
                   "key": "gen_ai.output.preview",
                   "value": {
-                    "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis, social inequality, and Enlightenment ideas. Key events include the Storming of the Bastille (July 14, 1789), the Declaration of the Rights of Man, the Reign of Terror, and Napoleon's rise to power."
+                    "stringValue": "The French Revolution (1789-1799) was caused by fiscal crisis and social inequality. Key events include the Storming of the Bastille and Napoleon's rise."
                   }
                 }
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "b2ad20e21aedbd6f",
-              "parentSpanId": "7d39dd1508a65685",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "2f661e23ec36ff97",
+              "parentSpanId": "4a3ae931f962b0f8",
               "name": "synthesizer",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767795369100,
-              "endTimeUnixNano": 1771526767795369100,
+              "startTimeUnixNano": 1771612601475240400,
+              "endTimeUnixNano": 1771612601475240400,
               "attributes": [
                 {
                   "key": "param.synthesizer_prompt",
@@ -263,36 +263,36 @@
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "c4983190bc530580",
-              "parentSpanId": "7d39dd1508a65685",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "5e63df011e9d76b4",
+              "parentSpanId": "4a3ae931f962b0f8",
               "name": "evaluator",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767795897900,
-              "endTimeUnixNano": 1771526767795897900,
+              "startTimeUnixNano": 1771612601476754800,
+              "endTimeUnixNano": 1771612601476754800,
               "attributes": [
                 {
                   "key": "eval.score",
                   "value": {
-                    "stringValue": "0.35"
+                    "stringValue": "0.25"
                   }
                 },
                 {
                   "key": "eval.reasons",
                   "value": {
-                    "stringValue": "sufficient_detail"
+                    "stringValue": ""
                   }
                 }
               ]
             },
             {
-              "traceId": "f71070c96c59f0b5cdc82bac1c8bf89f",
-              "spanId": "7d39dd1508a65685",
+              "traceId": "3f0c04701d6ef976259ab9a41fef4154",
+              "spanId": "4a3ae931f962b0f8",
               "parentSpanId": "",
               "name": "m1-notebook.invoke",
               "kind": "UNSPECIFIED",
-              "startTimeUnixNano": 1771526767792571300,
-              "endTimeUnixNano": 1771526767796435000,
+              "startTimeUnixNano": 1771612601469565800,
+              "endTimeUnixNano": 1771612601478286200,
               "attributes": [
                 {
                   "key": "langgraph.service",
@@ -309,13 +309,13 @@
                 {
                   "key": "eval.score",
                   "value": {
-                    "stringValue": "0.7500000000000001"
+                    "stringValue": "0.4148"
                   }
                 },
                 {
                   "key": "eval.feedback",
                   "value": {
-                    "stringValue": "plan_steps=2, score=0.75"
+                    "stringValue": "plan_steps=2, len=153, score=0.4148"
                   }
                 }
               ]

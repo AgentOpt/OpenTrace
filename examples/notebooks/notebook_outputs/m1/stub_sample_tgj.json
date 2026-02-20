@@ -6,24 +6,24 @@
       "service": "m1-notebook"
     },
     "otel_meta": {
-      "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f"
+      "trace_id": "3f0c04701d6ef976259ab9a41fef4154"
     },
     "nodes": {
-      "m1-notebook:56956ad90dea9623": {
+      "m1-notebook:e1efcfe7e9da6462": {
         "kind": "msg",
         "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:f70e8c88a91dc995"
+          "parent": "m1-notebook:8113398fe044d1ab"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "56956ad90dea9623",
-            "parent_span_id": "f70e8c88a91dc995",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "e1efcfe7e9da6462",
+            "parent_span_id": "8113398fe044d1ab",
             "service": "m1-notebook",
             "temporal_ignore": true
           }
@@ -36,11 +36,11 @@
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "f70e8c88a91dc995"
+            "span_id": "8113398fe044d1ab"
           }
         }
       },
-      "m1-notebook:f70e8c88a91dc995": {
+      "m1-notebook:8113398fe044d1ab": {
         "kind": "msg",
         "name": "planner",
         "op": "llm_call",
@@ -54,29 +54,29 @@
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "f70e8c88a91dc995",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "8113398fe044d1ab",
             "parent_span_id": null,
             "service": "m1-notebook",
             "temporal_ignore": false
           }
         }
       },
-      "m1-notebook:a6d90771cfa1706c": {
+      "m1-notebook:3209c782053affc2": {
         "kind": "msg",
         "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:086b65165e7c54a3"
+          "parent": "m1-notebook:c49ccb0aef325d8a"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "a6d90771cfa1706c",
-            "parent_span_id": "086b65165e7c54a3",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "3209c782053affc2",
+            "parent_span_id": "c49ccb0aef325d8a",
             "service": "m1-notebook",
             "temporal_ignore": true
           }
@@ -89,19 +89,19 @@
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "086b65165e7c54a3"
+            "span_id": "c49ccb0aef325d8a"
           }
         }
       },
-      "m1-notebook:086b65165e7c54a3": {
+      "m1-notebook:c49ccb0aef325d8a": {
         "kind": "msg",
         "name": "executor",
         "op": "llm_call",
         "inputs": {
-          "gen_ai.prompt": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events of the french revolu'} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}.",
+          "gen_ai.prompt": "Given step 1 of plan: {'agent': 'web_researcher', 'action': 'search', 'goal': 'collect context', 'query': 'create a json plan for: summarize the causes and key events '} for query: Summarize the causes and key events of the French Revolution.. Return JSON {goto,query}.",
           "step": "m1-notebook:1",
           "user_query": "m1-notebook:Summarize the causes and key events of the French Revolution.",
-          "parent": "m1-notebook:f70e8c88a91dc995",
+          "parent": "m1-notebook:8113398fe044d1ab",
           "param_executor_prompt": "m1-notebook:param_executor_prompt"
         },
         "data": {
@@ -109,29 +109,29 @@
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "086b65165e7c54a3",
-            "parent_span_id": "f70e8c88a91dc995",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "c49ccb0aef325d8a",
+            "parent_span_id": "8113398fe044d1ab",
             "service": "m1-notebook",
             "temporal_ignore": false
           }
         }
       },
-      "m1-notebook:c4deca5f8c05f5dd": {
+      "m1-notebook:4b335139744b73ea": {
         "kind": "msg",
         "name": "llm.chat.completion",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:b2ad20e21aedbd6f"
+          "parent": "m1-notebook:2f661e23ec36ff97"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "c4deca5f8c05f5dd",
-            "parent_span_id": "b2ad20e21aedbd6f",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "4b335139744b73ea",
+            "parent_span_id": "2f661e23ec36ff97",
             "service": "m1-notebook",
             "temporal_ignore": true
           }
@@ -144,18 +144,18 @@
         "trainable": true,
         "info": {
           "otel": {
-            "span_id": "b2ad20e21aedbd6f"
+            "span_id": "2f661e23ec36ff97"
           }
         }
       },
-      "m1-notebook:b2ad20e21aedbd6f": {
+      "m1-notebook:2f661e23ec36ff97": {
         "kind": "msg",
         "name": "synthesizer",
         "op": "llm_call",
         "inputs": {
           "gen_ai.prompt": "Answer: Summarize the causes and key events of the French Revolution.\nContext:\n\nIf asked for IDs, include Wikidata QIDs.",
           "user_query": "m1-notebook:Summarize the causes and key events of the French Revolution.",
-          "parent": "m1-notebook:086b65165e7c54a3",
+          "parent": "m1-notebook:c49ccb0aef325d8a",
           "param_synthesizer_prompt": "m1-notebook:param_synthesizer_prompt"
         },
         "data": {
@@ -163,29 +163,29 @@
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "b2ad20e21aedbd6f",
-            "parent_span_id": "086b65165e7c54a3",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "2f661e23ec36ff97",
+            "parent_span_id": "c49ccb0aef325d8a",
             "service": "m1-notebook",
             "temporal_ignore": false
           }
         }
       },
-      "m1-notebook:c4983190bc530580": {
+      "m1-notebook:5e63df011e9d76b4": {
         "kind": "msg",
         "name": "evaluator",
         "op": "unspecified",
         "inputs": {
-          "parent": "m1-notebook:b2ad20e21aedbd6f"
+          "parent": "m1-notebook:2f661e23ec36ff97"
         },
         "data": {
           "message_id": null
         },
         "info": {
           "otel": {
-            "trace_id": "f71070c96c59f0b5cdc82bac1c8bf89f",
-            "span_id": "c4983190bc530580",
-            "parent_span_id": "b2ad20e21aedbd6f",
+            "trace_id": "3f0c04701d6ef976259ab9a41fef4154",
+            "span_id": "5e63df011e9d76b4",
+            "parent_span_id": "2f661e23ec36ff97",
             "service": "m1-notebook",
             "temporal_ignore": false
           }

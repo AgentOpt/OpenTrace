@@ -356,9 +356,9 @@ def optimize_graph(
         if _optimizer is not None:
             return
         try:
-            from opto.optimizers import OptoPrime
+            from opto.optimizers.optoprime_v2 import OptoPrimeV2
             kw = dict(optimizer_kwargs or {})
-            _optimizer = OptoPrime(param_nodes, **kw)
+            _optimizer = OptoPrimeV2(param_nodes, **kw)
         except ImportError:
             logger.warning(
                 "Could not import OptoPrime; running in eval-only mode "
