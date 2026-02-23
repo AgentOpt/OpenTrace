@@ -132,7 +132,12 @@ def _convert_otel_profile(doc: Dict[str,Any]) -> Dict[str,Any]:
         "nodes": nodes_list,
     }
 
-def ingest_tgj(doc: Dict[str,Any], port_index: Optional[Dict[str,Node]] = None) -> Dict[str,Node]:
+def ingest_tgj(
+    doc: Dict[str,Any],
+    port_index: Optional[Dict[str,Node]] = None,
+    *,
+    param_cache: Optional[Dict[str,"ParameterNode"]] = None,
+) -> Dict[str,Node]:
     version = doc.get("tgj") or doc.get("version")
     if version == OTEL_PROFILE_VERSION:
         doc = _convert_otel_profile(doc)
@@ -149,12 +154,25 @@ def ingest_tgj(doc: Dict[str,Any], port_index: Optional[Dict[str,Node]] = None) 
             nid = rec["id"]
             nm = rec.get("name", nid)
             if k == "parameter":
-                n = ParameterNode(
-                    rec.get("value"),
-                    name=nm,
-                    trainable=bool(rec.get("trainable", True)),
-                    description=rec.get("description", "[Parameter]")
-                )
+                n = param_cache.get(nid) if param_cache is not None else None
+                if n is None:
+                    n = ParameterNode(
+                        rec.get("value"),
+                        name=nm,
+                        trainable=bool(rec.get("trainable", True)),
+                        description=rec.get("description", "[Parameter]"),
+                    )
+                    if param_cache is not None:
+                        param_cache[nid] = n
+                else:
+                    try:
+                        n._data = rec.get("value")
+                    except Exception:
+                        pass
+                    try:
+                        n.trainable = bool(rec.get("trainable", True))
+                    except Exception:
+                        pass
                 nodes[nid] = n
                 nodes[nm] = n
             elif k == "value":
