@@ -529,23 +529,23 @@ def optimize_graph(
                     _ensure_optimizer(unique_params)
 
                     if _optimizer is not None and all_output_nodes:
-                        try:
-                            _optimizer.zero_feedback()
-                            for output_node, run_for_output in all_output_nodes:
-                                feedback_text = run_for_output.feedback or (
-                                    f"Score: {run_for_output.score}"
-                                    if run_for_output.score is not None
-                                    else "No feedback"
-                                )
-                                _optimizer.backward(output_node, feedback_text)
-                            raw_updates = _optimizer.step()
-
-                            if isinstance(raw_updates, dict):
-                                updates.update(raw_updates)
-                        except Exception as exc:
-                            logger.warning(
-                                "Optimizer step failed: %s", exc, exc_info=True
+                        for output_node, run_for_output in all_output_nodes:
+                            feedback_text = run_for_output.feedback or (
+                                f"Score: {run_for_output.score}"
+                                if run_for_output.score is not None
+                                else "No feedback"
                             )
+                            try:
+                                _optimizer.zero_feedback()
+                                _optimizer.backward(output_node, feedback_text)
+                                raw_updates = _optimizer.step()
+
+                                if isinstance(raw_updates, dict):
+                                    updates.update(raw_updates)
+                            except Exception as exc:
+                                logger.warning(
+                                    "Optimizer step failed for one query: %s", exc, exc_info=True
+                                )
 
             except Exception as exc:
                 logger.warning(
