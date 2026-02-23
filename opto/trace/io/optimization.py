@@ -312,6 +312,8 @@ def optimize_graph(
 
     eval_fn = eval_fn or _default_eval_fn
 
+    graph.session.flush_otlp(clear=True)
+
     # If not provided, fall back to the graph's configured output_key.
     # If both are provided and disagree, prefer the explicit argument.
     graph_output_key = getattr(graph, "output_key", None)
@@ -330,9 +332,9 @@ def optimize_graph(
     best_iteration = 0
     best_updates: Dict[str, Any] = {}
     best_parameters: Dict[str, Any] = _snapshot_parameters(effective_bindings)
-    # Track the updates applied *before* the current iteration so we know
-    # which updates produced the params used in each iteration.
     last_applied_updates: Dict[str, Any] = {}
+
+    param_cache: Dict[str, Any] = {}
 
     # -- lazy imports for Trace framework --
     _ingest_tgj = None
@@ -504,7 +506,7 @@ def optimize_graph(
                         )
 
                     for doc in tgj_docs:
-                        nodes = _ingest_tgj(doc)
+                        nodes = _ingest_tgj(doc, param_cache=param_cache)
 
                         from opto.trace.nodes import ParameterNode as _PN
                         param_nodes = [
@@ -527,16 +529,15 @@ def optimize_graph(
                     _ensure_optimizer(unique_params)
 
                     if _optimizer is not None and all_output_nodes:
-                        # Use the last output node for backward pass
-                        output_node, run_for_output = all_output_nodes[-1]
-                        feedback_text = run_for_output.feedback or (
-                            f"Score: {run_for_output.score}"
-                            if run_for_output.score is not None
-                            else "No feedback"
-                        )
                         try:
                             _optimizer.zero_feedback()
-                            _optimizer.backward(output_node, feedback_text)
+                            for output_node, run_for_output in all_output_nodes:
+                                feedback_text = run_for_output.feedback or (
+                                    f"Score: {run_for_output.score}"
+                                    if run_for_output.score is not None
+                                    else "No feedback"
+                                )
+                                _optimizer.backward(output_node, feedback_text)
                             raw_updates = _optimizer.step()
 
                             if isinstance(raw_updates, dict):
@@ -554,9 +555,9 @@ def optimize_graph(
             # Apply updates
             if updates and apply_updates_flag:
                 try:
-                    apply_updates(updates, effective_bindings, strict=False)
-                    last_applied_updates = dict(updates)
-                    logger.info("Applied updates: %s", sorted(updates.keys()))
+                    applied = apply_updates(updates, effective_bindings, strict=False)
+                    last_applied_updates = dict(applied)
+                    logger.info("Applied updates: %s", sorted(applied.keys()))
                 except Exception as exc:
                     logger.warning("apply_updates failed: %s", exc, exc_info=True)
 

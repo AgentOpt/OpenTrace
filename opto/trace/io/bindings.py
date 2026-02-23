@@ -17,6 +17,7 @@ Usage
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Literal, Optional
 
@@ -43,46 +44,77 @@ class Binding:
 
 
 def apply_updates(
-    updates: Dict[str, Any],
+    updates: Dict[Any, Any],
     bindings: Dict[str, Binding],
     *,
     strict: bool = True,
-) -> None:
+) -> Dict[str, Any]:
     """Apply optimizer updates to bound targets.
 
     Parameters
     ----------
-    updates : Dict[str, Any]
-        Keys are parameter names (without ``param.`` prefix) and values
-        are the new values suggested by the optimizer.
+    updates : Dict[Any, Any]
+        Keys are parameter names (strings) **or** ParameterNode objects.
+        Values are the new values suggested by the optimizer.
     bindings : Dict[str, Binding]
-        Mapping from the same parameter names to ``Binding`` objects.
+        Mapping from parameter names to ``Binding`` objects.
     strict : bool
         If *True* (default), raise ``KeyError`` when an update key has
         no corresponding binding.  If *False*, unknown keys are silently
         skipped.
+
+    Returns
+    -------
+    Dict[str, Any]
+        The updates that were actually applied (string-keyed).
 
     Raises
     ------
     KeyError
         When *strict* is True and an update key is missing from *bindings*.
     """
-    for key, value in updates.items():
+
+    def _normalize_key(k: Any) -> str:
+        if isinstance(k, str):
+            s = k
+        else:
+            s = (
+                getattr(k, "name", None)
+                or getattr(k, "_name", None)
+                or getattr(k, "py_name", None)
+                or str(k)
+            )
+        s = str(s).strip()
+        if s.startswith("param."):
+            s = s[len("param."):]
+        s = s.split(":")[0].split("/")[-1]
+        if s not in bindings:
+            s2 = re.sub(r"\d+$", "", s)
+            if s2 in bindings:
+                s = s2
+        return s
+
+    applied: Dict[str, Any] = {}
+    for raw_key, value in updates.items():
+        key = _normalize_key(raw_key)
         binding = bindings.get(key)
         if binding is None:
             if strict:
                 raise KeyError(
-                    f"apply_updates: no binding for key {key!r}. "
+                    f"apply_updates: no binding for key {key!r} (from {raw_key!r}). "
                     f"Available bindings: {sorted(bindings.keys())}"
                 )
-            logger.debug("apply_updates: skipping unknown key %r (strict=False)", key)
+            logger.debug("apply_updates: skipping unknown key %r (from %r)", key, raw_key)
             continue
         try:
             binding.set(value)
+            applied[key] = value
             logger.debug("apply_updates: set %r (kind=%s)", key, binding.kind)
         except Exception:
             logger.exception("apply_updates: failed to set %r", key)
-            raise
+            if strict:
+                raise
+    return applied
 
 
 def make_dict_binding(store: Dict[str, Any], key: str, kind: str = "prompt") -> Binding:
