@@ -339,10 +339,11 @@ def optimize_graph(
     # -- lazy imports for Trace framework --
     _ingest_tgj = None
     _GraphPropagator = None
+    _batchify = None
     _optimizer = optimizer
 
     def _ensure_trace_imports():
-        nonlocal _ingest_tgj, _GraphPropagator
+        nonlocal _ingest_tgj, _GraphPropagator, _batchify
         if _ingest_tgj is None:
             from opto.trace.io.tgj_ingest import ingest_tgj as _fn
             _ingest_tgj = _fn
@@ -352,6 +353,9 @@ def optimize_graph(
                 _GraphPropagator = GraphPropagator
             except ImportError:
                 _GraphPropagator = None
+        if _batchify is None:
+            from opto.trainer.algorithms.basic_algorithms import batchify
+            _batchify = batchify
 
     def _ensure_optimizer(param_nodes):
         nonlocal _optimizer
@@ -529,23 +533,28 @@ def optimize_graph(
                     _ensure_optimizer(unique_params)
 
                     if _optimizer is not None and all_output_nodes:
-                        for output_node, run_for_output in all_output_nodes:
-                            feedback_text = run_for_output.feedback or (
-                                f"Score: {run_for_output.score}"
-                                if run_for_output.score is not None
-                                else "No feedback"
-                            )
-                            try:
-                                _optimizer.zero_feedback()
-                                _optimizer.backward(output_node, feedback_text)
-                                raw_updates = _optimizer.step()
+                        targets = [node for node, _ in all_output_nodes]
+                        feedbacks = []
+                        for _node, _run in all_output_nodes:
+                            if _run.score is not None:
+                                feedbacks.append(f"Score: {_run.score:.4f}")
+                            else:
+                                feedbacks.append("No score")
 
-                                if isinstance(raw_updates, dict):
-                                    updates.update(raw_updates)
-                            except Exception as exc:
-                                logger.warning(
-                                    "Optimizer step failed for one query: %s", exc, exc_info=True
-                                )
+                        target = _batchify(*targets)
+                        feedback = _batchify(*feedbacks).data
+
+                        try:
+                            _optimizer.zero_feedback()
+                            _optimizer.backward(target, feedback)
+                            raw_updates = _optimizer.step()
+
+                            if isinstance(raw_updates, dict):
+                                updates.update(raw_updates)
+                        except Exception as exc:
+                            logger.warning(
+                                "Optimizer step failed: %s", exc, exc_info=True
+                            )
 
             except Exception as exc:
                 logger.warning(
