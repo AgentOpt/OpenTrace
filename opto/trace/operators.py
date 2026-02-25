@@ -598,21 +598,75 @@ def set_update(x: Any, y: Any):
 
 
 @bundle(catch_execution_error=False)
-def call_llm(llm, system_prompt: str, *user_prompts, **kwargs) -> str:
-    """Call the LLM model.
+def call_llm(llm, system_prompt: str, *user_prompts: str, **kwargs) -> str:
+    """
+    A thin wrapper around the LLM backend (LiteLLM/OpenAI/etc).
 
-    Args:
-        llm: The language model to use for generating responses.
-        system_prompt: the system prompt to the agent. By tuning this prompt, we can control the behavior of the agent. For example, it can be used to provide instructions to the agent (such as how to reason about the problem, how to use tools, how to answer the question), or provide in-context examples of how to solve the problem.
-        user_prompt: the input to the agent. It can be a query, a task, a code, etc.
-    Returns:
-        The response from the agent.
+    When a ``TelemetrySession`` is active, this function emits a **child OTEL span**
+    for the provider call (marked ``trace.temporal_ignore=true``), so it is visible
+    for monitoring but does not become the TGJ "output node" during optimization.
     """
     messages = []
-    if system_prompt is not None:
+    if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     for user_prompt in user_prompts:
         messages.append({"role": "user", "content": user_prompt})
-    # TODO auto-parsing results
-    response = llm(messages=messages, **kwargs)
-    return response.choices[0].message.content
+
+    try:
+        from opto.trace.io.telemetry_session import TelemetrySession
+        sess = TelemetrySession.current()
+    except Exception:
+        sess = None
+
+    if sess is None or not getattr(sess, "record_spans", False):
+        response = llm(messages=messages, **kwargs)
+        return response.choices[0].message.content
+
+    try:
+        from opto.trace.io.otel_semconv import record_genai_chat
+    except Exception:
+        record_genai_chat = None  # type: ignore
+
+    provider = getattr(llm, "provider_name", None) or getattr(llm, "provider", None) or "litellm"
+    model = getattr(llm, "model_name", None) or getattr(llm, "model", None) or "llm"
+
+    with sess.tracer.start_as_current_span("llm") as sp:
+        sp.set_attribute("trace.temporal_ignore", "true")
+        sp.set_attribute("gen_ai.operation.name", "chat")
+        sp.set_attribute("gen_ai.provider.name", str(provider))
+        sp.set_attribute("gen_ai.request.model", str(model))
+
+        try:
+            response = llm(messages=messages, **kwargs)
+        except Exception as e:
+            try:
+                sp.record_exception(e)
+                sp.set_attribute("error.type", type(e).__name__)
+                sp.set_attribute("error.message", str(e)[:500])
+            except Exception:
+                pass
+            raise
+
+        if record_genai_chat is not None:
+            try:
+                out_msg = None
+                try:
+                    out_msg = response.choices[0].message.content
+                except Exception:
+                    out_msg = None
+
+                record_genai_chat(
+                    sp,
+                    operation="chat",
+                    provider=str(provider),
+                    model=str(model),
+                    input_messages=messages,
+                    output_messages=[{"role": "assistant", "content": out_msg}] if out_msg is not None else [],
+                    response=response,
+                    temperature=kwargs.get("temperature"),
+                    max_tokens=kwargs.get("max_tokens"),
+                )
+            except Exception:
+                pass
+
+        return response.choices[0].message.content

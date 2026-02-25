@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import ctypes
 import functools
@@ -24,6 +25,7 @@ from opto.trace.nodes import (
     get_op_name,
 )
 from opto.trace.utils import contain
+from opto.trace import settings
 
 # This is a global flag to allow external dependencies to be used in the operator.
 ALLOW_EXTERNAL_DEPENDENCIES = None
@@ -41,6 +43,7 @@ def bundle(
     allow_external_dependencies=False,
     overwrite_python_recursion=False,
     projections=None,
+    mlflow_kwargs=None,
     output_name=None
 ):
     """Wrap a function as a FunModule which returns node objects.
@@ -78,6 +81,40 @@ def bundle(
             projections=projections,
             output_name=output_name
         )
+
+        mlflow_kwargs_local = mlflow_kwargs or {}
+
+        if "default_op" not in mlflow_kwargs_local:
+            try:
+                fp = str(fun_module.info.get("file", "")).replace("\\", "/")
+                fn = str(fun_module.info.get("fun_name", ""))
+                if fp.endswith("/trace/operators.py") and fn != "call_llm":
+                    mlflow_kwargs_local["default_op"] = True
+            except Exception:
+                pass
+
+        should_silence_default_op = (
+            settings.mlflow_config.get("disable_default_op_logging", True)
+            and mlflow_kwargs_local.get("default_op", False)
+        )
+
+        if (
+            settings.mlflow_autologging
+            and settings.mlflow_config.get("log_models", True)
+            and mlflow_kwargs_local.get("silent", False) is not True
+            and not should_silence_default_op
+        ):
+            try:
+                import mlflow
+                mlflow_trace_kwargs = {
+                    k: v
+                    for k, v in mlflow_kwargs_local.items()
+                    if k not in ["silent", "default_op"]
+                }
+                fun_module = mlflow.trace(fun_module, **mlflow_trace_kwargs)
+            except Exception:
+                pass
+
         return fun_module
 
     return decorator
@@ -561,38 +598,78 @@ class FunModule(Module):
     def sync_forward(self, fun, *args, **kwargs):
         """
         Call the operator fun and return a MessageNode. All nodes used in
-        the operator fun are added to used_nodes during the execution. If
-        the output is not a Node, we wrap it as a MessageNode, whose inputs
-        are nodes in used_nodes. Sync version.
+        the operator fun are added to used_nodes during the execution.
         """
-        # Wrap the inputs as nodes
         inputs, args, kwargs, _args, _kwargs = self._wrap_inputs(fun, args, kwargs)
-        # Execute fun
-        with trace_nodes() as used_nodes:
-            # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
-            _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
-            output = self.sync_call_fun(fun, *_args, **_kwargs)
-        # Wrap the output as a MessageNode or an ExceptionNode
+
+        span_cm = contextlib.nullcontext()
+        try:
+            from opto.trace.io.telemetry_session import TelemetrySession
+            sess = TelemetrySession.current()
+        except Exception:
+            sess = None
+
+        if sess is not None:
+            span_cm = sess.bundle_span(
+                fun_name=self.info.get("fun_name", getattr(fun, "__name__", self.name)),
+                file_path=self.info.get("file", ""),
+                inputs=inputs,
+            )
+
+        with span_cm as sp:
+            with trace_nodes() as used_nodes:
+                _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
+                try:
+                    output = self.sync_call_fun(fun, *_args, **_kwargs)
+                except Exception as e:
+                    if sp is not None:
+                        try:
+                            sp.record_exception(e)
+                            sp.set_attribute("error.type", type(e).__name__)
+                            sp.set_attribute("error.message", str(e)[:500])
+                        except Exception:
+                            pass
+                    raise
+
         nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
         return nodes
 
     async def async_forward(self, fun, *args, **kwargs):
         """
         Call the operator fun and return a MessageNode. All nodes used in
-        the operator fun are added to used_nodes during the execution. If
-        the output is not a Node, we wrap it as a MessageNode, whose inputs
-        are nodes in used_nodes. Async version.
+        the operator fun are added to used_nodes during the execution.
         """
-        # Wrap the inputs as nodes
         inputs, args, kwargs, _args, _kwargs = self._wrap_inputs(fun, args, kwargs)
-        # Execute fun
-        with trace_nodes() as used_nodes:
-            # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
-            _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
-            output = await self.async_call_fun(
-                fun, *_args, **_kwargs
-            )  # use await to call the async function
-        # Wrap the output as a MessageNode or an ExceptionNode
+
+        span_cm = contextlib.nullcontext()
+        try:
+            from opto.trace.io.telemetry_session import TelemetrySession
+            sess = TelemetrySession.current()
+        except Exception:
+            sess = None
+
+        if sess is not None:
+            span_cm = sess.bundle_span(
+                fun_name=self.info.get("fun_name", getattr(fun, "__name__", self.name)),
+                file_path=self.info.get("file", ""),
+                inputs=inputs,
+            )
+
+        with span_cm as sp:
+            with trace_nodes() as used_nodes:
+                _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
+                try:
+                    output = await self.async_call_fun(fun, *_args, **_kwargs)
+                except Exception as e:
+                    if sp is not None:
+                        try:
+                            sp.record_exception(e)
+                            sp.set_attribute("error.type", type(e).__name__)
+                            sp.set_attribute("error.message", str(e)[:500])
+                        except Exception:
+                            pass
+                    raise
+
         nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
         return nodes
 

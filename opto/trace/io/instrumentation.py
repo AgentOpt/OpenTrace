@@ -62,15 +62,16 @@ class InstrumentedGraph:
         of the root span, producing a **single trace ID** per invocation.
         """
         span_name = f"{self.service_name}.invoke"
-        with self.session.tracer.start_as_current_span(span_name) as root_sp:
-            root_sp.set_attribute("langgraph.service", self.service_name)
-            if query_hint:
-                root_sp.set_attribute("langgraph.query", str(query_hint)[:200])
-            self._root_span = root_sp
-            try:
-                yield root_sp
-            finally:
-                self._root_span = None
+        with self.session.activate():
+            with self.session.tracer.start_as_current_span(span_name) as root_sp:
+                root_sp.set_attribute("langgraph.service", self.service_name)
+                if query_hint:
+                    root_sp.set_attribute("langgraph.query", str(query_hint)[:200])
+                self._root_span = root_sp
+                try:
+                    yield root_sp
+                finally:
+                    self._root_span = None
 
     def invoke(self, state: Any, **kwargs: Any) -> Dict[str, Any]:
         """Execute graph under a root invocation span and capture telemetry.

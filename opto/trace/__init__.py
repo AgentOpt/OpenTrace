@@ -5,6 +5,8 @@ from opto.trace.broadcast import apply_op
 import opto.trace.propagators as propagators
 import opto.trace.operators as operators
 import opto.trace.projections as projections
+import opto.trace.settings as settings
+import opto.features.mlflow as mlflow
 
 from opto.trace.nodes import Node, GRAPH
 from opto.trace.nodes import node
@@ -33,5 +35,7 @@ __all__ = [
     "model",
     "apply_op",
     "propagators",
-    "utils"
+    "utils",
+    "settings",
+    "mlflow"
 ]

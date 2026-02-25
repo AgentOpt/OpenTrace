@@ -2463,6 +2463,14 @@ class MessageNode(Node[T]):
         if len(self.hidden_dependencies) > 0:
             self._dependencies["expandable"].add(self)
 
+        try:
+            from opto.trace.io.telemetry_session import TelemetrySession
+            sess = TelemetrySession.current()
+            if sess is not None:
+                sess.on_message_node_created(self, inputs=self._inputs)
+        except Exception:
+            pass
+
     @property
     def inputs(self):
         """(Union[List[Node], Dict[str, Node]]): Input nodes to the operator"""
