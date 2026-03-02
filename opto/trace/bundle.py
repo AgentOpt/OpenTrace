@@ -631,7 +631,7 @@ class FunModule(Module):
                             pass
                     raise
 
-        nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
+            nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
         return nodes
 
     async def async_forward(self, fun, *args, **kwargs):
@@ -670,7 +670,7 @@ class FunModule(Module):
                             pass
                     raise
 
-        nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
+            nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
         return nodes
 
     def wrap(
