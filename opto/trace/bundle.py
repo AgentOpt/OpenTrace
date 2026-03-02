@@ -211,6 +211,8 @@ class FunModule(Module):
 
         self.traceable_code = traceable_code
         self._fun = fun
+        self.__name__ = fun.__name__
+        self.__qualname__ = fun.__qualname__
         self.description = description
         self._process_inputs = _process_inputs
         self.catch_execution_error = catch_execution_error
