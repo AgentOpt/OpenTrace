@@ -136,8 +136,8 @@ class TelemetrySession:
 
         self._message_node_records: List[Dict[str, Any]] = []
 
-        # Activation token (set on __enter__/activate)
-        self._token: Optional[contextvars.Token] = None
+        # Activation token stack (supports nested with-blocks on the same instance)
+        self._token_stack: List[contextvars.Token] = []
 
     # -- activation -----------------------------------------------------------
 
@@ -160,13 +160,14 @@ class TelemetrySession:
             _CURRENT_SESSION.reset(token)
 
     def __enter__(self) -> "TelemetrySession":
-        self._token = _CURRENT_SESSION.set(self)
+        token = _CURRENT_SESSION.set(self)
+        self._token_stack.append(token)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._token is not None:
-            _CURRENT_SESSION.reset(self._token)
-            self._token = None
+        if self._token_stack:
+            token = self._token_stack.pop()
+            _CURRENT_SESSION.reset(token)
 
     # -- properties -----------------------------------------------------------
 
