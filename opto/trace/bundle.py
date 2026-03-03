@@ -213,6 +213,10 @@ class FunModule(Module):
         self._fun = fun
         self.__name__ = fun.__name__
         self.__qualname__ = fun.__qualname__
+        try:
+            self.__signature__ = inspect.signature(fun)
+        except Exception:
+            self.__signature__ = inspect.signature(lambda *a, **kw: None)
         self.description = description
         self._process_inputs = _process_inputs
         self.catch_execution_error = catch_execution_error
