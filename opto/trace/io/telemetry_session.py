@@ -169,6 +169,25 @@ class TelemetrySession:
             token = self._token_stack.pop()
             _CURRENT_SESSION.reset(token)
 
+    def set_current(self) -> "TelemetrySession":
+        """Activate this session without a context manager.
+
+        Useful in notebooks or scripts where indenting all code under a
+        ``with`` block is impractical.  Must be paired with a later call
+        to :meth:`clear_current`.
+
+        Returns the session instance for chaining.
+        """
+        token = _CURRENT_SESSION.set(self)
+        self._token_stack.append(token)
+        return self
+
+    def clear_current(self) -> None:
+        """Deactivate the most recent :meth:`set_current` activation."""
+        if self._token_stack:
+            token = self._token_stack.pop()
+            _CURRENT_SESSION.reset(token)
+
     # -- properties -----------------------------------------------------------
 
     @property
