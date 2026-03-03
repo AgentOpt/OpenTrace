@@ -657,14 +657,10 @@ def call_llm(llm, system_prompt: str, *user_prompts: str, **kwargs) -> str:
 
                 record_genai_chat(
                     sp,
-                    operation="chat",
                     provider=str(provider),
                     model=str(model),
                     input_messages=messages,
-                    output_messages=[{"role": "assistant", "content": out_msg}] if out_msg is not None else [],
-                    response=response,
-                    temperature=kwargs.get("temperature"),
-                    max_tokens=kwargs.get("max_tokens"),
+                    output_text=out_msg,
                 )
             except Exception:
                 pass
