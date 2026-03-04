@@ -71,15 +71,25 @@ def check_optimizer_parameters(optimizer: Optimizer, agent: trace.Module):
 
 def save_train_config(function):
     """ Decorator to save the inputs of a class method. """
-    def wrapper(self, **kwargs):
+
+    def wrapper(self, *args, **kwargs):
+        # Backward-compat: some wrappers call ``train(guide, train_dataset, ...)`` positionally.
+        # Normalize them into keyword args before forwarding.
+        if args:
+            if len(args) >= 1 and "guide" not in kwargs:
+                kwargs["guide"] = args[0]
+            if len(args) >= 2 and "train_dataset" not in kwargs:
+                kwargs["train_dataset"] = args[1]
+
         _kwargs = kwargs.copy()
-        del _kwargs['train_dataset']  # remove train_dataset from the saved kwargs
-        if _kwargs.get('validate_dataset') is not None:
-            del _kwargs['validate_dataset'] # remove validate_dataset from the saved kwargs
-        if _kwargs.get('test_dataset') is not None:
-            del _kwargs['test_dataset']  # remove test_dataset from the saved kwargs
-        setattr(self, f'_train_last_kwargs', _kwargs)
+        _kwargs.pop("train_dataset", None)  # remove train_dataset from the saved kwargs
+        if _kwargs.get("validate_dataset") is not None:
+            _kwargs.pop("validate_dataset", None)  # remove validate_dataset from the saved kwargs
+        if _kwargs.get("test_dataset") is not None:
+            _kwargs.pop("test_dataset", None)  # remove test_dataset from the saved kwargs
+        setattr(self, "_train_last_kwargs", _kwargs)
         return function(self, **kwargs)
+
     return wrapper
 
 class SearchTemplate(Trainer):
