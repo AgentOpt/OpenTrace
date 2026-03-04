@@ -632,7 +632,6 @@ def call_llm(llm, system_prompt: str, *user_prompts: str, **kwargs) -> str:
 
     with sess.tracer.start_as_current_span("llm") as sp:
         sp.set_attribute("trace.temporal_ignore", "true")
-        sp.set_attribute("gen_ai.operation.name", "chat")
         sp.set_attribute("gen_ai.provider.name", str(provider))
         sp.set_attribute("gen_ai.request.model", str(model))
 
