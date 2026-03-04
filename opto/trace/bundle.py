@@ -604,8 +604,11 @@ class FunModule(Module):
     def sync_forward(self, fun, *args, **kwargs):
         """
         Call the operator fun and return a MessageNode. All nodes used in
-        the operator fun are added to used_nodes during the execution.
+        the operator fun are added to used_nodes during the execution. If
+        the output is not a Node, we wrap it as a MessageNode, whose inputs
+        are nodes in used_nodes. Sync version.
         """
+        # Wrap the inputs as nodes
         inputs, args, kwargs, _args, _kwargs = self._wrap_inputs(fun, args, kwargs)
 
         span_cm = contextlib.nullcontext()
@@ -622,8 +625,10 @@ class FunModule(Module):
                 inputs=inputs,
             )
 
+        # Execute fun
         with span_cm as sp:
             with trace_nodes() as used_nodes:
+                # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
                 _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
                 try:
                     output = self.sync_call_fun(fun, *_args, **_kwargs)
@@ -637,14 +642,18 @@ class FunModule(Module):
                             pass
                     raise
 
+            # Wrap the output as a MessageNode or an ExceptionNode
             nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
         return nodes
 
     async def async_forward(self, fun, *args, **kwargs):
         """
         Call the operator fun and return a MessageNode. All nodes used in
-        the operator fun are added to used_nodes during the execution.
+        the operator fun are added to used_nodes during the execution. If
+        the output is not a Node, we wrap it as a MessageNode, whose inputs
+        are nodes in used_nodes. Async version.
         """
+        # Wrap the inputs as nodes
         inputs, args, kwargs, _args, _kwargs = self._wrap_inputs(fun, args, kwargs)
 
         span_cm = contextlib.nullcontext()
@@ -661,11 +670,15 @@ class FunModule(Module):
                 inputs=inputs,
             )
 
+        # Execute fun
         with span_cm as sp:
             with trace_nodes() as used_nodes:
+                # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
                 _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
                 try:
-                    output = await self.async_call_fun(fun, *_args, **_kwargs)
+                    output = await self.async_call_fun(
+                        fun, *_args, **_kwargs
+                    )  # use await to call the async function
                 except Exception as e:
                     if sp is not None:
                         try:
@@ -676,6 +689,7 @@ class FunModule(Module):
                             pass
                     raise
 
+            # Wrap the output as a MessageNode or an ExceptionNode
             nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
         return nodes
 

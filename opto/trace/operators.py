@@ -598,19 +598,22 @@ def set_update(x: Any, y: Any):
 
 
 @bundle(catch_execution_error=False)
-def call_llm(llm, system_prompt: str, *user_prompts: str, **kwargs) -> str:
-    """
-    A thin wrapper around the LLM backend (LiteLLM/OpenAI/etc).
+def call_llm(llm, system_prompt: str, *user_prompts, **kwargs) -> str:
+    """Call the LLM model.
 
-    When a ``TelemetrySession`` is active, this function emits a **child OTEL span**
-    for the provider call (marked ``trace.temporal_ignore=true``), so it is visible
-    for monitoring but does not become the TGJ "output node" during optimization.
+    Args:
+        llm: The language model to use for generating responses.
+        system_prompt: the system prompt to the agent. By tuning this prompt, we can control the behavior of the agent. For example, it can be used to provide instructions to the agent (such as how to reason about the problem, how to use tools, how to answer the question), or provide in-context examples of how to solve the problem.
+        user_prompt: the input to the agent. It can be a query, a task, a code, etc.
+    Returns:
+        The response from the agent.
     """
     messages = []
-    if system_prompt:
+    if system_prompt is not None:
         messages.append({"role": "system", "content": system_prompt})
     for user_prompt in user_prompts:
         messages.append({"role": "user", "content": user_prompt})
+    # TODO auto-parsing results
 
     try:
         from opto.trace.io.telemetry_session import TelemetrySession
