@@ -49,7 +49,7 @@ jobs:
 
     # 6) Set up Python & install dependencies
     - uses: actions/setup-python@v5
-      with: { python-version: "3.10" }
+      with: { python-version: "3.13" }
     - name: Install Python deps
       run: |
         pip install -e .

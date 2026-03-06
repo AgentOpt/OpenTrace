@@ -29,5 +29,5 @@ setuptools.setup(
     long_description=open('README.md', encoding="utf8").read(),
     packages=setuptools.find_packages(include=["opto*"]),
     install_requires=install_requires,
-    python_requires=">=3.10",
+    python_requires=">=3.13",
 )
