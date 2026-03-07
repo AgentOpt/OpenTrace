@@ -2211,6 +2211,11 @@ class Node(AbstractNode[T]):
 
         return ops.keys(self)
 
+    def get(self, key, default=None):
+        import opto.trace.operators as ops
+
+        return ops.get(self, node(key), node(default))
+
     def pop(self, __index=-1):
         # python does hidden type checks
         import opto.trace.operators as ops
