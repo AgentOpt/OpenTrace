@@ -1,8 +1,35 @@
 # Multi-Objective Vector Scores
 
-This guide explains how to use multi-objective optimization in OpenTrace and
-Trace-Bench. It covers the scoring model, configuration options, supported
-trainer algorithms, and the token-minimization pattern.
+## Why multi-objective optimization?
+
+Standard single-objective optimization collapses all concerns into one scalar
+score. This works when you care about exactly one metric, but real tasks have
+competing concerns: accuracy vs. API cost, quality vs. latency, base loss vs.
+regularization. A single number hides these trade-offs — you can't tell whether
+a candidate is cheap-but-wrong or correct-but-expensive.
+
+Multi-objective mode makes each metric explicit. Instead of `score = 0.85`, you
+get `{"accuracy": 0.95, "tokens_out": 120, "latency_s": 0.3}`. The trainer
+then uses weighted scalarization or Pareto ranking to select candidates, giving
+you visibility into trade-offs and the ability to re-prioritize without
+retraining.
+
+**Best use cases:** 2-4 competing metrics, minimizing API cost while
+maintaining quality, understanding accuracy-vs-speed trade-offs, regularized
+optimization problems.
+
+**What you gain:** explicit per-metric tracking, Pareto frontier exploration,
+tunable weight priorities, token-efficient candidate selection.
+
+**Jump to:**
+[Switching to multi-objective](#switching-from-scalar-to-multi-objective) |
+[ObjectiveConfig reference](#objectiveconfig-reference) |
+[Token minimization](#adding-token-minimization) |
+[Canonical demos](#canonical-demos) |
+[Data flow](#data-flow) |
+[Running in Trace-Bench](#running-in-trace-bench)
+
+---
 
 ## Overview
 
@@ -256,16 +283,14 @@ adding token metrics to any task.
 
 ## Data flow
 
-```
-Guide.get_score_dict()        # per-example Dict[str, float]
-        |
-evaluate_vector()             # calls get_score_dict for each example
-        |
-aggregate_score_dicts()       # per-metric mean across examples
-        |
-select_best() / select_top_k()   # multi-objective candidate selection
-        |
-ObjectiveConfig               # mode, weights, minimize, tie_break
+### Evaluation pipeline
+
+```mermaid
+graph TD
+    A["Guide.get_score_dict()"] -->|"per-example Dict[str, float]"| B["evaluate_vector()"]
+    B -->|"List[Dict[str, float]]"| C["aggregate_score_dicts()"]
+    C -->|"per-candidate mean Dict"| D["select_best() / select_top_k()"]
+    D -->|"uses ObjectiveConfig"| E["Best candidate selected"]
 ```
 
 1. **evaluate_vector()** (`opto/trainer/evaluators.py`) calls
@@ -275,6 +300,21 @@ ObjectiveConfig               # mode, weights, minimize, tie_break
    metric means across all examples for a single candidate.
 3. **select_best()** / **select_top_k()** rank candidates according to the
    `ObjectiveConfig` and return the winning index/indices.
+
+### Selection mode decision
+
+```mermaid
+graph TD
+    S["ObjectiveConfig.mode"] -->|"scalar"| SC["to_scalar_score() → argmax"]
+    S -->|"weighted"| W["apply_minimize() → weighted_scalarize() → argmax"]
+    S -->|"pareto"| P["apply_minimize() → pareto_rank()"]
+    P --> F{"Single rank-0\ncandidate?"}
+    F -->|"Yes"| R["Return winner"]
+    F -->|"No"| TB["tie_break strategy"]
+    TB -->|"weighted"| TW["weighted_scalarize among front → argmax"]
+    TB -->|"lexicographic"| TL["sort by metric name → pick highest"]
+    TB -->|"random_seeded"| TR["seeded shuffle → pick first"]
+```
 
 Trainer algorithms (BasicSearch, Beamsearch) call this pipeline internally when
 `objective_config` is provided and `mode != "scalar"`.
