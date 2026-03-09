@@ -501,9 +501,9 @@ def select_top_k(candidates: List[Tuple[ScoreLike, any]],
 | `tests/test_objectives.py` | Unit tests for all functions in objectives.py | M1 |
 | `tests/test_evaluators_vector.py` | Tests for evaluate_vector + aggregate_vector_scores | M1 |
 | `tests/test_trainers_multiobjective.py` | Integration tests for BasicSearch + Beamsearch with ObjectiveConfig | M2 |
-| `examples/notebooks/t6_m0_analysis.ipynb` | M0 analysis notebook | M0 |
-| `examples/notebooks/t6_m1_vector_scores.ipynb` | M1 demo notebook | M1 |
-| `examples/notebooks/t6_m2_trainers.ipynb` | M2 demo notebook | M2 |
+| `docs/dev/t6_m0_analysis.ipynb` | M0 analysis notebook | M0 |
+| `examples/notebooks/multiobjective_quickstart.ipynb` | M1 demo notebook | M1 |
+| `examples/notebooks/multiobjective_trainers.ipynb` | M2 demo notebook | M2 |
 | `examples/notebooks/t6_m3_benchmarks.ipynb` | M3 benchmark notebook | M3 |
 | `docs/T6_technical_plan.md` | This document | M0 |
 | `docs/multi_objective_scores.md` | User-facing documentation | M4 |
@@ -615,7 +615,7 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 
 **Deliverables:**
 - `docs/T6_technical_plan.md` — this document, finalized
-- `examples/notebooks/t6_m0_analysis.ipynb` — Colab-ready notebook
+- `docs/dev/t6_m0_analysis.ipynb` — Colab-ready notebook
 
 **Notebook demonstrates:**
 - Current Guide score contract (`get_feedback` → `Tuple[float, str]`, `metric` → `float`)
@@ -637,7 +637,7 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 - `opto/trainer/evaluators.py` (add `evaluate_vector`, `aggregate_vector_scores`)
 - `opto/trainer/algorithms/basic_algorithms.py` (BasicSearch: accept/use ObjectiveConfig)
 - `tests/test_objectives.py`, `tests/test_evaluators_vector.py`
-- `examples/notebooks/t6_m1_vector_scores.ipynb`
+- `examples/notebooks/multiobjective_quickstart.ipynb`
 
 **Notebook demonstrates:**
 - StubLLM mode: BasicSearchAlgorithm on small candidate set (5-10) with deterministic dummy guide returning dict metrics
@@ -659,7 +659,7 @@ Selection path:   get_score_dict() → evaluate_vector() → objectives.py  ← 
 - Expanded BasicSearch tests (edge cases, missing metrics, tie-break policies)
 - Optional: minimal PrioritySearch support (weighted scalarization for heap, dict stored for logging)
 - `tests/test_trainers_multiobjective.py`
-- `examples/notebooks/t6_m2_trainers.ipynb`
+- `examples/notebooks/multiobjective_trainers.ipynb`
 
 **Notebook demonstrates:**
 - BasicSearch + Beamsearch in: scalar mode (baseline), weighted mode, Pareto mode
