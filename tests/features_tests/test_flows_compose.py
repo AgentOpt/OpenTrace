@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, Mock
+from opto.utils.llm import AbstractModel
 
 
 # Mock LLM at module level to ensure no real API calls
@@ -15,7 +16,7 @@ def mock_llm_globally():
         def __init__(self, content):
             self.message = type('m', (), {'content': content})
 
-    class DummyLLM:
+    class DummyLLM(AbstractModel):
         def __init__(self):
             # Default to an endless stream of the same mocked response
             self.responses = ["Mocked LLM response"]

@@ -1,10 +1,14 @@
 import json
+import os
 import pytest
 from opto.optimizers.optoprimemulti import OptoPrimeMulti
 from opto.utils.llm import LLMFactory
 from opto.trace.propagators import GraphPropagator
 from opto.trace.nodes import ParameterNode
 from opto.trace import bundle, node, GRAPH
+
+HAS_CREDENTIALS = os.path.exists("OAI_CONFIG_LIST") or os.environ.get("TRACE_LITELLM_MODEL") or os.environ.get("OPENAI_API_KEY")
+SKIP_REASON = "No LLM API credentials available"
 
 class DummyLLM:
     def __init__(self, responses):
@@ -293,16 +297,17 @@ def user_code(output):
     else:
         return "Try again. The output should be negative"
 
+@pytest.mark.skipif(not HAS_CREDENTIALS, reason=SKIP_REASON)
 @pytest.mark.parametrize("gen_tech", [
-    "temperature_variation", 
-    "self_refinement", 
-    "iterative_alternatives", 
+    "temperature_variation",
+    "self_refinement",
+    "iterative_alternatives",
     "multi_experts",
     "multi_llm"
 ])
 @pytest.mark.parametrize("sel_tech", [
-    "moa", 
-    "lastofn", 
+    "moa",
+    "lastofn",
     "majority"
 ])
 def test_optimizer_with_code(gen_tech, sel_tech):

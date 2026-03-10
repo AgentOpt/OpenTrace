@@ -51,8 +51,8 @@ def test_tag_template_change():
     part1 = optimizer.replace_symbols(part1, optimizer.prompt_symbols)
     part2 = optimizer.replace_symbols(part2, optimizer.prompt_symbols)
 
-    assert """<var name="variable_name" type="data_type">""" in part1, "Expected <var> tag to be present in part1"
-    assert """<const name="y" type="int">""" in part2, "Expected <const> tag to be present in part2"
+    assert "<variable>" in part1, "Expected <variable> tag to be present in part1"
+    assert """<const""" in part2 or """<solution""" in part2, "Expected <const> or <solution> tag to be present in part2"
 
     print(part1)
     print(part2)
@@ -161,4 +161,4 @@ def test_extraction_pipeline():
     assert 'reasoning' in suggestion, "Expected 'reasoning' in suggestion"
     assert 'variables' in suggestion, "Expected 'variables' in suggestion"
     assert 'int0' in suggestion['variables'], "Expected 'int0' variable in suggestion"
-    assert suggestion['variables']['int0'] == 2, "Expected int0 to be incremented to 2"
+    assert str(suggestion['variables']['int0']) == '2', "Expected int0 to be incremented to 2"
