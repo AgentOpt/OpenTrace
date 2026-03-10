@@ -212,6 +212,11 @@ class TracingLLM:
         self._trainable_keys_all = trainable_keys is None
         self.trainable_keys = set(trainable_keys) if trainable_keys is not None else set()
         self.emit_code_param = emit_code_param
+        # Infer provider from model string if not explicitly provided
+        if provider_name == "llm":
+            model_str = str(getattr(llm, "model", "") or "")
+            if "/" in model_str:
+                provider_name = model_str.split("/", 1)[0]
         self.provider_name = provider_name
         self.llm_span_name = llm_span_name
         self.emit_llm_child_span = emit_llm_child_span

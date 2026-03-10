@@ -91,6 +91,8 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
             
             # Track the most recent span for temporal parenting
             prev_span_id = None
+            # Map span_id -> actual TGJ node_id (for stable parent references)
+            span_to_node_id: Dict[str, str] = {}
             
             # Identify root invocation spans (e.g. "service.invoke") so we
             # can exclude them from temporal chaining — they are structural
@@ -155,7 +157,8 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                     effective_psid = None
 
                 if effective_psid and "parent" not in inputs:
-                    inputs["parent"] = f"{svc}:{effective_psid}"
+                    # Resolve via mapping so parent refs use stable node ids
+                    inputs["parent"] = span_to_node_id.get(effective_psid, f"{svc}:{effective_psid}")
                 
                 # Connect parameters as inputs to the MessageNode
                 for pname in params.keys():
@@ -182,9 +185,13 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                         rec["inputs"][role] = ref
                     else:
                         rec["inputs"][role] = ref if ":" in ref else f"{svc}:{ref}"
-                node_id = f"{svc}:{sid}"
+                # Use message.id as stable logical node identity when
+                # available; fall back to span id for backward compat.
+                msg_id = attrs.get("message.id")
+                node_id = f"{svc}:{msg_id}" if msg_id else f"{svc}:{sid}"
                 nodes[node_id] = rec
-                
+                span_to_node_id[sid] = node_id
+
                 # D10: Advance temporal chain only on spans NOT marked
                 # with trace.temporal_ignore (child LLM spans are ignored;
                 # node spans advance the chain).

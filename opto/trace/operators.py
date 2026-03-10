@@ -630,8 +630,15 @@ def call_llm(llm, system_prompt: str, *user_prompts, **kwargs) -> str:
     except Exception:
         record_genai_chat = None  # type: ignore
 
-    provider = getattr(llm, "provider_name", None) or getattr(llm, "provider", None) or "litellm"
     model = getattr(llm, "model_name", None) or getattr(llm, "model", None) or "llm"
+    provider = getattr(llm, "provider_name", None) or getattr(llm, "provider", None)
+    if not provider:
+        # Best-effort inference from model string (e.g. "openai/gpt-4" -> "openai")
+        model_str = str(model)
+        if "/" in model_str:
+            provider = model_str.split("/", 1)[0]
+        else:
+            provider = "litellm"
 
     with sess.tracer.start_as_current_span("llm") as sp:
         sp.set_attribute("trace.temporal_ignore", "true")

@@ -92,6 +92,10 @@ class TelemetrySession:
     mlflow_log_artifacts : bool
         If True, ``export_run_bundle()`` will also attempt to log the bundle
         directory as MLflow artifacts (best-effort no-op when unavailable).
+    mlflow_autolog : bool
+        If True, best-effort enable MLflow autologging so ``@trace.bundle`` ops
+        can also be wrapped by ``mlflow.trace`` while this session is used.
+        This keeps MLflow optional and preserves backward compatibility.
     """
 
     def __init__(
@@ -106,6 +110,8 @@ class TelemetrySession:
         message_nodes: Optional[MessageNodeTelemetryConfig] = None,
         max_attr_chars: int = 500,
         mlflow_log_artifacts: bool = False,
+        mlflow_autolog: bool = False,
+        mlflow_autolog_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.service_name = service_name
         self.record_spans = record_spans
@@ -114,6 +120,8 @@ class TelemetrySession:
         self.message_nodes = message_nodes or MessageNodeTelemetryConfig()
         self.max_attr_chars = int(max_attr_chars)
         self.mlflow_log_artifacts = bool(mlflow_log_artifacts)
+        self.mlflow_autolog = bool(mlflow_autolog)
+        self.mlflow_autolog_kwargs = dict(mlflow_autolog_kwargs or {})
 
         # OTEL plumbing
         self._exporter = InMemorySpanExporter()
@@ -138,6 +146,20 @@ class TelemetrySession:
 
         # Activation token stack (supports nested with-blocks on the same instance)
         self._token_stack: List[contextvars.Token] = []
+
+        # Optional MLflow bridge: keep MLflow optional and do not fail session
+        # construction if MLflow is unavailable.
+        if self.mlflow_autolog:
+            try:
+                from opto.features.mlflow.autolog import autolog as _mlflow_autolog
+                kwargs = {"silent": True}
+                kwargs.update(self.mlflow_autolog_kwargs)
+                _mlflow_autolog(**kwargs)
+            except Exception as e:
+                logger.debug(
+                    "TelemetrySession could not enable MLflow autologging: %s",
+                    e,
+                )
 
     # -- activation -----------------------------------------------------------
 
