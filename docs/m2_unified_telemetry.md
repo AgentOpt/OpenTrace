@@ -189,8 +189,8 @@ Files changed across the M2 branch (vs `upstream/experimental`):
 
 | File | Change | Why |
 |------|--------|-----|
-| `examples/notebooks/01_m1_instrument_and_optimize.ipynb` | M1 demo notebook | LangGraph instrumentation walkthrough |
-| `examples/notebooks/02_m2_unified_telemetry.ipynb` | M2 demo notebook | Unified session, TGJ export, MLflow bridge |
+| `examples/notebooks/demo_m1_instrument_and_optimize.ipynb` | M1 demo notebook | LangGraph instrumentation walkthrough |
+| `examples/notebooks/demo_m2_unified_telemetry.ipynb` | M2 demo notebook | Unified session, TGJ export, MLflow bridge |
 | `docs/m0_README.md`, `docs/m1_README.md` | Milestone readmes | Architecture context |
 | `docs/T1_technical_plan.md` | Technical plan | Project design reference |
 
