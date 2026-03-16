@@ -65,9 +65,11 @@ class ModuleCandidate:
     def __lt__(self, other):
         """ Compare two candidates based on their update_dict. """
         assert isinstance(other, ModuleCandidate), "other must be an instance of ModuleCandidate."
-        return self.created_time > other.created_time
+        # return self.created_time > other.created_time
         # self < other if, self is created later than other
         # Since we will use minheap, and this would give priority to later created candidates in the heap memory.
+        return self.num_rollouts < other.num_rollouts
+        # This would give priority to candidates with fewer rollouts in the heap memory for tie-breaking.
 
     def __hash__(self):
         """ Hash the candidate based on its update_dict. """
