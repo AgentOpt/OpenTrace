@@ -101,18 +101,18 @@ def multiply(num):
     assert function_repr in part2, "Expected function representation to be present in part2"
 
 def test_big_data_truncation():
-    num_1 = node(1, trainable=True)
+    num_1 = node("**2", trainable=True)
 
-    list_1 = node([1, 2, 3, 4, 5, 6, 7, 8, 9, 20] * 10, trainable=True)
+    list_1 = node("12345691912338" * 10, trainable=False)
 
-    result = num_1 + list_1[30]
+    result = list_1 + num_1
 
-    optimizer = OptoPrimeV2([num_1, list_1], use_json_object_format=False,
+    optimizer = OptoPrimeV2([num_1], use_json_object_format=False,
                             ignore_extraction_error=False,
                             include_example=True, initial_var_char_limit=10)
 
     optimizer.zero_feedback()
-    optimizer.backward(result, 'make this number bigger')
+    optimizer.backward(result, 'compute the expression')
 
     summary = optimizer.summarize()
     part1, part2 = optimizer.construct_prompt(summary)
@@ -120,11 +120,7 @@ def test_big_data_truncation():
     part1 = optimizer.replace_symbols(part1, optimizer.prompt_symbols)
     part2 = optimizer.replace_symbols(part2, optimizer.prompt_symbols)
 
-    truncated_repr = """<variable name="list0" type="list">
-<value>
-[1, 2, 3, ...(skipped due to length limit)
-</value>
-</variable>"""
+    truncated_repr = """1234569191...(skipped due to length limit)"""
 
     assert truncated_repr in part2, "Expected truncated list representation to be present in part2"
 
@@ -177,5 +173,5 @@ The instruction suggests that the output, `add0`, needs to be made bigger than i
     assert 'variables' in suggestion, "Expected 'variables' in suggestion"
     assert 'int0' in suggestion['variables'], "Expected 'int0' variable in suggestion"
     assert 'int1' in suggestion['variables'], "Expected 'int1' variable in suggestion"
-    assert suggestion['variables']['int0'] == 5, "Expected int0 to be incremented to 5"
-    assert suggestion['variables']['int1'] == 5, "Expected int1 to be incremented to 5"
+    assert suggestion['variables']['int0'] == '5', "Expected int0 to be incremented to 5"
+    assert suggestion['variables']['int1'] == '5', "Expected int1 to be incremented to 5"

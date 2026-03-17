@@ -1,7 +1,9 @@
 import json
 from textwrap import dedent
+from typing import List
 
 from opto.optimizers.optoprime import OptoPrime
+from opto.trace.nodes import ParameterNode
 
 
 class OPRO(OptoPrime):
@@ -83,6 +85,24 @@ class OPRO(OptoPrime):
         """
         super().__init__(*args, **kwargs)
         self.buffer = []
+
+    def parameter_check(self, parameters: List[ParameterNode]):
+        """Check if the parameters are valid.
+        This can be overloaded by subclasses to add more checks.
+
+        Args:
+            parameters: List[ParameterNode]
+                The parameters to check.
+        
+        Raises:
+            AssertionError: If any parameter contains image data.
+        """
+        # Ensure no parameters contain image data
+        for param in parameters:
+            assert not param.is_image, (
+                f"Parameter '{param.name}' contains image data. "
+                f"OPROv1 optimizer does not support image parameters."
+            )
 
     def construct_prompt(self, summary, mask=None, *args, **kwargs):
         """Construct system and user prompts using historical examples.

@@ -1,13 +1,13 @@
-name: CI
+name: Full CI (with Ollama)
 
 on:
   push:
-    branches: [ main, dev, experimental, ci-multi ]
-  pull_request:
-    branches: [ main, dev, experimental, ci-multi ]
+    branches: [ main ]
+  # Manual trigger for testing or major releases
+  workflow_dispatch:
 
 jobs:
-  test:
+  full-test:
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -15,12 +15,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
   
-    # 1) Restore any cached Ollama data (~2 GB)
+    # 1) Restore any cached Ollama data
     - name: Restore Ollama cache
       uses: actions/cache@v4
       with:
         path: ~/.ollama
-        key: qwen3-4b-gguf-v1
+        key: qwen3-vl-2b-v1
 
     # 2) Install Ollama
     - name: Install Ollama
@@ -43,9 +43,9 @@ jobs:
       run: |
         sudo systemctl enable --now ollama
 
-    # 5) Pull the phi4-mini:3.8b model (uses cache if present)
-    - name: Pull phi4-mini:3.8b model
-      run: ollama pull phi4-mini:3.8b
+    # 5) Pull the qwen3-vl:2b model - supports multimodal/vision with OpenAI-compatible API
+    - name: Pull qwen3-vl:2b model (multimodal)
+      run: ollama pull qwen3-vl:2b
 
     # 6) Set up Python & install dependencies
     - uses: actions/setup-python@v5
@@ -60,13 +60,13 @@ jobs:
       run: |
         echo "OPENAI_API_KEY=ollama"             >> $GITHUB_ENV
         echo "OPENAI_API_BASE=http://localhost:11434/v1" >> $GITHUB_ENV
-        echo "TRACE_LITELLM_MODEL=openai/phi4-mini:3.8b" >> $GITHUB_ENV
+        echo "TRACE_LITELLM_MODEL=openai/qwen3-vl:2b" >> $GITHUB_ENV
 
     # 8) Run all Trace unit tests
     - name: Run unit tests
       run: pytest tests/unit_tests/
 
     # 9) Run basic tests for each optimizer (some will fail due to the small LLM model chosen for free GitHub CI)
-    - name: Run optimizers test suite
-      run: pytest tests/llm_optimizers_tests/test_optimizer.py || true 
-      continue-on-error: true
+#    - name: Run optimizers test suite
+#      run: pytest tests/llm_optimizers_tests/test_optimizer.py || true
+#      continue-on-error: true

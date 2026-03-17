@@ -6,6 +6,10 @@ from typing import TypeVar, Generic
 import re
 import heapq
 import contextvars
+import requests
+from PIL import Image
+from io import BytesIO
+from urllib.parse import urlparse
 
 
 def node(data, name=None, trainable=False, description=None):
@@ -275,15 +279,128 @@ class Graph:
 
 GRAPH = Graph()  # This is a global registry of all the nodes.
 
-# USED_NODES = (
-#     list()
-# )  # A stack of sets. This is a global registry to track which nodes are read.
-
 USED_NODES = contextvars.ContextVar('USED_NODES', default=list())
 # A stack of sets. This is a global registry to track which nodes are read.
 
 T = TypeVar("T")
 
+
+def verify_data_is_image_url(url: str, timeout: float = 1.0) -> bool:
+    """Verify if the node's data is an image URL by checking Content-Type via HEAD request.
+
+    This method performs an actual network request to verify that a URL points to an image.
+    It should be used when you need definitive verification beyond pattern matching.
+
+    The method should be called before we convert image to base64 string (e.g., optimization step)
+
+    Args:
+        timeout: Maximum time in seconds to wait for the request. Default is 1.0.
+
+    Returns:
+        bool: True if the URL returns an image Content-Type, False otherwise.
+
+    Notes:
+        - This method only applies to http/https URLs
+        - Returns False for non-URL data or if the request fails
+        - Uses HEAD request to avoid downloading the full image
+        - Requires network connectivity
+
+    Example:
+        >>> result = verify_data_is_image_url("https://example.com/photo.jpg")
+        >>> result  # Network verification: True/False
+    """
+    if not isinstance(url, str):
+        return False
+
+    try:
+        parsed = urlparse(url)
+
+        # Only verify http/https URLs
+        if parsed.scheme not in ('http', 'https'):
+            return False
+
+        # Perform HEAD request to check Content-Type
+        try:
+            response = requests.head(url, timeout=timeout, allow_redirects=True)
+            content_type = response.headers.get('content-type', '').lower()
+            return content_type.startswith('image/')
+        except ImportError:
+            warnings.warn(
+                "requests library not available. Install with: pip install requests",
+                ImportWarning
+            )
+            return False
+        except (requests.RequestException, Exception):
+            # Network errors, timeouts, invalid URLs, etc.
+            return False
+
+    except (ValueError, AttributeError):
+        return False
+
+
+def is_image(data) -> bool:
+    """Check if the node is an image node.
+    This is a shared type check
+
+    Returns:
+        bool: True if the node is an image node, False otherwise.
+
+    Notes:
+        Supports four types of image data:
+        1. Base64 encoded string (data URL format)
+        2. PIL Image object
+        3. Raw image bytes
+        4. URL string pointing to an image (pattern-based check, no network request)
+
+        For URLs, this performs a fast pattern-based check only. For verification
+        with a network request, use verify_image_url() method.
+
+        If you have a numpy array, convert it to PIL Image first:
+            from PIL import Image
+            pil_image = Image.fromarray(numpy_array)
+    """
+    try:
+        if isinstance(data, Image.Image):
+            return True
+    except ImportError:
+        pass
+
+    # Check if it's a base64 data URL string
+    if isinstance(data, str) and data.startswith('data:image/'):
+        return True
+
+    # Check if it's raw image bytes
+    if isinstance(data, bytes):
+        try:
+            Image.open(BytesIO(data))
+            return True
+        except Exception:
+            pass
+
+    # Check if it's an image URL (pattern-based, no network request)
+    if isinstance(data, str):
+        try:
+            parsed = urlparse(data)
+            if parsed.scheme in ('http', 'https'):
+                path = parsed.path.lower()
+                # Common image extensions
+                image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+                                    '.svg', '.ico', '.tiff', '.tif', '.heic', '.heif')
+                if any(path.endswith(ext) for ext in image_extensions):
+                    return True
+        except (ValueError, AttributeError):
+            pass
+
+    # Check if it's a specialized container class
+    # We don't use isinstance check because we can't import other files into nodes.py, this file should have no
+    # external dependencies on other files.
+    try:
+        if 'ImageContent' in data.__class__.__name__:
+            return True
+    except AttributeError:
+        pass
+
+    return False
 
 class AbstractNode(Generic[T]):
     """AbstractNode represents an abstract data node in a directed graph.
@@ -361,6 +478,31 @@ class AbstractNode(Generic[T]):
         if len(current_used_nodes) > 0 and GRAPH.TRACE:  # We're within trace_nodes context.
             current_used_nodes[-1].add(self)
         return self.__getattribute__("_data")
+    
+    @property
+    def is_image(self) -> bool:
+        """Check if the node is an image node.
+        This is a shared type check
+
+        Returns:
+            bool: True if the node is an image node, False otherwise.
+
+        Notes:
+            Supports four types of image data:
+            1. Base64 encoded string (data URL format)
+            2. PIL Image object
+            3. Raw image bytes
+            4. URL string pointing to an image (pattern-based check, no network request)
+            5. An ImageContent (customized data container)
+
+            For URLs, this performs a fast pattern-based check only. For verification
+            with a network request, use verify_image_url() method.
+
+            If you have a numpy array, convert it to PIL Image first:
+                from PIL import Image
+                pil_image = Image.fromarray(numpy_array)
+        """
+        return is_image(self._data)
 
     @property
     def parents(self):

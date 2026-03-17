@@ -12,6 +12,7 @@ from opto.trace.propagators import TraceGraph, GraphPropagator
 from opto.trace.propagators.propagators import Propagator
 from opto.optimizers.optimizer import Optimizer
 from opto.optimizers.buffers import FIFOBuffer
+from opto.optimizers.utils import is_bedrock_model
 from opto.utils.llm import AbstractModel, LLM
 
 
@@ -215,17 +216,17 @@ class ProblemInstance:
 
 class OptoPrime(Optimizer):
     """Language model-based optimizer for text and code parameters.
-    
-    OptoPrime implements optimization through structured problem representation and 
-    language model reasoning. It converts execution traces into problem instances 
+
+    OptoPrime implements optimization through structured problem representation and
+    language model reasoning. It converts execution traces into problem instances
     that language models can understand and improve.
-    
+
     The optimizer operates by:
     1. Collecting execution traces and feedback from the computation graph
     2. Converting traces into structured problem representations
     3. Prompting language models to suggest parameter improvements
     4. Extracting and applying suggested updates to parameters
-    
+
     Parameters
     ----------
     parameters : list[ParameterNode]
@@ -256,7 +257,7 @@ class OptoPrime(Optimizer):
         Whether to highlight variables at the end of prompts.
     **kwargs
         Additional keyword arguments passed to parent class.
-    
+
     Attributes
     ----------
     llm : AbstractModel
@@ -269,7 +270,7 @@ class OptoPrime(Optimizer):
         Log of problem summaries if logging is enabled.
     memory : FIFOBuffer
         Buffer storing historical feedback.
-    
+
     Methods
     -------
     summarize()
@@ -278,7 +279,7 @@ class OptoPrime(Optimizer):
         Create a ProblemInstance from aggregated feedback.
     extract_llm_suggestion(response)
         Parse LLM response to extract parameter updates.
-    
+
     Notes
     -----
     OptoPrime excels at optimizing:
@@ -286,34 +287,34 @@ class OptoPrime(Optimizer):
     - Code implementations and algorithms
     - Mixed text-code parameters
     - Parameters with complex constraints
-    
+
     The optimizer uses structured problem representations that separate:
     - Variables (trainable parameters)
     - Inputs (non-trainable values)
     - Code (execution trace)
     - Outputs (results)
     - Feedback (optimization signals)
-    
+
     This structure enables language models to understand the optimization
     context and suggest targeted improvements.
-    
+
     See Also
     --------
     Optimizer : Base optimizer class
     OptoPrimeV2 : Enhanced version with improved prompt engineering
     TextGrad : Alternative text-based optimizer
-    
+
     Examples
     --------
     >>> from opto.optimizers import OptoPrime
     >>> from opto.trace import node
-    >>> 
+    >>>
     >>> # Create trainable parameters
     >>> prompt = node("Explain quantum computing", trainable=True)
-    >>> 
+    >>>
     >>> # Initialize optimizer
     >>> optimizer = OptoPrime([prompt], objective="Make explanation clearer")
-    >>> 
+    >>>
     >>> # Run optimization loop
     >>> for _ in range(5):
     ...     output = model(prompt)
@@ -391,7 +392,6 @@ class OptoPrime(Optimizer):
         """
     )
 
-
     example_problem_template = dedent(
         """
         Here is an example of problem instance and response:
@@ -462,26 +462,27 @@ class OptoPrime(Optimizer):
     }
 
     def __init__(
-        self,
-        parameters: List[ParameterNode],
-        llm: AbstractModel = None,
-        *args,
-        propagator: Propagator = None,
-        objective: Union[None, str] = None,
-        ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
-        include_example=False,  # TODO # include example problem and response in the prompt
-        memory_size=0,  # Memory size to store the past feedback
-        max_tokens=4096,
-        log=True,
-        prompt_symbols=None,
-        json_keys=None,  # keys to use in the json object format (can remove "answer" if not needed)
-        use_json_object_format=True,  # whether to use json object format for the response when calling LLM
-        highlight_variables=False,  # whether to highlight the variables at the end in the prompt
-        **kwargs,
+            self,
+            parameters: List[ParameterNode],
+            llm: AbstractModel = None,
+            *args,
+            propagator: Propagator = None,
+            objective: Union[None, str] = None,
+            ignore_extraction_error: bool = True,
+            # ignore the type conversion error when extracting updated values from LLM's suggestion
+            include_example=False,  # TODO # include example problem and response in the prompt
+            memory_size=0,  # Memory size to store the past feedback
+            max_tokens=4096,
+            log=True,
+            prompt_symbols=None,
+            json_keys=None,  # keys to use in the json object format (can remove "answer" if not needed)
+            use_json_object_format=True,  # whether to use json object format for the response when calling LLM
+            highlight_variables=False,  # whether to highlight the variables at the end in the prompt
+            **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
         self.ignore_extraction_error = ignore_extraction_error
-        self.llm = llm or LLM()
+        self.llm = llm or LLM(mm_beta=True)
         self.objective = objective or self.default_objective
         self.example_problem = ProblemInstance.problem_template.format(
             instruction=self.default_objective,
@@ -517,7 +518,8 @@ class OptoPrime(Optimizer):
         # if self.default_json_keys['answer'] is None:
         #     del self.default_json_keys['answer']
         # NOTE del cause KeyError if the key is not in the dict due to changing class attribute
-        if 'answer' not in self.default_json_keys or self.default_json_keys['answer'] is None:  # answer field is not needed
+        if 'answer' not in self.default_json_keys or self.default_json_keys[
+            'answer'] is None:  # answer field is not needed
             # If 'answer' is not in the json keys, we use the no-answer format
             self.output_format_prompt = self.output_format_prompt_no_answer.format(**self.default_json_keys)
         else:  # If 'answer' is in the json keys, we use the original format of OptoPrime
@@ -525,16 +527,34 @@ class OptoPrime(Optimizer):
         self.use_json_object_format = use_json_object_format
         self.highlight_variables = highlight_variables
 
+    def parameter_check(self, parameters: List[ParameterNode]):
+        """Check if the parameters are valid.
+        This can be overloaded by subclasses to add more checks.
+
+        Args:
+            parameters: List[ParameterNode]
+                The parameters to check.
+
+        Raises:
+            AssertionError: If any parameter contains image data.
+        """
+        # Ensure no parameters contain image data
+        for param in parameters:
+            assert not param.is_image, (
+                f"Parameter '{param.name}' contains image data. "
+                f"OptoPrimeV1 optimizer does not support image parameters."
+            )
+
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
         return GraphPropagator()
 
     def summarize(self):
         """Aggregate feedback from parameters into a structured summary.
-        
+
         Collects and organizes feedback from all trainable parameters into
         a FunctionFeedback structure suitable for problem representation.
-        
+
         Returns
         -------
         FunctionFeedback
@@ -546,7 +566,7 @@ class OptoPrime(Optimizer):
             - output: Final output values
             - documentation: Function documentation strings
             - user_feedback: Aggregated user feedback
-        
+
         Notes
         -----
         The method performs several transformations:
@@ -554,7 +574,7 @@ class OptoPrime(Optimizer):
         2. Converts the trace graph to FunctionFeedback structure
         3. Separates root nodes into variables (trainable) and inputs (non-trainable)
         4. Preserves the computation graph and intermediate values
-        
+
         Parameters without feedback (disconnected from output) are still
         included in the summary but may not receive updates.
         """
@@ -610,12 +630,12 @@ class OptoPrime(Optimizer):
     @staticmethod
     def repr_node_constraint(node_dict):
         """Format node constraints for display.
-        
+
         Parameters
         ----------
         node_dict : dict
             Dictionary of node names to (value, description) tuples.
-        
+
         Returns
         -------
         str
@@ -634,10 +654,10 @@ class OptoPrime(Optimizer):
 
     def problem_instance(self, summary, mask=None):
         """Create a ProblemInstance from aggregated feedback.
-        
+
         Converts a FunctionFeedback summary into a formatted problem
         representation for the language model.
-        
+
         Parameters
         ----------
         summary : FunctionFeedback
@@ -645,13 +665,13 @@ class OptoPrime(Optimizer):
         mask : list[str], optional
             List of sections to exclude from the problem instance.
             Can include: "#Instruction", "#Code", "#Variables", etc.
-        
+
         Returns
         -------
         ProblemInstance
             Structured problem representation with all sections
             formatted for language model consumption.
-        
+
         Notes
         -----
         The mask parameter allows selective inclusion of problem
@@ -695,20 +715,19 @@ class OptoPrime(Optimizer):
     def construct_prompt(self, summary, mask=None, *args, **kwargs):
         """Construct the system and user prompt."""
         system_prompt = (
-            self.representation_prompt + self.output_format_prompt
+                self.representation_prompt + self.output_format_prompt
         )  # generic representation + output rule
         user_prompt = self.user_prompt_template.format(
             problem_instance=str(self.problem_instance(summary, mask=mask))
         )  # problem instance
         if self.include_example:
             user_prompt = (
-                self.example_problem_template.format(
-                    example_problem=self.example_problem,
-                    example_response=self.example_response,
-                )
-                + user_prompt
+                    self.example_problem_template.format(
+                        example_problem=self.example_problem,
+                        example_response=self.example_response,
+                    )
+                    + user_prompt
             )
-
 
         if self.highlight_variables:
             var_names = []
@@ -736,9 +755,9 @@ class OptoPrime(Optimizer):
                 )
             examples = "\n".join(examples)
             user_prompt = (
-                prefix
-                + f"\nBelow are some variables and their feedbacks you received in the past.\n\n{examples}\n\n"
-                + self.final_prompt
+                    prefix
+                    + f"\nBelow are some variables and their feedbacks you received in the past.\n\n{examples}\n\n"
+                    + self.final_prompt
             )
         self.memory.add((summary.variables, summary.user_feedback))
 
@@ -750,7 +769,7 @@ class OptoPrime(Optimizer):
         return text
 
     def _step(
-        self, verbose=False, mask=None, *args, **kwargs
+            self, verbose=False, mask=None, *args, **kwargs
     ) -> Dict[ParameterNode, Any]:
         assert isinstance(self.propagator, GraphPropagator)
         summary = self.summarize()
@@ -760,12 +779,12 @@ class OptoPrime(Optimizer):
         user_prompt = self.replace_symbols(user_prompt, self.prompt_symbols)
 
         response = self.call_llm(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                verbose=verbose,
-                max_tokens=self.max_tokens,
-            )
-            
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            verbose=verbose,
+            max_tokens=self.max_tokens,
+        )
+
         if "TERMINATE" in response:
             return {}
 
@@ -787,7 +806,7 @@ class OptoPrime(Optimizer):
         return update_dict
 
     def construct_update_dict(
-        self, suggestion: Dict[str, Any]
+            self, suggestion: Dict[str, Any]
     ) -> Dict[ParameterNode, Any]:
         """Convert the suggestion in text into the right data type."""
         try:
@@ -858,56 +877,173 @@ class OptoPrime(Optimizer):
                     raise e
         return update_dict
 
-    def extract_llm_suggestion(self, response: str, suggestion_tag=None, reasoning_tag=None, return_only_suggestion=True, ignore_extraction_error=None) -> Dict[str, Any]:
+    @staticmethod
+    def _fix_json_string_newlines(text: str) -> str:
+        """Escape literal newlines inside JSON string values.
+
+        LLMs sometimes output actual newline characters inside JSON string
+        values instead of the ``\\n`` escape sequence.  This walks the text
+        with a simple state machine and converts those raw newlines so that
+        ``json.loads()`` can parse the result.
+
+        Only works when the LLM has properly escaped internal ``"`` as
+        ``\\"``.  If quotes are also unescaped the regex fallback handles
+        extraction instead.
+        """
+        result = []
+        in_string = False
+        i = 0
+        while i < len(text):
+            c = text[i]
+            if c == '\\' and in_string and i + 1 < len(text):
+                # Escape sequence inside string – pass through both chars.
+                result.append(c)
+                result.append(text[i + 1])
+                i += 2
+                continue
+            if c == '"':
+                in_string = not in_string
+                result.append(c)
+            elif in_string and c == '\n':
+                result.append('\\n')
+            elif in_string and c == '\r':
+                result.append('\\r')
+            elif in_string and c == '\t':
+                result.append('\\t')
+            else:
+                result.append(c)
+            i += 1
+        return ''.join(result)
+
+    @staticmethod
+    def _decode_json_escapes(value: str) -> str:
+        """Decode JSON escape sequences in *value*.
+
+        First tries ``json.loads`` (which handles all escapes correctly).
+        If that fails (e.g. because the value contains unescaped ``"``),
+        falls back to manual replacement of the most common sequences.
+        """
+        # Try escaping unescaped internal quotes so json.loads can handle it.
+        try:
+            escaped = re.sub(r'(?<!\\)"', r'\\"', value)
+            return json.loads(f'"{escaped}"')
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Manual fallback – order matters: protect \\\\ first.
+        _PH = '\x00_BSLASH_\x00'
+        value = value.replace('\\\\', _PH)
+        value = value.replace('\\n', '\n')
+        value = value.replace('\\t', '\t')
+        value = value.replace('\\r', '\r')
+        value = value.replace('\\"', '"')
+        value = value.replace("\\'", "'")
+        value = value.replace(_PH, '\\')
+        return value
+
+    def extract_llm_suggestion(self, response: str, suggestion_tag=None, reasoning_tag=None,
+                               return_only_suggestion=True, ignore_extraction_error=None) -> Dict[str, Any]:
         """Extract the suggestion from the response."""
         suggestion_tag = suggestion_tag or self.default_json_keys.get("suggestion", "suggestion")
         reasoning_tag = reasoning_tag or self.default_json_keys.get("reasoning", "reasoning")
         ignore_extraction_error = ignore_extraction_error or getattr(self, "ignore_extraction_error", False)
 
+        # Ensure response is a plain string (LLM clients may return
+        # wrapper objects like ContentBlockList).
+        if not isinstance(response, str):
+            response = str(response)
+
         if "```" in response:
-            match = re.findall(r"```(.*?)```", response, re.DOTALL)
+            # Strip markdown code blocks, including optional language identifier
+            match = re.findall(r"```\w*\n?(.*?)```", response, re.DOTALL)
             if len(match) > 0:
                 response = match[0]
 
         json_extracted = {}
         suggestion = {}
-        attempt_n = 0
-        while attempt_n < 2:
+        reasoning = ""
+
+        # --- Attempt 1: direct json.loads ---
+        try:
+            json_extracted = json.loads(response)
+        except json.JSONDecodeError:
+            # --- Attempt 2: extract outermost { ... } and retry ---
+            braces = re.findall(r"{.*}", response, re.DOTALL)
+            if braces:
+                try:
+                    json_extracted = json.loads(braces[0])
+                except json.JSONDecodeError:
+                    pass
+        except Exception:
+            pass
+
+        # --- Attempt 3: fix literal newlines inside strings, then parse ---
+        if not isinstance(json_extracted, dict) or len(json_extracted) == 0:
             try:
-                json_extracted = json.loads(response)
-                if isinstance(json_extracted, dict):  # trim all whitespace keys in the json_extracted
-                    json_extracted = {k.strip(): v for k, v in json_extracted.items()}
-                suggestion = json_extracted.get(suggestion_tag, json_extracted)
-                reasoning = json_extracted.get(reasoning_tag, "")
-                break
-            except json.JSONDecodeError:
-                response = re.findall(r"{.*}", response, re.DOTALL)
-                if len(response) > 0:
-                    response = response[0]
-                attempt_n += 1
-            except Exception:
-                attempt_n += 1
+                fixed = self._fix_json_string_newlines(response)
+                json_extracted = json.loads(fixed)
+            except (json.JSONDecodeError, Exception):
+                braces = re.findall(r"{.*}", response, re.DOTALL)
+                if braces:
+                    try:
+                        fixed = self._fix_json_string_newlines(braces[0])
+                        json_extracted = json.loads(fixed)
+                    except (json.JSONDecodeError, Exception):
+                        pass
+
+        if isinstance(json_extracted, dict) and len(json_extracted) > 0:
+            json_extracted = {k.strip(): v for k, v in json_extracted.items()}
+            suggestion = json_extracted.get(suggestion_tag, json_extracted)
+            reasoning = json_extracted.get(reasoning_tag, "")
 
         if not isinstance(suggestion, dict):
             suggestion = json_extracted if isinstance(json_extracted, dict) else {}
 
+        # --- Regex fallback: position-based extraction ---
+        # Handles the case where json.loads fails entirely (e.g. the LLM
+        # used actual newlines AND unescaped quotes inside code strings).
+        # Instead of matching "value" with a regex (which breaks on internal
+        # unescaped quotes), we locate each key and extract the value as
+        # everything between the opening " and the last " before the next
+        # key or end of the suggestion object.
         if len(suggestion) == 0:
-            pattern = rf'"{suggestion_tag}"\s*:\s*\{{(.*?)\}}'
-            suggestion_match = re.search(pattern, str(response), re.DOTALL)
-            if suggestion_match:
+            pattern = rf'"{suggestion_tag}"\s*:\s*\{{'
+            suggestion_start = re.search(pattern, str(response), re.DOTALL)
+            if suggestion_start:
                 suggestion = {}
-                suggestion_content = suggestion_match.group(1)
-                pair_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"(.*)"'
-                pairs = re.findall(pair_pattern, suggestion_content, re.DOTALL)
-                for key, value in pairs:
-                    suggestion[key] = value
+                content = str(response)[suggestion_start.end():]
+
+                # Find all "key": " patterns that start a value.
+                key_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"'
+                key_matches = list(re.finditer(key_pattern, content))
+
+                for idx, km in enumerate(key_matches):
+                    key = km.group(1)
+                    value_start = km.end()  # right after the opening "
+
+                    # Boundary: start of next key or end of content.
+                    if idx + 1 < len(key_matches):
+                        boundary = key_matches[idx + 1].start()
+                    else:
+                        boundary = len(content)
+
+                    region = content[value_start:boundary]
+
+                    # The value's closing " is the last " in this region.
+                    last_quote = region.rfind('"')
+                    if last_quote >= 0:
+                        value = region[:last_quote]
+                    else:
+                        value = region.rstrip().rstrip(',').rstrip('}')
+
+                    suggestion[key] = self._decode_json_escapes(value)
 
         if len(suggestion) == 0 and not ignore_extraction_error:
             print(f"Cannot extract {suggestion_tag} from LLM's response:\n{response}")
 
         keys_to_remove = []
         for key, value in suggestion.items():
-            if "__code" in key and value.strip() == "":
+            if "__code" in key and isinstance(value, str) and value.strip() == "":
                 keys_to_remove.append(key)
         for key in keys_to_remove:
             del suggestion[key]
@@ -915,11 +1051,11 @@ class OptoPrime(Optimizer):
         return suggestion if return_only_suggestion else {"reasoning": reasoning, "variables": suggestion}
 
     def call_llm(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        verbose: Union[bool, str] = False,
-        max_tokens: int = 4096,
+            self,
+            system_prompt: str,
+            user_prompt: str,
+            verbose: Union[bool, str] = False,
+            max_tokens: int = 4096,
     ):
         """Call the LLM with a prompt and return the response."""
         if verbose not in (False, "output"):
@@ -930,13 +1066,16 @@ class OptoPrime(Optimizer):
             {"role": "user", "content": user_prompt},
         ]
 
-        response_format =  {"type": "json_object"} if self.use_json_object_format else None
-        try:  # Try tp force it to be a json object
+        # Bedrock doesn't support response_format natively - LiteLLM adds tools which breaks the response
+        _is_bedrock = hasattr(self.llm, 'model_name') and is_bedrock_model(self.llm.model_name)
+
+        response_format = {"type": "json_object"} if (self.use_json_object_format and not _is_bedrock) else None
+        try:  # Try to force it to be a json object
             response = self.llm(messages=messages, max_tokens=max_tokens, response_format=response_format)
         except Exception:
             response = self.llm(messages=messages, max_tokens=max_tokens)
 
-        response = response.choices[0].message.content
+        response = response.content
 
         if verbose:
             print("LLM response:\n", response)

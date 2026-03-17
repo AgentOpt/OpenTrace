@@ -3,7 +3,7 @@ from typing import Any, List, Dict, Union, Tuple, Optional
 from dataclasses import dataclass, asdict
 from opto.optimizers.optoprime import OptoPrime, FunctionFeedback
 from opto.trace.utils import dedent
-from opto.optimizers.utils import truncate_expression, extract_xml_like_data
+from opto.optimizers.utils import truncate_expression, extract_xml_like_data, MultiModalPayload, is_bedrock_model
 
 from opto.trace.nodes import ParameterNode, Node, MessageNode
 from opto.trace.propagators import TraceGraph, GraphPropagator
@@ -15,7 +15,6 @@ import copy
 import pickle
 import re
 from typing import Dict, Any
-
 
 class OptimizerPromptSymbolSet:
     """
@@ -37,6 +36,7 @@ class OptimizerPromptSymbolSet:
     instruction_section_title = "# Instruction"
     code_section_title = "# Code"
     documentation_section_title = "# Documentation"
+    context_section_title = "# Context"
 
     node_tag = "node"  # nodes that are constants in the graph
     variable_tag = "variable"  # nodes that can be changed
@@ -141,6 +141,7 @@ class OptimizerPromptSymbolSet:
             "instruction": self.instruction_section_title,
             "code": self.code_section_title,
             "documentation": self.documentation_section_title,
+            "context": self.context_section_title
         }
 
 
@@ -149,7 +150,7 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
 
     expect_json = True
 
-    custom_output_format_instruction = """
+    custom_output_format_instruction = dedent("""
     {{
         "reasoning": <Your reasoning>,
         "suggestion": {{
@@ -157,7 +158,7 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
             <variable_2>: <suggested_value_2>,
         }}
     }}
-    """
+    """)
 
     def example_output(self, reasoning, variables):
         """
@@ -172,10 +173,13 @@ class OptimizerPromptSymbolSetJSON(OptimizerPromptSymbolSet):
         }
         return json.dumps(output, indent=2)
 
-    def output_response_extractor(self, response: str, suggestion_tag = "suggestion") -> Dict[str, Any]:
-        # Use extract_llm_suggestion from OptoPrime => it could be implemented the other way around (OptoPrime would uses this helper but it should be moved out of OptoPrimev2)
-        return OptoPrime.extract_llm_suggestion(self, response, suggestion_tag=suggestion_tag, reasoning_tag="reasoning", return_only_suggestion=False)
-
+    def output_response_extractor(self, response: str) -> Dict[str, Any]:
+        """
+        Extracts reasoning and suggestion variables from the LLM response using OptoPrime's extraction logic.
+        """
+        # Use the centralized extraction logic from OptoPrime
+        optoprime_instance = OptoPrime()
+        return optoprime_instance.extract_llm_suggestion(response)
 
 class OptimizerPromptSymbolSet2(OptimizerPromptSymbolSet):
     variables_section_title = "# Variables"
@@ -186,6 +190,7 @@ class OptimizerPromptSymbolSet2(OptimizerPromptSymbolSet):
     instruction_section_title = "# Instruction"
     code_section_title = "# Code"
     documentation_section_title = "# Documentation"
+    context_section_title = "# Context"
 
     node_tag = "const"  # nodes that are constants in the graph
     variable_tag = "var"  # nodes that can be changed
@@ -208,6 +213,7 @@ class ProblemInstance:
     others: str
     outputs: str
     feedback: str
+    context: Optional[str]
 
     optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
 
@@ -240,7 +246,7 @@ class ProblemInstance:
     )
 
     def __repr__(self) -> str:
-        return self.problem_template.format(
+        optimization_query = self.problem_template.format(
             instruction=self.instruction,
             code=self.code,
             documentation=self.documentation,
@@ -248,13 +254,25 @@ class ProblemInstance:
             inputs=self.inputs,
             outputs=self.outputs,
             others=self.others,
-            feedback=self.feedback,
+            feedback=self.feedback
         )
+
+        context_section = dedent("""
+        
+        # Context
+        {context}
+        """)
+
+        if self.context is not None and self.context.strip() != "":
+            context_section = context_section.format(context=self.context)
+            optimization_query += context_section
+
+        return optimization_query
 
 
 @dataclass
 class MemoryInstance:
-    variables: Dict[str, Tuple[Any, str]] # name -> (data, constraint)
+    variables: Dict[str, Tuple[Any, str]]  # name -> (data, constraint)
     feedback: str
     optimizer_prompt_symbol_set: OptimizerPromptSymbolSet
 
@@ -303,6 +321,7 @@ class OptoPrimeV2(OptoPrime):
         - {others_section_title}: the intermediate values created through the code execution.
         - {outputs_section_title}: the result of the code output.
         - {feedback_section_title}: the feedback about the code's execution result.
+        - {context_section_title}: the context information that might be useful to solve the problem.
 
         In `{variables_section_title}`, `{inputs_section_title}`, `{outputs_section_title}`, and `{others_section_title}`, the format is:
 
@@ -357,14 +376,19 @@ class OptoPrimeV2(OptoPrime):
 
     example_prompt = dedent(
         """
-
         Here are some feasible but not optimal solutions for the current problem instance. Consider this as a hint to help you understand the problem better.
 
         ================================
-
         {examples}
-
         ================================
+        """
+    )
+
+    context_prompt = dedent(
+        """
+        Here is some additional **context** to solving this problem:
+        
+        {context}
         """
     )
 
@@ -393,18 +417,18 @@ class OptoPrimeV2(OptoPrime):
             optimizer_prompt_symbol_set: OptimizerPromptSymbolSet = OptimizerPromptSymbolSet(),
             use_json_object_format=True,  # whether to use json object format for the response when calling LLM
             truncate_expression=truncate_expression,
+            problem_context: Optional[str] = None,
             **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
 
-        if optimizer_prompt_symbol_set is None:
-            optimizer_prompt_symbol_set = OptimizerPromptSymbolSet()
-
         self.truncate_expression = truncate_expression
+        self.problem_context = problem_context
+        self.multimodal_payload = MultiModalPayload()
 
         self.use_json_object_format = use_json_object_format if optimizer_prompt_symbol_set.expect_json and use_json_object_format else False
         self.ignore_extraction_error = ignore_extraction_error
-        self.llm = llm or LLM()
+        self.llm = llm or LLM(mm_beta=True)
         self.objective = objective or self.default_objective.format(value_tag=optimizer_prompt_symbol_set.value_tag,
                                                                     variables_section_title=optimizer_prompt_symbol_set.variables_section_title,
                                                                     feedback_section_title=optimizer_prompt_symbol_set.feedback_section_title)
@@ -443,6 +467,62 @@ class OptoPrimeV2(OptoPrime):
         self.prompt_symbols = copy.deepcopy(self.default_prompt_symbols)
         self.initialize_prompt()
 
+    def parameter_check(self, parameters: List[ParameterNode]):
+        """Check if the parameters are valid.
+        This can be overloaded by subclasses to add more checks.
+
+        Args:
+            parameters: List[ParameterNode]
+                The parameters to check.
+        
+        Raises:
+            AssertionError: If more than one parameter contains image data.
+        
+        Notes:
+            OptoPrimeV2 supports image parameters, but only one parameter can be
+            an image at a time since LLMs can only generate one image per inference.
+        """
+        # Count image parameters
+        image_params = [param for param in parameters if param.is_image]
+        
+        if len(image_params) > 1:
+            param_names = ', '.join([f"'{p.name}'" for p in image_params])
+            raise AssertionError(
+                f"OptoPrimeV2 supports at most one image parameter, but found {len(image_params)}: "
+                f"{param_names}. LLMs can only generate one image at a time."
+            )
+
+    def add_image_context(self, image: Union[str, Any], context: str = "", format: str = "PNG"):
+        """
+        Add an image to the optimizer context.
+        
+        Args:
+            image: Can be:
+                - URL string (starting with 'http://' or 'https://')
+                - Local file path (string)
+                - Numpy array or array-like RGB image
+            context: Optional context text to describe the image. If empty, uses default.
+            format: Image format for numpy arrays (PNG, JPEG, etc.). Default: PNG
+        """
+        if self.problem_context is None:
+            self.problem_context = ""
+
+        if context == "":
+            context = "The attached image is given to the workflow. You should use the image to help you understand the problem and provide better suggestions. You can refer to the image when providing your suggestions."
+
+        self.problem_context += f"{context}\n\n"
+
+        # Set the image using the multimodal payload
+        self.multimodal_payload.set_image(image, format=format)
+
+        self.initialize_prompt()
+
+    def add_context(self, context: str):
+        if self.problem_context is None:
+            self.problem_context = ""
+        self.problem_context += f"{context}\n\n"
+        self.initialize_prompt()
+
     def initialize_prompt(self):
         self.representation_prompt = self.representation_prompt.format(
             variable_expression_format=dedent(f"""
@@ -463,7 +543,8 @@ class OptoPrimeV2(OptoPrime):
             instruction_section_title=self.optimizer_prompt_symbol_set.instruction_section_title.replace(" ", ""),
             code_section_title=self.optimizer_prompt_symbol_set.code_section_title.replace(" ", ""),
             documentation_section_title=self.optimizer_prompt_symbol_set.documentation_section_title.replace(" ", ""),
-            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", "")
+            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", ""),
+            context_section_title=self.optimizer_prompt_symbol_set.context_section_title.replace(" ", "")
         )
         self.output_format_prompt = self.output_format_prompt_template.format(
             output_format=self.optimizer_prompt_symbol_set.output_format,
@@ -476,7 +557,8 @@ class OptoPrimeV2(OptoPrime):
             documentation_section_title=self.optimizer_prompt_symbol_set.documentation_section_title.replace(" ", ""),
             variables_section_title=self.optimizer_prompt_symbol_set.variables_section_title.replace(" ", ""),
             inputs_section_title=self.optimizer_prompt_symbol_set.inputs_section_title.replace(" ", ""),
-            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", "")
+            others_section_title=self.optimizer_prompt_symbol_set.others_section_title.replace(" ", ""),
+            context_section_title=self.optimizer_prompt_symbol_set.context_section_title.replace(" ", "")
         )
 
     def repr_node_value(self, node_dict, node_tag="node",
@@ -523,7 +605,9 @@ class OptoPrimeV2(OptoPrime):
         return "\n".join(temp_list)
 
     def construct_prompt(self, summary, mask=None, *args, **kwargs):
-        """Construct the system and user prompt."""
+        """Construct the system and user prompt.
+        Expanded to construct a list of content blocks
+        """
         system_prompt = (
                 self.representation_prompt + self.output_format_prompt
         )  # generic representation + output rule
@@ -603,6 +687,7 @@ class OptoPrimeV2(OptoPrime):
                                              constraint_tag=self.optimizer_prompt_symbol_set.constraint_tag) if self.optimizer_prompt_symbol_set.others_section_title not in mask else ""
             ),
             feedback=summary.user_feedback if self.optimizer_prompt_symbol_set.feedback_section_title not in mask else "",
+            context=self.problem_context if self.optimizer_prompt_symbol_set.context_section_title not in mask else "",
             optimizer_prompt_symbol_set=self.optimizer_prompt_symbol_set
         )
 
@@ -664,12 +749,22 @@ class OptoPrimeV2(OptoPrime):
         if verbose not in (False, "output"):
             print("Prompt\n", system_prompt + user_prompt)
 
+        user_message_content = []
+        # Add image content block if available
+        image_block = self.multimodal_payload.get_content_block()
+        if image_block is not None:
+            user_message_content.append(image_block)
+
+        user_message_content.append({"type": "text", "text": user_prompt})
+
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": user_message_content},
         ]
 
-        response_format = {"type": "json_object"} if self.use_json_object_format else None
+        # Bedrock doesn't support response_format natively - LiteLLM adds tools which breaks the response
+        _is_bedrock = hasattr(self.llm, 'model_name') and is_bedrock_model(self.llm.model_name)
+        response_format = {"type": "json_object"} if (self.use_json_object_format and not _is_bedrock) else None
 
         response = self.llm(messages=messages, max_tokens=max_tokens, response_format=response_format)
 
@@ -678,3 +773,42 @@ class OptoPrimeV2(OptoPrime):
         if verbose:
             print("LLM response:\n", response)
         return response
+
+    def save(self, path: str):
+        """Save the optimizer state to a file."""
+        with open(path, 'wb') as f:
+            pickle.dump({
+                "truncate_expression": self.truncate_expression,
+                "use_json_object_format": self.use_json_object_format,
+                "ignore_extraction_error": self.ignore_extraction_error,
+                "objective": self.objective,
+                "initial_var_char_limit": self.initial_var_char_limit,
+                "optimizer_prompt_symbol_set": self.optimizer_prompt_symbol_set,
+                "include_example": self.include_example,
+                "max_tokens": self.max_tokens,
+                "memory": self.memory,
+                "default_prompt_symbols": self.default_prompt_symbols,
+                "prompt_symbols": self.prompt_symbols,
+                "representation_prompt": self.representation_prompt,
+                "output_format_prompt": self.output_format_prompt,
+                "context_prompt": self.context_prompt
+            }, f)
+
+    def load(self, path: str):
+        """Load the optimizer state from a file."""
+        with open(path, 'rb') as f:
+            state = pickle.load(f)
+            self.truncate_expression = state["truncate_expression"]
+            self.use_json_object_format = state["use_json_object_format"]
+            self.ignore_extraction_error = state["ignore_extraction_error"]
+            self.objective = state["objective"]
+            self.initial_var_char_limit = state["initial_var_char_limit"]
+            self.optimizer_prompt_symbol_set = state["optimizer_prompt_symbol_set"]
+            self.include_example = state["include_example"]
+            self.max_tokens = state["max_tokens"]
+            self.memory = state["memory"]
+            self.default_prompt_symbols = state["default_prompt_symbols"]
+            self.prompt_symbols = state["prompt_symbols"]
+            self.representation_prompt = state["representation_prompt"]
+            self.output_format_prompt = state["output_format_prompt"]
+            self.context_prompt = state["context_prompt"]
