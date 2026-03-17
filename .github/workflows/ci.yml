@@ -58,18 +58,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for i in {1..60}; do
+
+          ready=0
+          for i in $(seq 1 60); do
             if curl -fsS "http://${OLLAMA_HOST}/api/tags" > /dev/null; then
               echo "Ollama is ready"
-              exit 0
+              ready=1
+              break
             fi
+            echo "Waiting for Ollama... attempt $i/60"
             sleep 2
           done
 
-          echo "Ollama failed to become ready"
-          sudo systemctl status ollama --no-pager || true
-          sudo journalctl -u ollama -n 200 --no-pager || true
-          exit 1
+          if [ "$ready" -ne 1 ]; then
+            echo "Ollama failed to become ready"
+            sudo systemctl status ollama --no-pager || true
+            sudo journalctl -u ollama -n 200 --no-pager || true
+            exit 1
+          fi
 
       - name: Pull phi4-mini:3.8b model
         run: |
