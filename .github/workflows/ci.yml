@@ -16,31 +16,30 @@ jobs:
       OLLAMA_VERSION: "0.18.0"
       OLLAMA_HOST: "127.0.0.1:11434"
       OLLAMA_CONTEXT_LENGTH: "4000"
-      OLLAMA_MODELS: "${{ github.workspace }}/.ollama/models"
+      OLLAMA_MODELS: "/usr/share/ollama/.ollama/models"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Cache the actual model directory we control and reuse across runs.
       - name: Restore Ollama model cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.OLLAMA_MODELS }}
-          key: ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-phi4-mini-3.8b-v1
+          path: /usr/share/ollama/.ollama/models
+          key: ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-phi4-mini-3.8b-v2
           restore-keys: |
             ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-
             ollama-${{ runner.os }}-
 
-      - name: Prepare Ollama model directory
-        run: |
-          mkdir -p "${OLLAMA_MODELS}"
-
-      - name: Install Ollama (pinned)
+      - name: Install Ollama
         run: |
           curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=${OLLAMA_VERSION} sh
 
-      # Use environment variables instead of replacing ExecStart.
+      - name: Prepare Ollama directories
+        run: |
+          sudo mkdir -p /usr/share/ollama/.ollama/models
+          sudo chown -R ollama:ollama /usr/share/ollama
+
       - name: Configure Ollama service
         run: |
           sudo mkdir -p /etc/systemd/system/ollama.service.d
@@ -54,37 +53,38 @@ jobs:
           sudo systemctl enable ollama
           sudo systemctl restart ollama
 
+      - name: Verify Ollama service started
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo systemctl status ollama --no-pager || true
+          sudo journalctl -u ollama -n 100 --no-pager || true
+
       - name: Wait for Ollama to become ready
         shell: bash
         run: |
           set -euo pipefail
 
-          ready=0
           for i in $(seq 1 60); do
             if curl -fsS "http://${OLLAMA_HOST}/api/tags" > /dev/null; then
               echo "Ollama is ready"
-              ready=1
               break
             fi
+
+            if [ "$i" -eq 60 ]; then
+              echo "Ollama failed to become ready"
+              sudo systemctl status ollama --no-pager || true
+              sudo journalctl -u ollama -n 200 --no-pager || true
+              exit 1
+            fi
+
             echo "Waiting for Ollama... attempt $i/60"
             sleep 2
           done
 
-          if [ "$ready" -ne 1 ]; then
-            echo "Ollama failed to become ready"
-            sudo systemctl status ollama --no-pager || true
-            sudo journalctl -u ollama -n 200 --no-pager || true
-            exit 1
-          fi
-
       - name: Pull phi4-mini:3.8b model
         run: |
           ollama pull phi4-mini:3.8b
-
-      - name: Show Ollama info
-        run: |
-          ollama list
-          curl -fsS "http://${OLLAMA_HOST}/api/tags"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -104,12 +104,10 @@ jobs:
           echo "TRACE_LITELLM_MODEL=openai/phi4-mini:3.8b" >> "$GITHUB_ENV"
 
       - name: Run unit tests
-        run: |
-          pytest tests/unit_tests/
+        run: pytest tests/unit_tests/
 
       - name: Run optimizers test suite
-        run: |
-          pytest tests/llm_optimizers_tests/test_optimizer.py || true
+        run: pytest tests/llm_optimizers_tests/test_optimizer.py || true
         continue-on-error: true
 
       - name: Dump Ollama logs on failure
@@ -117,4 +115,4 @@ jobs:
         run: |
           sudo systemctl status ollama --no-pager || true
           sudo journalctl -u ollama -n 300 --no-pager || true
-          ls -R "${OLLAMA_MODELS}" || true
+          sudo ls -R /usr/share/ollama/.ollama || true
