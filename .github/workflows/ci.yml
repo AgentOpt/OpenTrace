@@ -2,71 +2,113 @@ name: CI
 
 on:
   push:
-    branches: [ main, dev, experimental, ci-multi ]
+    branches: [main, dev, experimental, ci-multi]
   pull_request:
-    branches: [ main, dev, experimental, ci-multi ]
+    branches: [main, dev, experimental, ci-multi]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
 
+    env:
+      PYTHON_VERSION: "3.13"
+      OLLAMA_VERSION: "0.18.0"
+      OLLAMA_HOST: "127.0.0.1:11434"
+      OLLAMA_CONTEXT_LENGTH: "4000"
+      OLLAMA_MODELS: "${{ github.workspace }}/.ollama/models"
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-  
-    # 1) Restore any cached Ollama data (~2 GB)
-    - name: Restore Ollama cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.ollama
-        key: qwen3-4b-gguf-v1
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    # 2) Install Ollama
-    - name: Install Ollama
-      run: |
-        curl -fsSL https://ollama.com/install.sh | sh
+      # Cache the actual model directory we control and reuse across runs.
+      - name: Restore Ollama model cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OLLAMA_MODELS }}
+          key: ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-phi4-mini-3.8b-v1
+          restore-keys: |
+            ollama-${{ runner.os }}-${{ env.OLLAMA_VERSION }}-
+            ollama-${{ runner.os }}-
 
-    # 3) Drop-in override to bump context window to 4k tokens
-    - name: Configure Ollama for 4K context
-      run: |
-        sudo mkdir -p /etc/systemd/system/ollama.service.d
-        sudo tee /etc/systemd/system/ollama.service.d/override.conf << 'EOF'
-        [Service]
-        ExecStart=
-        ExecStart=/usr/local/bin/ollama serve --num_ctx 4000
-        EOF
-        sudo systemctl daemon-reload
+      - name: Prepare Ollama model directory
+        run: |
+          mkdir -p "${OLLAMA_MODELS}"
 
-    # 4) Enable & start the systemd-managed Ollama daemon
-    - name: Enable & start Ollama
-      run: |
-        sudo systemctl enable --now ollama
+      - name: Install Ollama (pinned)
+        run: |
+          curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=${OLLAMA_VERSION} sh
 
-    # 5) Pull the phi4-mini:3.8b model (uses cache if present)
-    - name: Pull phi4-mini:3.8b model
-      run: ollama pull phi4-mini:3.8b
+      # Use environment variables instead of replacing ExecStart.
+      - name: Configure Ollama service
+        run: |
+          sudo mkdir -p /etc/systemd/system/ollama.service.d
+          sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null <<EOF
+          [Service]
+          Environment="OLLAMA_HOST=${OLLAMA_HOST}"
+          Environment="OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH}"
+          Environment="OLLAMA_MODELS=${OLLAMA_MODELS}"
+          EOF
+          sudo systemctl daemon-reload
+          sudo systemctl enable ollama
+          sudo systemctl restart ollama
 
-    # 6) Set up Python & install dependencies
-    - uses: actions/setup-python@v5
-      with: { python-version: "3.13" }
-    - name: Install Python deps
-      run: |
-        pip install -e .
-        pip install pytest datasets numpy
+      - name: Wait for Ollama to become ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..60}; do
+            if curl -fsS "http://${OLLAMA_HOST}/api/tags" > /dev/null; then
+              echo "Ollama is ready"
+              exit 0
+            fi
+            sleep 2
+          done
 
-    # 7) Point LiteLLM/OpenAI to our local Ollama server
-    - name: Configure LLM env
-      run: |
-        echo "OPENAI_API_KEY=ollama"             >> $GITHUB_ENV
-        echo "OPENAI_API_BASE=http://localhost:11434/v1" >> $GITHUB_ENV
-        echo "TRACE_LITELLM_MODEL=openai/phi4-mini:3.8b" >> $GITHUB_ENV
+          echo "Ollama failed to become ready"
+          sudo systemctl status ollama --no-pager || true
+          sudo journalctl -u ollama -n 200 --no-pager || true
+          exit 1
 
-    # 8) Run all Trace unit tests
-    - name: Run unit tests
-      run: pytest tests/unit_tests/
+      - name: Pull phi4-mini:3.8b model
+        run: |
+          ollama pull phi4-mini:3.8b
 
-    # 9) Run basic tests for each optimizer (some will fail due to the small LLM model chosen for free GitHub CI)
-    - name: Run optimizers test suite
-      run: pytest tests/llm_optimizers_tests/test_optimizer.py || true 
-      continue-on-error: true
+      - name: Show Ollama info
+        run: |
+          ollama list
+          curl -fsS "http://${OLLAMA_HOST}/api/tags"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest datasets numpy
+
+      - name: Configure LLM env
+        run: |
+          echo "OPENAI_API_KEY=ollama" >> "$GITHUB_ENV"
+          echo "OPENAI_API_BASE=http://${OLLAMA_HOST}/v1" >> "$GITHUB_ENV"
+          echo "TRACE_LITELLM_MODEL=openai/phi4-mini:3.8b" >> "$GITHUB_ENV"
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit_tests/
+
+      - name: Run optimizers test suite
+        run: |
+          pytest tests/llm_optimizers_tests/test_optimizer.py || true
+        continue-on-error: true
+
+      - name: Dump Ollama logs on failure
+        if: failure()
+        run: |
+          sudo systemctl status ollama --no-pager || true
+          sudo journalctl -u ollama -n 300 --no-pager || true
+          ls -R "${OLLAMA_MODELS}" || true
