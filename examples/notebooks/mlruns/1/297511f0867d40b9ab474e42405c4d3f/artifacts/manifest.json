@@ -1,0 +1,9 @@
+{
+  "created_at": 1773827633.9607828,
+  "service_name": "m2-mlflow-artifacts",
+  "files": {
+    "otlp": "otlp.json",
+    "tgj": "tgj.json",
+    "message_nodes": "message_nodes.jsonl"
+  }
+}

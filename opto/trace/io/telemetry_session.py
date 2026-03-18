@@ -267,6 +267,10 @@ class TelemetrySession:
             sid = None
         if not sid:
             return None
+        # Prefer stable message.id (node.name) over raw span ID
+        msg_id = getattr(node, "name", None)
+        if msg_id:
+            return f"{self.service_name}:{msg_id}"
         return f"{self.service_name}:{sid}"
 
     def _inputs_and_params_from_trace_inputs(

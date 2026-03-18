@@ -43,8 +43,8 @@ def bundle(
     allow_external_dependencies=False,
     overwrite_python_recursion=False,
     projections=None,
+    output_name=None,
     mlflow_kwargs=None,
-    output_name=None
 ):
     """Wrap a function as a FunModule which returns node objects.
 
@@ -82,7 +82,7 @@ def bundle(
             output_name=output_name
         )
 
-        mlflow_kwargs_local = mlflow_kwargs or {}
+        mlflow_kwargs_local = dict(mlflow_kwargs or {})
 
         if "default_op" not in mlflow_kwargs_local:
             try:

@@ -1,0 +1,36 @@
+[
+  {
+    "version": "trace-json/1.0+otel",
+    "agent": {
+      "id": "m2-mlflow-artifacts",
+      "service": "m2-mlflow-artifacts"
+    },
+    "otel_meta": {
+      "trace_id": "5c9c66f54cb6cb85f5f6f821fb26b892"
+    },
+    "nodes": {
+      "m2-mlflow-artifacts:mlf_add:1": {
+        "kind": "msg",
+        "name": "mlf_add",
+        "op": "unspecified",
+        "inputs": {
+          "x": "lit:42",
+          "y": "lit:8"
+        },
+        "data": {
+          "message_id": "mlf_add:1"
+        },
+        "info": {
+          "otel": {
+            "trace_id": "5c9c66f54cb6cb85f5f6f821fb26b892",
+            "span_id": "303f702c9cfe9650",
+            "parent_span_id": "",
+            "service": "m2-mlflow-artifacts",
+            "temporal_ignore": false
+          }
+        }
+      }
+    },
+    "context": {}
+  }
+]

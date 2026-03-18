@@ -198,6 +198,18 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                 if not temporal_ignore:
                     prev_span_id = sid
 
+            # Post-process: remap any input refs that still use raw span IDs
+            # through span_to_node_id so they point to stable message.id-based keys.
+            for _nid, rec in nodes.items():
+                for role, ref in list(rec.get("inputs", {}).items()):
+                    if ref.startswith("lit:"):
+                        continue
+                    # ref format is "service:span_id" — extract the span_id part
+                    if ":" in ref:
+                        prefix, suffix = ref.split(":", 1)
+                        if suffix in span_to_node_id and ref != span_to_node_id[suffix]:
+                            rec["inputs"][role] = span_to_node_id[suffix]
+
             docs.append(
                 {
                     "version": PROFILE_VERSION,

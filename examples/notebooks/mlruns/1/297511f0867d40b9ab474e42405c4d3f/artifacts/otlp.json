@@ -1,0 +1,65 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": []
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "m2-mlflow-artifacts"
+          },
+          "spans": [
+            {
+              "traceId": "5f40ee58d97a989e32ec475d74a22e22",
+              "spanId": "9dcc158e3ebc93fc",
+              "parentSpanId": "",
+              "name": "mlf_add",
+              "kind": "UNSPECIFIED",
+              "startTimeUnixNano": 1773827633138169400,
+              "endTimeUnixNano": 1773827633138169400,
+              "attributes": [
+                {
+                  "key": "trace.bundle",
+                  "value": {
+                    "stringValue": "true"
+                  }
+                },
+                {
+                  "key": "trace.bundle.fun_name",
+                  "value": {
+                    "stringValue": "mlf_add"
+                  }
+                },
+                {
+                  "key": "trace.bundle.file",
+                  "value": {
+                    "stringValue": "C:\\Users\\admin\\AppData\\Local\\Temp\\ipykernel_8420\\3706077928.py"
+                  }
+                },
+                {
+                  "key": "inputs.x",
+                  "value": {
+                    "stringValue": "lit:42"
+                  }
+                },
+                {
+                  "key": "inputs.y",
+                  "value": {
+                    "stringValue": "lit:8"
+                  }
+                },
+                {
+                  "key": "message.id",
+                  "value": {
+                    "stringValue": "mlf_add:1"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

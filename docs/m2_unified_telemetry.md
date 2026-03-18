@@ -10,6 +10,7 @@
 2. [File-by-File Change Table](#2-file-by-file-change-table)
 3. [Configuration Options](#3-configuration-options)
 4. [With Telemetry vs Without Telemetry](#4-with-telemetry-vs-without-telemetry)
+5. [Known Limitations](#5-known-limitations)
 
 ---
 
@@ -113,6 +114,32 @@ span_to_node_id[sid] = node_id
 # Parent reference resolves through the mapping:
 if effective_psid and "parent" not in inputs:
     inputs["parent"] = span_to_node_id.get(effective_psid, f"{svc}:{effective_psid}")
+
+# Post-process: remap ALL input refs (not just parents) through span_to_node_id
+for _nid, rec in nodes.items():
+    for role, ref in list(rec.get("inputs", {}).items()):
+        if ref.startswith("lit:"):
+            continue
+        if ":" in ref:
+            prefix, suffix = ref.split(":", 1)
+            if suffix in span_to_node_id and ref != span_to_node_id[suffix]:
+                rec["inputs"][role] = span_to_node_id[suffix]
+```
+
+Additionally, `TelemetrySession._lookup_node_ref()` now prefers `node.name`
+(which is the `message.id`) over the raw span ID hex, so refs emitted into
+span attributes are stable **at the source**:
+
+```python
+# telemetry_session.py — _lookup_node_ref()
+def _lookup_node_ref(self, node):
+    sid = self._node_span_ids.get(node)
+    if not sid:
+        return None
+    msg_id = getattr(node, "name", None)   # prefer stable message.id
+    if msg_id:
+        return f"{self.service_name}:{msg_id}"
+    return f"{self.service_name}:{sid}"
 ```
 
 ---
@@ -162,11 +189,11 @@ Files changed across the M2 branch (vs `upstream/experimental`):
 
 | File | Change | Why |
 |------|--------|-----|
-| `opto/trace/io/telemetry_session.py` | Added `mlflow_autolog`, `mlflow_autolog_kwargs` params; best-effort import + call in `__init__` | **B1** — Let TelemetrySession optionally activate MLflow autologging without hard dependency |
+| `opto/trace/io/telemetry_session.py` | Added `mlflow_autolog`, `mlflow_autolog_kwargs` params; best-effort import + call in `__init__`; `_lookup_node_ref()` now prefers `message.id` over raw span ID | **B1** — MLflow bridge; **B4** — stable refs at source |
 | `opto/trace/operators.py` | Hardened provider inference in `call_llm`: parse `"openai/gpt-4"` → `"openai"` before falling back to `"litellm"` | **B3** — Correct `gen_ai.provider.name` for slash-style model strings |
 | `opto/trace/io/langgraph_otel_runtime.py` | Same provider inference in `TracingLLM.__init__` | **B3** — Consistent provider detection across both LangGraph and non-LangGraph paths |
-| `opto/trace/io/otel_adapter.py` | `span_to_node_id` mapping; use `message.id` as stable node key; resolve parent refs through map | **B4** — Deterministic node identity for TGJ round-trip and optimization alignment |
-| `opto/trace/bundle.py` | No changes in Phase B (verified `mlflow_kwargs` position is safe) | **B2** — Audit confirmed no break |
+| `opto/trace/io/otel_adapter.py` | `span_to_node_id` mapping; use `message.id` as stable node key; resolve parent refs through map; post-process all `inputs.*` refs through `span_to_node_id` | **B4** — Deterministic node identity for TGJ round-trip and optimization alignment |
+| `opto/trace/bundle.py` | Restored `output_name` before `mlflow_kwargs` for positional backward compat; `dict(mlflow_kwargs or {})` to avoid mutating caller dicts | **B2** — Positional arg safety + dict copy |
 | `opto/trace/io/otel_semconv.py` | New file (M2) — semantic convention helpers | Dual semconv: `param.*` for optimization + `gen_ai.*` for Agent Lightning |
 | `opto/trace/io/tgj_ingest.py` | New file (M2) — TGJ ingestion back to Trace nodes | Round-trip: OTLP → TGJ → Trace graph |
 | `opto/trace/io/bindings.py` | New file (M2) — dynamic span-to-node bindings | MessageNode ↔ OTEL span linkage |
@@ -355,3 +382,54 @@ tracing_llm = TracingLLM(llm=base_llm, tracer=session.tracer)
 | `span_attribute_filter` returns `{}` | Span is dropped silently |
 | OTEL exporter error | Caught internally, does not affect Trace graph |
 | No active session | `TelemetrySession.current()` returns `None`, all instrumentation is skipped |
+
+---
+
+## 5. Known Limitations
+
+### MLflow `@mlflow.trace` wrapping is definition-time, not runtime
+
+The MLflow autolog bridge applies `@mlflow.trace` wrapping at **`@bundle` decoration time** — i.e. when the `def` decorated with `@bundle()` is first evaluated. It is **not** a runtime toggle that retroactively wraps already-defined bundle functions.
+
+**Implication:** If you define `@bundle` functions (or import modules that define them) **before** enabling MLflow autologging, those functions will **not** have MLflow trace wrapping.
+
+**Correct order:**
+
+```python
+# 1. Enable autologging FIRST
+import opto.trace as trace
+trace.mlflow.autolog(silent=True)
+
+# 2. THEN define or import @bundle functions
+from opto.trace import bundle
+
+@bundle("[my_op] do something")
+def my_op(x):
+    return x + 1
+# my_op NOW has mlflow.trace wrapping
+```
+
+**Incorrect order (MLflow wrapping will NOT be applied):**
+
+```python
+# 1. Define @bundle functions first
+from opto.trace import bundle
+
+@bundle("[my_op] do something")
+def my_op(x):
+    return x + 1
+
+# 2. Enable autologging after — TOO LATE for my_op
+import opto.trace as trace
+trace.mlflow.autolog(silent=True)
+# my_op does NOT have mlflow.trace wrapping
+```
+
+**Workaround:** If you cannot control import order, you can manually wrap existing bundle functions:
+
+```python
+import mlflow
+my_op = mlflow.trace(my_op)
+```
+
+This limitation does **not** affect OTEL span emission (which is runtime-gated via `TelemetrySession.current()`) — only the MLflow `@mlflow.trace` decorator layer.
