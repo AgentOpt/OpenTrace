@@ -72,8 +72,14 @@ def _nodes_iter(nodes_field: Union[List[Dict[str,Any]], Dict[str,Dict[str,Any]]]
 
 
 def _convert_otel_profile(doc: Dict[str,Any]) -> Dict[str,Any]:
+    raw_nodes = _nodes_iter(doc.get("nodes", {}))
+    known_ids = {
+        rec.get("id") or rec.get("name")
+        for rec in raw_nodes
+        if (rec.get("id") or rec.get("name")) is not None
+    }
     nodes_list = []
-    for rec in _nodes_iter(doc.get("nodes", {})):
+    for rec in raw_nodes:
         kind = _kind_norm(rec.get("kind"))
         nid = rec.get("id") or rec.get("name")
         name = rec.get("name", nid)
@@ -93,11 +99,21 @@ def _convert_otel_profile(doc: Dict[str,Any]) -> Dict[str,Any]:
                     if v.startswith("lit:"):
                         inputs[k] = {"literal": v.split(":",1)[1]}
                     elif ":" in v:
-                        # treat as a ref if it looks like svc:16-hex-span-id or svc:param_*
-                        svc, _, rest = v.partition(":")
-                        is_span_like = len(rest) == 16 and all(c in "0123456789abcdef" for c in rest.lower())
-                        is_param_like = rest.startswith("param_")
-                        inputs[k] = {"ref": v} if (is_span_like or is_param_like) else {"literal": v}
+                        # First prefer exact-match refs against known node ids.
+                        # This preserves stable logical ids like "service:message.id"
+                        # introduced by the OTEL -> TGJ adapter.
+                        if v in known_ids:
+                            inputs[k] = {"ref": v}
+                        else:
+                            # Backward-compatible fallback for older span-id-based refs
+                            # and parameter refs that may not be listed yet.
+                            _svc, _, rest = v.partition(":")
+                            is_span_like = (
+                                len(rest) == 16
+                                and all(c in "0123456789abcdef" for c in rest.lower())
+                            )
+                            is_param_like = rest.startswith("param_")
+                            inputs[k] = {"ref": v} if (is_span_like or is_param_like) else {"literal": v}
                     else:
                         inputs[k] = {"literal": v}
                 else:
