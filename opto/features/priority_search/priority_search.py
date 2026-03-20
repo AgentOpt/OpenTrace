@@ -761,8 +761,13 @@ class PrioritySearch(SearchTemplate):
                 results[candidate] = []  # Add with empty rollouts list
 
         # Populate score_dict in each rollout when multi-objective is active
+        # Populate per-metric score_dict for all multi-objective modes (including "scalar").
+        # This allows mode="scalar" with HeapMemory to leverage weighted scalarization
+        # in compute_exploration_priority, rather than falling back to the single scalar score.
+        # Without this, mode="scalar" would skip score_dict collection and behave
+        # identically to objective_config=None, making the "scalar" mode a no-op.
         cfg = getattr(self, 'objective_config', None)
-        if cfg is not None and cfg.mode != "scalar":
+        if cfg is not None:
             guide = self.validate_sampler.guide
             for c, rollout_list in results.items():
                 for rollout in rollout_list:

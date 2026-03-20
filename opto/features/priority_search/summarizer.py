@@ -37,7 +37,25 @@ def get_trajectory_of_one_rollout(rollout):
     parameters = rollout['module'].parameters()
     parameters_dict = {p.py_name: p.data for p in parameters}
     
-    # Construct structured markdown trajectory
+    # In multi-objective mode, rollouts carry a 'score_dict' with per-metric scores
+    # (e.g. {"accuracy": 0.9, "latency": 0.2}) populated by validate() in PrioritySearch.
+    # We render the full breakdown so the summarizer LLM can analyze trade-offs across
+    # objectives, rather than seeing only the aggregate scalar score.
+    # When score_dict is absent (single-objective mode), we fall back to scalar-only display.
+    score_dict = rollout.get('score_dict')
+    if isinstance(score_dict, dict) and score_dict:
+        breakdown = "\n".join(f"  - {k}: {v}" for k, v in score_dict.items())
+        result_section = (
+            f"- **Overall Score:** {rollout['score']}\n"
+            f"- **Score Breakdown:**\n{breakdown}\n"
+            f"- **Feedback:** {rollout['feedback']}"
+        )
+    else:
+        result_section = (
+            f"- **Score:** {rollout['score']}\n"
+            f"- **Feedback:** {rollout['feedback']}"
+        )
+
     trajectory = f"""## Task Trajectory
 
 ## Module Parameters
@@ -50,19 +68,23 @@ def get_trajectory_of_one_rollout(rollout):
 {rollout['target']}
 
 ## Result
-- **Score:** {rollout['score']} 
-- **Feedback:** {rollout['feedback']}"""
+{result_section}"""
     return trajectory
 
 class Summarizer:
     """A class which use LLM to summarize the trajectories of the memory. It should be able to learn the patterns of the trajectories. Generate a summary to guide the optimizer to generate better candidates.
     """
-    def __init__(self,verbose: bool = False):
+    def __init__(self, verbose: bool = False, success_threshold: float = 0):
         self.llm = LLM() # use the default model
         self.max_candidates_in_prompt = 5
         self.current_summary = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: "
         self.used_candidates = set()  # Track candidates that have been summarized
         self.verbose = verbose
+        # Configurable threshold for classifying rollouts as successful (score > threshold)
+        # or failed (score <= threshold). Defaults to 0 for backward compatibility.
+        # Previously hardcoded as 0, which also caused rollouts with negative scores to be
+        # missed by both the success and failure lists.
+        self.success_threshold = success_threshold
 
     def _get_trajectories_for_memory(self, memory):
         """
@@ -94,8 +116,8 @@ class Summarizer:
             candidate_update_dict = candidate.update_dict.values()
             # print_color(f"Candidate pamameters: {candidate_update_dict}", "blue")# For debugging
             prompt = f"Candidate pamameters: {candidate_update_dict}."
-            successful_rollouts = [rollout for rollout in rollouts if rollout['score'] > 0]
-            failed_rollouts = [rollout for rollout in rollouts if rollout['score'] == 0]
+            successful_rollouts = [rollout for rollout in rollouts if rollout['score'] > self.success_threshold]
+            failed_rollouts = [rollout for rollout in rollouts if rollout['score'] <= self.success_threshold]
             if len(successful_rollouts) > 0: 
                 random_successful_rollout = random.choice(successful_rollouts)
                 prompt += f"\nSuccessful trajectory: {get_trajectory_of_one_rollout(random_successful_rollout)}."

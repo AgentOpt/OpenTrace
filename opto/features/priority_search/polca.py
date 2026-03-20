@@ -20,7 +20,7 @@ def calculate_distance_to_memory(memory, new_candidate):
                 min_distance = distance
         return min_distance
 
-class EpsilonNetPS_plus_Summarizer(PrioritySearch):
+class POLCA(PrioritySearch):
     """
     A subclass of PrioritySearch, which keeps an epsilon-net as the memory. Reject new candidates that are in the epsilon-net of the memory.
 
