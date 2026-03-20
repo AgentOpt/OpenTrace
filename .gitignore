@@ -168,4 +168,5 @@ OAI_CONFIG_LIST
 *.gv.pdf
 
 # jupyter book API output
-docs/api/*
+docs/api/*examples/notebooks/bbeh/
+t6_m2_bbeh_2.ipynb

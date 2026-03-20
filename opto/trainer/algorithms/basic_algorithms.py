@@ -6,7 +6,18 @@ from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
 from opto.trainer.utils import batch_run, async_run
 from opto.optimizers.utils import print_color
-from opto.trainer.evaluators import evaluate
+from opto.trainer.evaluators import evaluate, evaluate_vector, aggregate_vector_scores
+from opto.trainer.objectives import ObjectiveConfig, select_best, apply_minimize, weighted_scalarize
+
+
+def _objective_scalar(score_dict, config):
+    """Compute scalar objective consistent with selection mode.
+
+    Uses weighted_scalarize(apply_minimize(...)) so the logged scalar
+    reflects the same weights and minimize settings used for selection.
+    """
+    minimized = apply_minimize(score_dict, config.minimize)
+    return weighted_scalarize(minimized, config.weights, config.missing_value)
 
 
 def standard_optimization_step(agent, x, guide, info, min_score=0):
@@ -533,6 +544,7 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
               validate_dataset = None, # dataset of (x, info) pairs to evaluate the agent for candidate selection
               validate_guide = None,  #  to provide scores for the validation set
               num_proposals = 4,  # number of proposals to get from the optimizer
+              objective_config = None,  # optional ObjectiveConfig for multi-objective selection
               num_epochs = 1,  # number of training epochs
               batch_size = 1,  # batch size for updating the agent
               test_dataset = None, # dataset of (x, info) pairs to evaluate the agent
@@ -549,6 +561,8 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
         self.validate_guide = validate_guide or guide
         self.min_score = min_score
         self.current_score = None
+        self.objective_config = objective_config
+        self.current_score_dict = None  # stores vector score when using multi-objective
 
         return super().train(guide, train_dataset, num_epochs=num_epochs, batch_size=batch_size,
                       test_dataset=test_dataset, test_frequency=test_frequency, log_frequency=log_frequency,
@@ -571,6 +585,21 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
                               description="Validating proposals")
             return np.mean(scores) if all([s is not None for s in scores]) else -np.inf
 
+        def validate_vector():
+            """ Validate and return aggregated vector score dict. """
+            score_dicts = evaluate_vector(self.agent,
+                                          self.validate_guide,
+                                          self.validate_dataset['inputs'],
+                                          self.validate_dataset['infos'],
+                                          min_score=self.min_score,
+                                          num_threads=num_threads,
+                                          description="Validating proposals (vector)")
+            return aggregate_vector_scores(score_dicts)
+
+        # Determine whether to use vector scoring for selection
+        use_vector = (self.objective_config is not None
+                      and self.objective_config.mode != "scalar")
+
         # TODO perhaps we can ask for multiple updates in one query or use different temperatures in different queries
         # Generate different proposals
         step_kwargs = dict(bypassing=True, verbose='output' if verbose else False)  # we don't print the inner full message
@@ -582,25 +611,57 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
                                 kwargs_list=[step_kwargs] * self.num_proposals,
                                 max_workers=num_threads,
                                 description=f"Generating {self.num_proposals} proposals")  # async step
+
         # Validate the proposals
         candidates = []
         backup_dict = {p: copy.deepcopy(p.data) for p in self.agent.parameters()}  # backup the current value
-        for update_dict in update_dicts:
-            if len(update_dict) == 0:
-                continue
-            self.optimizer.update(update_dict)  # set the agent with update_dict
-            score = validate()  # check the score on the validation set
-            candidates.append((score, update_dict))
-            self.optimizer.update(backup_dict)  # restore the backup
 
-        # Include the current parameter as a candidate
-        if self.current_score is None:
-            self.current_score = validate()
-        candidates.append((self.current_score, backup_dict))
+        if use_vector:
+            # Vector path: collect (score_dict, update_dict) for multi-objective selection
+            vector_candidates = []
+            for update_dict in update_dicts:
+                if len(update_dict) == 0:
+                    continue
+                self.optimizer.update(update_dict)
+                score_dict = validate_vector()
+                scalar_score = _objective_scalar(score_dict, self.objective_config)
+                candidates.append((scalar_score, update_dict))
+                vector_candidates.append((score_dict, update_dict))
+                self.optimizer.update(backup_dict)
 
-        # Find the candidate with the best score
-        best_score, best_update = max(candidates, key=lambda x: x[0])
-        self.current_score = best_score
+            # Include current parameters as a candidate
+            if self.current_score_dict is None:
+                self.current_score_dict = validate_vector()
+            if self.current_score is None:
+                self.current_score = _objective_scalar(self.current_score_dict, self.objective_config)
+            candidates.append((self.current_score, backup_dict))
+            vector_candidates.append((self.current_score_dict, backup_dict))
+
+            # Select best via multi-objective config
+            best_idx = select_best(vector_candidates, self.objective_config)
+            best_score_dict = vector_candidates[best_idx][0]
+            best_update = vector_candidates[best_idx][1]
+            best_score = _objective_scalar(best_score_dict, self.objective_config)
+            self.current_score = best_score
+            self.current_score_dict = best_score_dict
+        else:
+            # Scalar path: unchanged from original behavior
+            for update_dict in update_dicts:
+                if len(update_dict) == 0:
+                    continue
+                self.optimizer.update(update_dict)  # set the agent with update_dict
+                score = validate()  # check the score on the validation set
+                candidates.append((score, update_dict))
+                self.optimizer.update(backup_dict)  # restore the backup
+
+            # Include the current parameter as a candidate
+            if self.current_score is None:
+                self.current_score = validate()
+            candidates.append((self.current_score, backup_dict))
+
+            # Find the candidate with the best score
+            best_score, best_update = max(candidates, key=lambda x: x[0])
+            self.current_score = best_score
 
         if verbose:
             print_color(f"Best score: {best_score} out of scores {[c[0] for c in candidates]}", 'green')
@@ -609,5 +670,14 @@ class BasicSearchAlgorithm(MinibatchAlgorithm):
         # Make the best update
         self.optimizer.update(best_update)
 
-        # Logging
-        self.logger.log('Validation score', best_score, self.n_iters, color='green')
+        # Logging — scalar objective for backward compatibility
+        if use_vector:
+            self.logger.log('Validation objective', best_score, self.n_iters, color='green')
+        else:
+            self.logger.log('Validation score', best_score, self.n_iters, color='green')
+
+        # Log individual vector metrics if available
+        if use_vector and isinstance(best_score_dict, dict):
+            for metric_name, metric_value in best_score_dict.items():
+                self.logger.log(f'Validation score/{metric_name}', metric_value,
+                                self.n_iters, color='green')

@@ -430,6 +430,14 @@ def values(x: Dict):
     return [k for k in x.values()]
 
 
+@bundle()
+def get(x: Any, key: Any, default: Any = None):
+    """Return the value for key if key is in x, else default."""
+    if not hasattr(x, "get"):
+        raise AttributeError(f"{type(x)} object has no attribute 'get'.")
+    return x.get(key, default)
+
+
 # dict in-place operators
 
 
