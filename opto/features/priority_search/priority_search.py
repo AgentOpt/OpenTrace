@@ -728,8 +728,6 @@ class PrioritySearch(SearchTemplate):
         exploration_candidates = self._exploration_candidates  # exploration candidates from the previous iteration
         assert self._exploration_candidates is not None, "exploration_candidates must be set before calling validate."
 
-        # The current batch of samples can be used to validate the exploration candidates
-        # validate_samples = copy.copy(samples)
         # Exploration samples are added before proposing, so we don't need to add them again here.
         validate_samples = Samples([], {'inputs': [], 'infos': []})
 
@@ -739,7 +737,7 @@ class PrioritySearch(SearchTemplate):
         validate_samples.add_samples(Samples(*self.validate_sampler.sample(candidate_agents,
                                                                 use_prev_batch=use_prev_batch,
                                                                 description_prefix='Validating newly proposed candidates: ')))  # list of BatchRollout objects
-
+        candidates_to_be_matched = candidates
         if self.validate_exploration_candidates:
             if not use_prev_batch:   # validate the exploration candidates that collected the samples as well
                 # validate the agents in the validate_dataset
@@ -747,9 +745,9 @@ class PrioritySearch(SearchTemplate):
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
                                               description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
+                # Only match exploration candidates if they were actually sampled (i.e., validate_exploration_candidates=True and use_prev_batch=False)
+                candidates_to_be_matched = exploration_candidates + candidates
 
-        # Only match exploration candidates if they were actually sampled (i.e., validate_exploration_candidates=True and use_prev_batch=False)
-        candidates_to_be_matched = exploration_candidates + candidates if (self.validate_exploration_candidates and not use_prev_batch) else candidates
         matched_candidates_and_samples = self.match_candidates_and_samples(candidates_to_be_matched, validate_samples.samples)
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
@@ -761,11 +759,6 @@ class PrioritySearch(SearchTemplate):
                 results[candidate] = []  # Add with empty rollouts list
 
         # Populate score_dict in each rollout when multi-objective is active
-        # Populate per-metric score_dict for all multi-objective modes (including "scalar").
-        # This allows mode="scalar" with HeapMemory to leverage weighted scalarization
-        # in compute_exploration_priority, rather than falling back to the single scalar score.
-        # Without this, mode="scalar" would skip score_dict collection and behave
-        # identically to objective_config=None, making the "scalar" mode a no-op.
         cfg = getattr(self, 'objective_config', None)
         if cfg is not None:
             guide = self.validate_sampler.guide
@@ -973,8 +966,5 @@ class PrioritySearch(SearchTemplate):
         """ Add the exploration rollouts to the exploration candidates.
         """
         matched_exploration_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates, samples.samples)
-        exploration_results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
-        for c, rollouts in matched_exploration_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
-            exploration_results[c] = [ r for rr in rollouts for r in rr.to_list()]
-        for candidate, rollouts in exploration_results.items():
-            candidate.add_rollouts(rollouts)
+        for c, rollouts in matched_exploration_candidates_and_samples.items():
+            c.add_rollouts([r for rr in rollouts for r in rr.to_list()])

@@ -74,12 +74,44 @@ def get_trajectory_of_one_rollout(rollout):
 class Summarizer:
     """A class which use LLM to summarize the trajectories of the memory. It should be able to learn the patterns of the trajectories. Generate a summary to guide the optimizer to generate better candidates.
     """
-    def __init__(self, verbose: bool = False, success_threshold: float = 0):
+    DEFAULT_SYSTEM_PROMPT = "You are an expert at analyzing agent behavior patterns and providing actionable guidance for parameter optimization."
+
+    DEFAULT_USER_PROMPT_TEMPLATE = """Analyze the following agent conversation trajectories and extract insights for optimization.
+
+        Current Summary (from previous analysis):
+        {current_summary}
+
+        New Trajectories to Analyze:
+        {history_trajectories}
+
+        Instructions:
+        - Review both the Current Summary and the New Trajectories
+        - Synthesize ALL insights into a single, cohesive summary
+        - Integrate new patterns with existing knowledge
+        - Reorganize and consolidate information as needed for clarity
+        - DO NOT use incremental language like "[Previous points remain valid, plus:]"
+        - Generate a complete, standalone summary that incorporates everything
+
+        Provide your analysis in XML format:
+        <reasoning>
+        Analyze the key patterns and strategies that led to success or failure in these trajectories. Consider both the current summary and new trajectories.
+        </reasoning>
+        <summary>
+        A complete, consolidated summary with concrete recommendations for generating better results. This should be a standalone summary that integrates insights from both the current summary and new trajectories, without using incremental modification language.
+        </summary>"""
+
+    def __init__(self, verbose: bool = False, success_threshold: float = 0,
+                 max_candidates_in_prompt: int = 5,
+                 current_summary: str = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: ",
+                 system_prompt: str = None,
+                 user_prompt_template: str = None):
         self.llm = LLM() # use the default model
-        self.max_candidates_in_prompt = 5
-        self.current_summary = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: "
+        self.max_candidates_in_prompt = max_candidates_in_prompt
+        self.current_summary = current_summary
         self.used_candidates = set()  # Track candidates that have been summarized
         self.verbose = verbose
+        self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
+        self.user_prompt_template = user_prompt_template or self.DEFAULT_USER_PROMPT_TEMPLATE
         # Configurable threshold for classifying rollouts as successful (score > threshold)
         # or failed (score <= threshold). Defaults to 0 for backward compatibility.
         # Previously hardcoded as 0, which also caused rollouts with negative scores to be
@@ -114,7 +146,6 @@ class Summarizer:
                 continue
             # For each candidate, add one (if exists) successful_rollout and one (if exists) failed_rollout.
             candidate_update_dict = candidate.update_dict.values()
-            # print_color(f"Candidate pamameters: {candidate_update_dict}", "blue")# For debugging
             prompt = f"Candidate pamameters: {candidate_update_dict}."
             successful_rollouts = [rollout for rollout in rollouts if rollout['score'] > self.success_threshold]
             failed_rollouts = [rollout for rollout in rollouts if rollout['score'] <= self.success_threshold]
@@ -140,52 +171,22 @@ class Summarizer:
         """
 
         history_trajectories = self._get_trajectories_for_memory(memory)
-
-        # print_color(f"History trajectories: {history_trajectories}", "green")
-
         if len(history_trajectories) == 0:
             return "No trajectories found for the memory."
         
-        system_prompt = "You are an expert at analyzing agent behavior patterns and providing actionable guidance for parameter optimization."
-        
-        user_prompt = f"""Analyze the following agent conversation trajectories and extract insights for optimization.
-
-        Current Summary (from previous analysis):
-        {self.current_summary}
-
-        New Trajectories to Analyze:
-        {history_trajectories}
-
-        Instructions:
-        - Review both the Current Summary and the New Trajectories
-        - Synthesize ALL insights into a single, cohesive summary
-        - Integrate new patterns with existing knowledge
-        - Reorganize and consolidate information as needed for clarity
-        - DO NOT use incremental language like "[Previous points remain valid, plus:]"
-        - Generate a complete, standalone summary that incorporates everything
-
-        Provide your analysis in XML format:
-        <reasoning>
-        Analyze the key patterns and strategies that led to success or failure in these trajectories. Consider both the current summary and new trajectories.
-        </reasoning>
-        <summary>
-        A complete, consolidated summary with concrete recommendations for generating better Lean 4 code. This should be a standalone summary that integrates insights from both the current summary and new trajectories, without using incremental modification language.
-        </summary>"""
+        user_prompt = self.user_prompt_template.format(
+            current_summary=self.current_summary,
+            history_trajectories=history_trajectories,
+        )
 
         prompt_messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_prompt},
         ]
 
-        # print_color(f"User prompt: {user_prompt}", "blue")
-        
-        # print_color(f"System prompt: {system_prompt}", "blue")
-        # print_color(f"User prompt: {user_prompt}", "blue")
         
         response = self.llm(messages=prompt_messages)
         response = response.choices[0].message.content
-        # print_color(f"Response: {response}", "yellow")
-        
         # Extract summary using XML regex
         summary_match = re.search(r'<summary>(.*?)</summary>', response, re.DOTALL)
 

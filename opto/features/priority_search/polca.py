@@ -8,17 +8,17 @@ from opto.features.priority_search.search_template import Samples
 
 
 def calculate_distance_to_memory(memory, new_candidate):
-        """For a new candidate, calculate the distance to the current memory. That's the least L2 distance to any candidate in the memory.
-        
-        To use this funciton in PrioritySearch, set memory to be self.memory.memory.
-        """
-        assert hasattr(new_candidate, 'embedding') and all(hasattr(candidate, 'embedding') for _, candidate in memory), "All candidates should have the embedding attribute."
-        min_distance = float('inf')
-        for _, candidate in memory:
-            distance = np.linalg.norm(np.array(new_candidate.embedding) - np.array(candidate.embedding))
-            if distance < min_distance:
-                min_distance = distance
-        return min_distance
+    """For a new candidate, calculate the distance to the current memory. That's the least L2 distance to any candidate in the memory.
+    
+    To use this funciton in PrioritySearch, set memory to be self.memory.memory.
+    """
+    assert hasattr(new_candidate, 'embedding') and all(hasattr(candidate, 'embedding') for _, candidate in memory), "All candidates should have the embedding attribute."
+    min_distance = float('inf')
+    for _, candidate in memory:
+        distance = np.linalg.norm(np.array(new_candidate.embedding) - np.array(candidate.embedding))
+        if distance < min_distance:
+            min_distance = distance
+    return min_distance
 
 class POLCA(PrioritySearch):
     """
@@ -36,6 +36,7 @@ class POLCA(PrioritySearch):
     def __init__(self,
                  epsilon: float = 0.1,
                  use_summarizer: bool = False,
+                 context: str = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: ",
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,7 +44,7 @@ class POLCA(PrioritySearch):
         self.use_summarizer = use_summarizer
         self.regressor = RegressorTemplate()
         self.summarizer = Summarizer()
-        self.context = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: "
+        self.context = context
         
     def filter_candidates(self, new_candidates: List[ModuleCandidate]) -> List[ModuleCandidate]:
         """ Filter candidates by their embeddings.
