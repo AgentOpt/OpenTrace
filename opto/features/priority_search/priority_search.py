@@ -534,7 +534,14 @@ class PrioritySearch(SearchTemplate):
         # samples is None in the first iteration
         if samples is not None:
             # 1. Propose new parameters based on running LLM optimizers on the collected samples
+
+            # We add the exploration rollouts to the exploration candidates, before proposing. Then these samples will not be added in the validate step.
+            self.add_exploration_rollouts_to_candidates(self._exploration_candidates, samples)
             candidates = self.propose(samples, verbose=verbose, **kwargs)  # List of ModuleCandidates
+
+            # Filter the new candidates, only some of them will be added to the memory. Default is no filtering.
+            candidates = self.filter_candidates(candidates)
+
             # 2. Validate the proposed parameters
             validate_results = self.validate(candidates, samples, verbose=verbose, **kwargs)  # this updates the priority queue
             # 3. Update the priority queue with the validation results
@@ -721,8 +728,8 @@ class PrioritySearch(SearchTemplate):
         exploration_candidates = self._exploration_candidates  # exploration candidates from the previous iteration
         assert self._exploration_candidates is not None, "exploration_candidates must be set before calling validate."
 
-        # The current batch of samples can be used to validate the exploration candidates
-        validate_samples = copy.copy(samples)
+        # Exploration samples are added before proposing, so we don't need to add them again here.
+        validate_samples = Samples([], {'inputs': [], 'infos': []})
 
         # Validate newly proposed candidates
         use_prev_batch = self.use_prev_batch  # when True, self.validate_sampler == self.train_sampler, and the current batch is used for validation
@@ -730,7 +737,7 @@ class PrioritySearch(SearchTemplate):
         validate_samples.add_samples(Samples(*self.validate_sampler.sample(candidate_agents,
                                                                 use_prev_batch=use_prev_batch,
                                                                 description_prefix='Validating newly proposed candidates: ')))  # list of BatchRollout objects
-
+        candidates_to_be_matched = candidates
         if self.validate_exploration_candidates:
             if not use_prev_batch:   # validate the exploration candidates that collected the samples as well
                 # validate the agents in the validate_dataset
@@ -738,16 +745,22 @@ class PrioritySearch(SearchTemplate):
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
                                               description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
+                # Only match exploration candidates if they were actually sampled (i.e., validate_exploration_candidates=True and use_prev_batch=False)
+                candidates_to_be_matched = exploration_candidates + candidates
 
-
-        matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates + candidates, validate_samples.samples)
+        matched_candidates_and_samples = self.match_candidates_and_samples(candidates_to_be_matched, validate_samples.samples)
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
             results[c] = [ r for rr in rollouts for r in rr.to_list()]  # we only need the list of dicts
+        # Add exploration candidates that weren't included in match_candidates_and_samples
+        # This ensures they get re-added to memory even if they weren't validated again
+        for candidate in exploration_candidates:
+            if candidate not in results:
+                results[candidate] = []  # Add with empty rollouts list
 
         # Populate score_dict in each rollout when multi-objective is active
         cfg = getattr(self, 'objective_config', None)
-        if cfg is not None and cfg.mode != "scalar":
+        if cfg is not None:
             guide = self.validate_sampler.guide
             for c, rollout_list in results.items():
                 for rollout in rollout_list:
@@ -936,3 +949,22 @@ class PrioritySearch(SearchTemplate):
         for rollout in candidate.rollouts:
             _process_rollout(rollout)
         return candidate
+
+    # For the further usage.
+    def filter_candidates(self, candidates: List[ModuleCandidate]) -> List[ModuleCandidate]:
+        """ Filter candidates.
+        This function can be overridden by subclasses to filter candidates by other criteria.
+        Args:
+            candidates (List[ModuleCandidate]): A list of candidates to filter.
+        Returns:
+            List[ModuleCandidate]: A list of filtered candidates.
+        """
+        return candidates
+
+    # For the further usage, we decide to add the exploration rollouts to the exploration candidates, before proposing.
+    def add_exploration_rollouts_to_candidates(self, exploration_candidates: List[ModuleCandidate], samples: Samples):
+        """ Add the exploration rollouts to the exploration candidates.
+        """
+        matched_exploration_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates, samples.samples)
+        for c, rollouts in matched_exploration_candidates_and_samples.items():
+            c.add_rollouts([r for rr in rollouts for r in rr.to_list()])
