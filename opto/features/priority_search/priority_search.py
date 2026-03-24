@@ -10,6 +10,10 @@ from opto.trainer.utils import async_run, safe_mean
 from opto.trainer.algorithms.basic_algorithms import batchify
 from opto.features.priority_search.search_template import SearchTemplate, Samples, BatchRollout, save_train_config
 from opto.features.priority_search.utils import set_module_parameters, remap_update_dict, create_module_from_update_dict, is_module_copy, deepcopy_module
+from opto.trainer.objectives import (
+    ObjectiveConfig, to_score_dict, apply_minimize,
+    weighted_scalarize, pareto_rank, aggregate_score_dicts
+)
 
 
 class ModuleCandidate:
@@ -84,6 +88,19 @@ class ModuleCandidate:
         if not self.rollouts:
             return None
         return safe_mean([r['score'] for r in self.rollouts])
+
+    def mean_score_dict(self) -> Optional[Dict[str, float]]:
+        """Compute the per-metric mean score dict across rollouts.
+
+        Returns None if no rollouts have 'score_dict' entries.
+        """
+        if not self.rollouts:
+            return None
+        score_dicts = [r.get("score_dict") for r in self.rollouts]
+        score_dicts = [sd for sd in score_dicts if isinstance(sd, dict)]
+        if not score_dicts:
+            return None
+        return aggregate_score_dicts(score_dicts)
 
     def compute_score_confidence(self, min_score, max_score, scaling_constant=1.0, total_trials=1):
         """Compute the UCB, mean, LCB score for the candidate. After queried, the number of confidence queries is incremented.
@@ -213,6 +230,76 @@ class HeapMemory:
                 return p if p is not None else 0
             return max(self.memory, key=lambda x: _criterion(x))
 
+
+class ParetoHeapMemory(HeapMemory):
+    """Heap-backed memory that can pop using Pareto-front selection among top-K items.
+
+    Keeps scalar priority for push/best efficiency.  When mode='pareto',
+    pop() selects from the Pareto front among the top-K candidates by scalar
+    priority, with tie-breaking via weighted scalarization.
+
+    push() and best() are inherited unchanged from HeapMemory.
+    """
+
+    def __init__(self, size=None, processing_fun: Callable = None, *,
+                 pareto_k: int = 20,
+                 score_dict_fn: Optional[Callable] = None,
+                 objective_config: Optional[ObjectiveConfig] = None):
+        super().__init__(size=size, processing_fun=processing_fun)
+        self.pareto_k = pareto_k
+        self.score_dict_fn = score_dict_fn
+        self.objective_config = objective_config
+
+    def pop(self):
+        """Pop a candidate, using Pareto-front selection when configured.
+
+        If objective_config is None, mode != 'pareto', or score_dict_fn is
+        missing, falls back to standard heapq.heappop (scalar priority).
+        """
+        if not self.memory:
+            raise IndexError("pop from an empty heap memory")
+
+        cfg = self.objective_config
+        if cfg is None or cfg.mode != "pareto" or self.score_dict_fn is None:
+            return heapq.heappop(self.memory)
+
+        # Extract top-K by scalar priority (heap stores -score, so nsmallest = highest scores)
+        k = min(self.pareto_k, len(self.memory))
+        topk = heapq.nsmallest(k, self.memory)
+        candidates = [c for _, c in topk]
+
+        # Get score dicts for each candidate
+        score_dicts = []
+        for c in candidates:
+            sd = self.score_dict_fn(c)
+            sd = to_score_dict(sd) if sd is not None else None
+            score_dicts.append(sd)
+
+        # Fallback to standard pop if any candidate lacks a score dict
+        if any(sd is None for sd in score_dicts):
+            return heapq.heappop(self.memory)
+
+        # Apply minimize normalization and compute Pareto ranks
+        score_dicts = [apply_minimize(sd, cfg.minimize) for sd in score_dicts]
+        ranks = pareto_rank(score_dicts, metrics=cfg.pareto_metrics)
+        front_idx = [i for i, r in enumerate(ranks) if r == 0]
+
+        # Tie-break among front by weighted scalarization
+        def _tie_break(i):
+            sd = score_dicts[i]
+            if cfg.weights:
+                return float(weighted_scalarize(sd, cfg.weights, cfg.missing_value))
+            return float(np.mean(list(sd.values())))
+
+        chosen_local = max(front_idx, key=_tie_break)
+        chosen_item = topk[chosen_local]
+
+        # Remove chosen item from heap (O(n), acceptable for small K)
+        self.memory.remove(chosen_item)
+        heapq.heapify(self.memory)
+        return chosen_item
+
+
 # TODO check saving and loading
 class PrioritySearch(SearchTemplate):
     """ A search algorithm that uses a priority queue to explore the parameter space and propose new candidates.
@@ -241,6 +328,8 @@ class PrioritySearch(SearchTemplate):
               guide, # guide to provide feedback
               train_dataset,  # dataset of (x, info) pairs to train the agent
               *,
+              # multi-objective
+              objective_config: Optional[ObjectiveConfig] = None,  # ObjectiveConfig for multi-objective selection (None = scalar)
               # validation
               validate_dataset = None, # same format as train_dataset; if None, use the current batch.
               validate_guide = None,  #  to provide scores for the validation set
@@ -318,6 +407,7 @@ class PrioritySearch(SearchTemplate):
             short_term_memory_size=short_term_memory_size,
             memory_update_frequency=memory_update_frequency,
             decouple_optimizers=decouple_optimizers,
+            objective_config=objective_config,
         )
 
         self._enforce_using_data_collecting_candidates = True
@@ -354,7 +444,8 @@ class PrioritySearch(SearchTemplate):
                                     long_term_memory_size,
                                     short_term_memory_size,
                                     memory_update_frequency,
-                                    decouple_optimizers):
+                                    decouple_optimizers,
+                                    objective_config=None):
         """Initialize search parameters and memory structures.
 
         Args:
@@ -369,6 +460,7 @@ class PrioritySearch(SearchTemplate):
             short_term_memory_size (int): Size of the short-term memory
             memory_update_frequency (int): The candidates are merged into long-term memory after this many iterations.
             decouple_optimizers (bool): Whether to decouple optimizers for each candidate
+            objective_config (ObjectiveConfig, optional): Multi-objective selection config. None = scalar.
         """
         # Validate and adjust num_candidates based on number of optimizers
         if num_candidates < len(self._optimizers):
@@ -410,8 +502,26 @@ class PrioritySearch(SearchTemplate):
         else:
             print(f"PrioritySearch initialized with both short-term and long-term memory. Candidates will be merged into long-term memory every {memory_update_frequency} iterations.")
 
-        self.long_term_memory = HeapMemory(size=long_term_memory_size, processing_fun=self.compress_candidate_memory)
-        self.short_term_memory = HeapMemory(size=short_term_memory_size)
+        self.objective_config = objective_config
+        use_pareto_memory = (objective_config is not None
+                             and objective_config.mode == "pareto")
+        if use_pareto_memory:
+            self.long_term_memory = ParetoHeapMemory(
+                size=long_term_memory_size,
+                processing_fun=self.compress_candidate_memory,
+                pareto_k=20,
+                score_dict_fn=lambda c: c.mean_score_dict(),
+                objective_config=objective_config,
+            )
+            self.short_term_memory = ParetoHeapMemory(
+                size=short_term_memory_size,
+                pareto_k=20,
+                score_dict_fn=lambda c: c.mean_score_dict(),
+                objective_config=objective_config,
+            )
+        else:
+            self.long_term_memory = HeapMemory(size=long_term_memory_size, processing_fun=self.compress_candidate_memory)
+            self.short_term_memory = HeapMemory(size=short_term_memory_size)
         self.memory_update_frequency = memory_update_frequency
 
     def update(self,
@@ -424,7 +534,14 @@ class PrioritySearch(SearchTemplate):
         # samples is None in the first iteration
         if samples is not None:
             # 1. Propose new parameters based on running LLM optimizers on the collected samples
+
+            # We add the exploration rollouts to the exploration candidates, before proposing. Then these samples will not be added in the validate step.
+            self.add_exploration_rollouts_to_candidates(self._exploration_candidates, samples)
             candidates = self.propose(samples, verbose=verbose, **kwargs)  # List of ModuleCandidates
+
+            # Filter the new candidates, only some of them will be added to the memory. Default is no filtering.
+            candidates = self.filter_candidates(candidates)
+
             # 2. Validate the proposed parameters
             validate_results = self.validate(candidates, samples, verbose=verbose, **kwargs)  # this updates the priority queue
             # 3. Update the priority queue with the validation results
@@ -611,8 +728,8 @@ class PrioritySearch(SearchTemplate):
         exploration_candidates = self._exploration_candidates  # exploration candidates from the previous iteration
         assert self._exploration_candidates is not None, "exploration_candidates must be set before calling validate."
 
-        # The current batch of samples can be used to validate the exploration candidates
-        validate_samples = copy.copy(samples)
+        # Exploration samples are added before proposing, so we don't need to add them again here.
+        validate_samples = Samples([], {'inputs': [], 'infos': []})
 
         # Validate newly proposed candidates
         use_prev_batch = self.use_prev_batch  # when True, self.validate_sampler == self.train_sampler, and the current batch is used for validation
@@ -620,7 +737,7 @@ class PrioritySearch(SearchTemplate):
         validate_samples.add_samples(Samples(*self.validate_sampler.sample(candidate_agents,
                                                                 use_prev_batch=use_prev_batch,
                                                                 description_prefix='Validating newly proposed candidates: ')))  # list of BatchRollout objects
-
+        candidates_to_be_matched = candidates
         if self.validate_exploration_candidates:
             if not use_prev_batch:   # validate the exploration candidates that collected the samples as well
                 # validate the agents in the validate_dataset
@@ -628,12 +745,32 @@ class PrioritySearch(SearchTemplate):
                 exploration_samples = Samples(*self.validate_sampler.sample(exploration_agents,
                                               description_prefix='Validating exploration candidates: '))  # sample the exploration agents
                 validate_samples.add_samples(exploration_samples)  # append the exploration samples to the validate_samples
+                # Only match exploration candidates if they were actually sampled (i.e., validate_exploration_candidates=True and use_prev_batch=False)
+                candidates_to_be_matched = exploration_candidates + candidates
 
-
-        matched_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates + candidates, validate_samples.samples)
+        matched_candidates_and_samples = self.match_candidates_and_samples(candidates_to_be_matched, validate_samples.samples)
         results = {}  # dict of ModuleCandidate id: (ModuleCandidate, list of rollouts)
         for c, rollouts in matched_candidates_and_samples.items():  # rollouts is a list of BatchRollouts
             results[c] = [ r for rr in rollouts for r in rr.to_list()]  # we only need the list of dicts
+        # Add exploration candidates that weren't included in match_candidates_and_samples
+        # This ensures they get re-added to memory even if they weren't validated again
+        for candidate in exploration_candidates:
+            if candidate not in results:
+                results[candidate] = []  # Add with empty rollouts list
+
+        # Populate score_dict in each rollout when multi-objective is active
+        cfg = getattr(self, 'objective_config', None)
+        if cfg is not None:
+            guide = self.validate_sampler.guide
+            for c, rollout_list in results.items():
+                for rollout in rollout_list:
+                    try:
+                        sd = guide.get_score_dict(
+                            rollout['x'], rollout['target'], rollout['info']
+                        )
+                        rollout['score_dict'] = sd
+                    except Exception:
+                        pass  # guide may not support get_score_dict; skip gracefully
 
         return results
 
@@ -769,8 +906,18 @@ class PrioritySearch(SearchTemplate):
         """
         if not isinstance(candidate, ModuleCandidate):
             raise TypeError("candidate must be an instance of ModuleCandidate.")
-        # By default, we compute the mean score of the rollouts
 
+        # Multi-objective priority: use weighted scalarization of score_dict when available
+        if getattr(self, 'objective_config', None) is not None:
+            sd = candidate.mean_score_dict()
+            if sd is not None:
+                cfg = self.objective_config
+                sd = apply_minimize(to_score_dict(sd), cfg.minimize)
+                if cfg.weights:
+                    return float(weighted_scalarize(sd, cfg.weights, cfg.missing_value))
+                return float(np.mean(list(sd.values())))
+
+        # Fall through to existing scalar logic
         if self.score_function == 'mean':
             # Compute the mean score of the candidate's rollouts
             return candidate.mean_score()
@@ -795,10 +942,29 @@ class PrioritySearch(SearchTemplate):
         def _process_rollout(rollout):
             # rollout is a dict containing module, x, info, target, score, feedback
             for k in rollout:
-                if k not in ['score']:
+                if k not in ['score', 'score_dict']:
                     rollout[k] = None
         candidate = copy.copy(candidate)  # make a copy of the candidate to avoid modifying the original one
         candidate.rollouts = copy.deepcopy(candidate.rollouts)  # deep copy the rollouts to avoid modifying the original one
         for rollout in candidate.rollouts:
             _process_rollout(rollout)
         return candidate
+
+    # For the further usage.
+    def filter_candidates(self, candidates: List[ModuleCandidate]) -> List[ModuleCandidate]:
+        """ Filter candidates.
+        This function can be overridden by subclasses to filter candidates by other criteria.
+        Args:
+            candidates (List[ModuleCandidate]): A list of candidates to filter.
+        Returns:
+            List[ModuleCandidate]: A list of filtered candidates.
+        """
+        return candidates
+
+    # For the further usage, we decide to add the exploration rollouts to the exploration candidates, before proposing.
+    def add_exploration_rollouts_to_candidates(self, exploration_candidates: List[ModuleCandidate], samples: Samples):
+        """ Add the exploration rollouts to the exploration candidates.
+        """
+        matched_exploration_candidates_and_samples = self.match_candidates_and_samples(exploration_candidates, samples.samples)
+        for c, rollouts in matched_exploration_candidates_and_samples.items():
+            c.add_rollouts([r for rr in rollouts for r in rr.to_list()])

@@ -47,6 +47,22 @@ class Guide:
         """ Exact match metric """
         return self.get_feedback(query, response, reference)[0]
 
+    def get_score_dict(self, query: str, response: str, reference: Optional[str] = None, **kwargs) -> Dict[str, float]:
+        """Return the evaluation score as a dictionary.
+
+        Default implementation wraps the scalar from get_feedback() as
+        {"score": float_value}. Subclasses returning multi-metric scores
+        should override this method to return e.g.
+        {"accuracy": 0.9, "fluency": 0.8, "latency_s": 0.05}.
+
+        If get_feedback() returns a dict as its first element, that dict
+        is returned directly (with values cast to float).
+        """
+        score = self.get_feedback(query, response, reference, **kwargs)[0]
+        if isinstance(score, dict):
+            return {k: float(v) for k, v in score.items()}
+        return {"score": float(score)}
+
     def copy(self):
         """ Create a copy of the guide instance.
 
