@@ -365,16 +365,9 @@ if __name__ == '__main__':
     os.makedirs(master_dir, exist_ok=True)
 
     dataset = load_dataset("hubert233/BigBenchExtraHard")
-    tasks = ['boardgame_qa', 'boolean_expressions', 'buggy_tables', 'causal_understanding', 'disambiguation_qa',
-             'dyck_languages', 'geometric_shapes',
-             'hyperbaton', 'linguini', 'movie_recommendation', 'multistep_arithmetic', 'nycc', 'object_counting',
-             'object_properties', 'sarc_triples',
-             'shuffled_objects', 'spatial_reasoning', 'sportqa', 'temporal_sequence', 'time_arithmetic', 'web_of_lies',
-             'word_sorting', 'zebra_puzzles']
 
-    # tasks = tasks[:5]
-    # tasks = ['boardgame_qa', 'boolean_expressions', 'causal_understanding', 'disambiguation_qa'] # first batch
-    tasks = ['dyck_languages', 'geometric_shapes', 'hyperbaton', 'linguini', 'movie_recommendation']  # second batch
+    tasks = ['boardgame_qa', 'boolean_expressions', 'causal_understanding', 'disambiguation_qa'] # first batch
+    tasks += ['dyck_languages', 'geometric_shapes', 'hyperbaton', 'linguini', 'movie_recommendation']  # second batch
 
     for task in tasks:
         print(f"Processing task: {task}")
