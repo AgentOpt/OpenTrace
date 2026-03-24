@@ -12,7 +12,7 @@ from opto.trace.nodes import ParameterNode
 
 from opto.optimizers.optoprime_v3 import OptoPrimeV3, OptimizerPromptSymbolSet
 from opto.utils.backbone import (
-    ContentBlock, ImageContent, ContentBlockList,
+    ContentBase, ImageContent, ContentBlockList,
     DEFAULT_IMAGE_PLACEHOLDER
 )
 
@@ -100,7 +100,7 @@ class ProblemInstance:
     ----------
     instruction : str
         The instruction describing what needs to be done or the question to answer.
-    variables : Union[str, List[ContentBlock]]
+    variables : Union[str, List[ContentBase]]
         The current proposed solution that can be modified. Can contain images.
     feedback : str
         Feedback about the current solution.
@@ -127,7 +127,7 @@ class ProblemInstance:
     organizes the instruction, variables, and feedback into a structured format.
     """
     instruction: str
-    variables: Union[str, List[ContentBlock]]
+    variables: Union[str, List[ContentBase]]
     feedback: str
     context: Optional[ContentBlockList]
 
@@ -147,7 +147,7 @@ class ProblemInstance:
     )
 
     @staticmethod
-    def _content_to_text(content: Union[str, List[ContentBlock]]) -> str:
+    def _content_to_text(content: Union[str, List[ContentBase]]) -> str:
         """Convert content (str or List[ContentBlock]) to text representation.
         
         Handles both string content and ContentBlockList/List[ContentBlock].

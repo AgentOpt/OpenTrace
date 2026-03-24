@@ -296,10 +296,11 @@ def render_assistant_turn(turn: 'AssistantTurn') -> str:
         ''')
         
         for tc in turn.tool_calls:
-            args_str = json.dumps(tc.arguments, indent=2) if tc.arguments else "{}"
+            func_name = tc.function.name if tc.function else "unknown"
+            args_str = tc.function.arguments if tc.function else "{}"
             parts.append(f'''
                 <div style="font-family: 'Monaco', 'Menlo', monospace; font-size: 0.9em; margin: 4px 0;">
-                    <span style="color: #6A1B9A; font-weight: 600;">{_escape(tc.name)}</span>
+                    <span style="color: #6A1B9A; font-weight: 600;">{_escape(func_name)}</span>
                     <span style="color: #666;">({_escape(args_str)})</span>
                 </div>
             ''')

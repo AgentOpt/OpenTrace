@@ -35,7 +35,7 @@ import io
 DEFAULT_IMAGE_PLACEHOLDER = "\n[IMAGE]\n"
 
 @dataclass
-class ContentBlock:
+class ContentBase:
     """Abstract base class for all content blocks."""
 
     def __init__(self, **kwargs):
@@ -51,7 +51,7 @@ class ContentBlock:
         raise NotImplementedError("Subclasses must implement this method")
 
     @classmethod
-    def build(cls, value: Any, **kwargs) -> 'ContentBlock':
+    def build(cls, value: Any, **kwargs) -> 'ContentBase':
         """Build a content block from a value with auto-detection.
         
         Args:
@@ -59,7 +59,7 @@ class ContentBlock:
             **kwargs: Additional keyword arguments for building
         
         Returns:
-            ContentBlock: The built content block
+            ContentBase: The built content block
         """
         raise NotImplementedError("Subclasses must implement this method")
     
@@ -86,7 +86,7 @@ class ContentBlockList(list):
     purposes in specialized methods but don't restrict the actual content.
     """
 
-    def __init__(self, content: Union[str, 'ContentBlock', List['ContentBlock'], None] = None):
+    def __init__(self, content: Union[str, 'ContentBase', List['ContentBase'], None] = None):
         """Initialize ContentBlockList with automatic type conversion.
         
         Args:
@@ -98,7 +98,7 @@ class ContentBlockList(list):
             self.extend(self._normalize(content))
     
     @staticmethod
-    def _normalize(content: Union[str, 'ContentBlock', List['ContentBlock'], None]) -> List['ContentBlock']:
+    def _normalize(content: Union[str, 'ContentBase', List['ContentBase'], None]) -> List['ContentBase']:
         """Normalize content to a list of ContentBlocks."""
         if content is None:
             return []
@@ -110,7 +110,7 @@ class ContentBlockList(list):
         return [content]
     
     @classmethod
-    def ensure(cls, content: Union[str, 'ContentBlock', List['ContentBlock'], None]) -> 'ContentBlockList':
+    def ensure(cls, content: Union[str, 'ContentBase', List['ContentBase'], None]) -> 'ContentBlockList':
         """Ensure content is a ContentBlockList with automatic conversion.
         
         Args:
@@ -123,7 +123,7 @@ class ContentBlockList(list):
             return content
         return cls(content)
     
-    def __getitem__(self, key: Union[int, slice]) -> Union['ContentBlock', 'ContentBlockList']:
+    def __getitem__(self, key: Union[int, slice]) -> Union['ContentBase', 'ContentBlockList']:
         """Support indexing and slicing.
         
         Args:
@@ -142,7 +142,7 @@ class ContentBlockList(list):
     def to_dict(self) -> Dict[str, Any]:
         return {"type": "list", "blocks": [b.to_dict() for b in self]}
     
-    def append(self, item: Union[str, 'ContentBlock', 'ContentBlockList']) -> 'ContentBlockList':
+    def append(self, item: Union[str, 'ContentBase', 'ContentBlockList']) -> 'ContentBlockList':
         """Append a string or ContentBlock, merging consecutive text.
         
         Args:
@@ -170,8 +170,8 @@ class ContentBlockList(list):
             super().append(item)
         return self
     
-    def extend(self, blocks: Union[str, 'ContentBlock', List[
-        'ContentBlock'], 'ContentBlockList', None]) -> 'ContentBlockList':
+    def extend(self, blocks: Union[str, 'ContentBase', List[
+        'ContentBase'], 'ContentBlockList', None]) -> 'ContentBlockList':
         """Extend with blocks, merging consecutive TextContent.
         
         Args:
@@ -226,7 +226,7 @@ class ContentBlockList(list):
 
     # --- Multimodal utilities ---
     @staticmethod
-    def blocks_to_text(blocks: Iterable['ContentBlock'],
+    def blocks_to_text(blocks: Iterable['ContentBase'],
                        image_placeholder: str = DEFAULT_IMAGE_PLACEHOLDER) -> str:
         """Convert any iterable of ContentBlocks to text representation.
         
@@ -322,7 +322,7 @@ class ContentBlockList(list):
         
         def _count_recursive(item: Any) -> None:
             """Recursively count blocks in nested structures."""
-            if isinstance(item, ContentBlock):
+            if isinstance(item, ContentBase):
                 # Count this block
                 class_name = item.__class__.__name__
                 counts[class_name] = counts.get(class_name, 0) + 1
@@ -333,7 +333,7 @@ class ContentBlockList(list):
                         if isinstance(attr_value, (ContentBlockList, list)):
                             for nested_item in attr_value:
                                 _count_recursive(nested_item)
-                        elif isinstance(attr_value, ContentBlock):
+                        elif isinstance(attr_value, ContentBase):
                             _count_recursive(attr_value)
             elif isinstance(item, (ContentBlockList, list)):
                 # Recursively count items in lists
@@ -748,7 +748,7 @@ class PromptTemplate:
 
 
 @dataclass
-class TextContent(ContentBlock):
+class TextContent(ContentBase):
     """Text content block"""
     type: Literal["text"] = "text"
     text: str = ""
@@ -824,7 +824,7 @@ class TextContent(ContentBlock):
 
 
 @dataclass
-class ImageContent(ContentBlock):
+class ImageContent(ContentBase):
     """Image content block - supports URLs, base64, file paths, and numpy arrays.
 
     OpenAI uses base64 encoded images in the image_data field and recombine it into a base64 string of the format `"image_url": f"data:image/jpeg;base64,{base64_image}"` when sending to the API.
@@ -1343,7 +1343,7 @@ class ImageContent(ContentBlock):
             self.image_data = base64.b64encode(self.image_bytes).decode('utf-8')
 
 @dataclass
-class PDFContent(ContentBlock):
+class PDFContent(ContentBase):
     """PDF content block"""
     type: Literal["pdf"] = "pdf"
     pdf_url: Optional[str] = None
@@ -1417,7 +1417,7 @@ class PDFContent(ContentBlock):
 
 
 @dataclass
-class FileContent(ContentBlock):
+class FileContent(ContentBase):
     """Generic file content block (for code, data files, etc.)"""
     file_data: str  # Could be text content or base64 for binary
     filename: str
@@ -1515,75 +1515,122 @@ class FileContent(ContentBlock):
 
 # Union type alias for common content types (for type hints)
 # Note: ContentBlock remains the abstract base class for inheritance
-ContentBlockUnion = Union[TextContent, ImageContent, PDFContent, FileContent]
+ContentBlock = Union[TextContent, ImageContent, PDFContent, FileContent]
 
 
 @dataclass
-class ToolCall(ContentBlock):
-    """Represents a tool call made by the LLM"""
-    id: str
-    type: str  # "function", "web_search", etc.
-    name: Optional[str] = None  # function name
-    arguments: Optional[Dict[str, Any]] = None  # function arguments
+class ToolCall:
+    """Structured tool invocation following OpenAI function calling format.
 
-    def is_empty(self) -> bool:
-        """Check if the tool call is empty (no id)."""
-        return not self.id
+    Example:
+        tool_call = ToolCall(
+            function=ToolCall.FunctionBody(
+                name="search",
+                arguments='{"query": "python async"}'
+            ),
+            id="call_abc123"
+        )
+    """
+
+    @dataclass
+    class FunctionBody:
+        """Function body containing the tool name and arguments."""
+        name: str
+        arguments: str  # JSON string
+
+    type: str = "function"
+    id: Optional[str] = None
+    function: Optional['ToolCall.FunctionBody'] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {"id": self.id, "type": self.type}
-        if self.name:
-            result["name"] = self.name
-        if self.arguments:
-            result["arguments"] = self.arguments
+        result = {"type": self.type}
+        if self.id:
+            result["id"] = self.id
+        if self.function:
+            result["function"] = {
+                "name": self.function.name,
+                "arguments": self.function.arguments,
+            }
         return result
 
 
 @dataclass
-class ToolResult(ContentBlock):
-    """Represents the result of a tool execution"""
-    tool_call_id: str
-    content: str  # Result as string (can be JSON stringified)
-    is_error: bool = False
+class UnparsedToolCall:
+    """Represents a tool call that failed to parse from model output.
 
-    def is_empty(self) -> bool:
-        """Check if the tool result is empty (no tool_call_id)."""
-        return not self.tool_call_id
+    When a model generates text that looks like a tool call but cannot be
+    parsed (e.g., invalid JSON), this class captures the raw text and error
+    for debugging and optional re-rendering.
+
+    Example:
+        unparsed = UnparsedToolCall(
+            raw_text='{"name": "search", invalid json}',
+            error="Invalid JSON: Expecting property name"
+        )
+    """
+    raw_text: str
+    error: str
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "tool_call_id": self.tool_call_id,
-            "content": self.content,
-            "is_error": self.is_error
+            "type": "unparsed_tool_call",
+            "raw_text": self.raw_text,
+            "error": self.error,
         }
 
 
 @dataclass
-class ToolDefinition(ContentBlock):
-    """Defines a tool that the LLM can use"""
-    type: str  # "function", "web_search", "file_search", etc.
-    name: Optional[str] = None
-    description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    strict: bool = False  # OpenAI strict mode
-    # Provider-specific fields
-    extra: Dict[str, Any] = field(default_factory=dict)
+class ToolResult:
+    """Represents the result of a tool execution."""
+    tool_call_id: str
+    content: str
+    is_error: bool = False
 
-    def is_empty(self) -> bool:
-        """Check if the tool definition is empty (no type)."""
-        return not self.type
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": "tool_result",
+            "tool_call_id": self.tool_call_id,
+            "content": self.content,
+            "is_error": self.is_error,
+        }
+
+
+@dataclass
+class ToolDefinition:
+    """Defines a tool that the LLM can use, following OpenAI function format.
+
+    Example:
+        tool = ToolDefinition(
+            function=ToolDefinition.FunctionDef(
+                name="get_weather",
+                description="Get weather for a location",
+                parameters={"type": "object", "properties": {...}}
+            )
+        )
+    """
+
+    @dataclass
+    class FunctionDef:
+        """Function definition with name, description, and parameter schema."""
+        name: str
+        description: Optional[str] = None
+        parameters: Optional[Dict[str, Any]] = None
+        strict: bool = False
+
+    type: str = "function"
+    function: Optional['ToolDefinition.FunctionDef'] = None
 
     def to_dict(self) -> Dict[str, Any]:
         result = {"type": self.type}
-        if self.name:
-            result["name"] = self.name
-        if self.description:
-            result["description"] = self.description
-        if self.parameters:
-            result["parameters"] = self.parameters
-        if self.strict:
-            result["strict"] = self.strict
-        result.update(self.extra)
+        if self.function:
+            func_dict: Dict[str, Any] = {"name": self.function.name}
+            if self.function.description:
+                func_dict["description"] = self.function.description
+            if self.function.parameters:
+                func_dict["parameters"] = self.function.parameters
+            if self.function.strict:
+                func_dict["strict"] = self.function.strict
+            result["function"] = func_dict
         return result
 
 @dataclass
@@ -1755,8 +1802,9 @@ class AssistantTurn(Turn):
     role: str = "assistant"
     content: ContentBlockList = field(default_factory=ContentBlockList)
 
-    # Tool usage (Option B: Everything in AssistantTurn)
+    # Tool usage
     tool_calls: List[ToolCall] = field(default_factory=list)
+    unparsed_tool_calls: List[UnparsedToolCall] = field(default_factory=list)
     tool_results: List[ToolResult] = field(default_factory=list)
 
     # Provider-specific features
@@ -1788,6 +1836,7 @@ class AssistantTurn(Turn):
                 role=other.role,
                 content=ContentBlockList(other.content),
                 tool_calls=list(other.tool_calls),
+                unparsed_tool_calls=list(other.unparsed_tool_calls),
                 tool_results=list(other.tool_results),
                 reasoning=other.reasoning,
                 finish_reason=other.finish_reason,
@@ -1812,6 +1861,7 @@ class AssistantTurn(Turn):
                 role="assistant",
                 content=ContentBlockList(),
                 tool_calls=[],
+                unparsed_tool_calls=[],
                 tool_results=[],
                 reasoning=None,
                 finish_reason=None,
@@ -1839,6 +1889,7 @@ class AssistantTurn(Turn):
             "role": "assistant",
             "content": ContentBlockList(),
             "tool_calls": [],
+            "unparsed_tool_calls": [],
             "tool_results": [],
             "reasoning": None,
             "finish_reason": None,
@@ -2000,6 +2051,7 @@ class AssistantTurn(Turn):
             "role": "assistant",
             "content": ContentBlockList(),
             "tool_calls": [],
+            "unparsed_tool_calls": [],
             "tool_results": [],
             "reasoning": None,
             "finish_reason": None,
@@ -2200,8 +2252,10 @@ class AssistantTurn(Turn):
                     tool_call = ToolCall(
                         id=tc.id if hasattr(tc, 'id') else None,
                         type=tc.type if hasattr(tc, 'type') else "function",
-                        name=tc.function.name if hasattr(tc, 'function') else tc.name,
-                        arguments=json.loads(tc.function.arguments) if hasattr(tc, 'function') and hasattr(tc.function, 'arguments') else {}
+                        function=ToolCall.FunctionBody(
+                            name=tc.function.name if hasattr(tc, 'function') else tc.name,
+                            arguments=tc.function.arguments if hasattr(tc, 'function') and hasattr(tc.function, 'arguments') else "{}",
+                        ),
                     )
                     result["tool_calls"].append(tool_call)
             
@@ -2274,6 +2328,7 @@ class AssistantTurn(Turn):
                 "role": "assistant",
                 "content": ContentBlockList(),
                 "tool_calls": [],
+                "unparsed_tool_calls": [],
                 "tool_results": [],
                 "reasoning": None,
                 "finish_reason": None,
@@ -2376,17 +2431,7 @@ class AssistantTurn(Turn):
         result["content"] = self.content.to_litellm_format(role=self.role)
 
         if self.tool_calls:
-            result["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": tc.type,
-                    "function": {
-                        "name": tc.name,
-                        "arguments": json.dumps(tc.arguments) if tc.arguments else "{}"
-                    }
-                }
-                for tc in self.tool_calls
-            ]
+            result["tool_calls"] = [tc.to_dict() for tc in self.tool_calls]
 
         return result
     
