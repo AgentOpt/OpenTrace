@@ -11,7 +11,7 @@ __version__ = version["__version__"]
 install_requires = [
     "graphviz>=0.20.1",
     "pytest",
-    "litellm",
+    "litellm>=1.64.0,<=1.82.6",
     "black",
     "scikit-learn",
 ]
