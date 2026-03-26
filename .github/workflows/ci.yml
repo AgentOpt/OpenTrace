@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 180
 
     env:
-      PYTHON_VERSION: "3.13"
+      PYTHON_VERSION: "3.9"
       OLLAMA_VERSION: "0.18.0"
       OLLAMA_HOST: "127.0.0.1:11434"
       OLLAMA_CONTEXT_LENGTH: "4000"
