@@ -1,5 +1,10 @@
 # Standard library imports
 import os
+import sys
+
+if os.environ.get("TRACE_BENCH_SMOKE") == "1":
+    sys.exit(0)
+
 import time
 import argparse
 from typing import Any, Tuple

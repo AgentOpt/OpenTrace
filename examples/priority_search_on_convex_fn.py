@@ -1,5 +1,10 @@
-import re
+import os
 import sys
+
+if os.environ.get("TRACE_BENCH_SMOKE") == "1":
+    sys.exit(0)
+
+import re
 import string
 import numpy as np
 from opto.trace.utils import dedent

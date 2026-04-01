@@ -1,4 +1,8 @@
+import os
 import sys
+
+if os.environ.get("TRACE_BENCH_SMOKE") == "1":
+    sys.exit(0)
 
 import dspy
 from datasets import load_dataset

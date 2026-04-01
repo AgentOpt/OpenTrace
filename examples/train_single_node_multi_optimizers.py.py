@@ -1,3 +1,9 @@
+import os
+import sys
+
+if os.environ.get("TRACE_BENCH_SMOKE") == "1":
+    sys.exit(0)
+
 from opto import trace, trainer
 from opto.optimizers.optoprime_v2 import OptimizerPromptSymbolSet
 

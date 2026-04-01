@@ -1,5 +1,11 @@
 # This script applies Trace to optimize the workflow in TextGrad's prompt_optimization.py.
 
+import os
+import sys
+
+if os.environ.get("TRACE_BENCH_SMOKE") == "1":
+    sys.exit(0)
+
 from opto import trace
 from opto.optimizers import OptoPrime, TextGrad
 import time

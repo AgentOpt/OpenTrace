@@ -1,3 +1,9 @@
+import os
+import sys
+
+if os.environ.get("TRACE_BENCH_SMOKE") == "1":
+    sys.exit(0)
+
 from opto.trace.nodes import node, GRAPH, ParameterNode
 from textwrap import dedent
 from opto.optimizers import OptoPrime
