@@ -106,7 +106,7 @@ config = ObjectiveConfig(
 ### Step 3 — Pass it to the trainer
 
 ```python
-from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm
+from opto.trainer.examples.basic_algorithms import BasicSearchAlgorithm
 
 trainer = BasicSearchAlgorithm(agent, optimizer)
 trainer.train(

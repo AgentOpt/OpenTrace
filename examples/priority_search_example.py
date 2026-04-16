@@ -4,7 +4,7 @@ from opto import trace
 from opto.utils.llm import LLM
 from opto.features.predefined_agents import BasicLearner
 from opto.optimizers import OptoPrimeV2 as OptoPrime
-from opto.features.priority_search import PrioritySearch as SearchAlgorithm
+from opto.trainer.algorithms import PrioritySearch as SearchAlgorithm
 from opto.trainer.loggers import TensorboardLogger
 from opto.trainer.guide import LLMJudge
 

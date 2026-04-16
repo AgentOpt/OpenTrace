@@ -1,8 +1,8 @@
 from opto import trace
-from opto.features.priority_search.sampler import Sampler
+from opto.trainer.supporting_files.sampler import Sampler
 from opto.trainer.loader import DataLoader
 from opto.trainer.guide import Guide
-from opto.features.priority_search.utils import is_node_copy
+from opto.trainer.supporting_files.utils import is_node_copy
 
 
 class Guide(Guide):

@@ -1,10 +1,10 @@
-from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate
-from opto.features.priority_search.module_regressor import RegressorTemplate
-from opto.features.priority_search.summarizer import Summarizer
+from opto.trainer.algorithms.priority_search import PrioritySearch, ModuleCandidate
+from opto.trainer.supporting_files.module_regressor import RegressorTemplate
+from opto.trainer.supporting_files.summarizer import Summarizer
 from typing import Union, List, Tuple, Dict, Any, Optional, Callable
 from opto.optimizers.utils import print_color
 import numpy as np
-from opto.features.priority_search.search_template import Samples
+from opto.trainer.supporting_files.search_template import Samples
 
 
 def calculate_distance_to_memory(memory, new_candidate):

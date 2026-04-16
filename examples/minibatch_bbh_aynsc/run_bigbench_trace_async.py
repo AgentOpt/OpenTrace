@@ -10,7 +10,7 @@ from tqdm import tqdm
 import autogen
 import pickle
 import os
-from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, evaluate
+from opto.trainer.examples.basic_algorithms import MinibatchAlgorithm, evaluate
 from opto.trainer.guide import Guide
 
 

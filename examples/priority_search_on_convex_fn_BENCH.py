@@ -9,7 +9,7 @@ from priority_search_on_convex_fn import Rosenbrock, SixHumpCamel, RewardGuide
 # ============ TESTING code =============
 import numpy as np
 from opto import trace
-from opto.features.priority_search import PrioritySearch as SearchAlgorithm
+from opto.trainer.algorithms import PrioritySearch as SearchAlgorithm
 from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
 from typing import Any
 from opto import trainer

@@ -7,7 +7,6 @@ from opto import trace
 from opto.trace.nodes import ParameterNode
 from opto.trainer.utils import async_run, batch_run
 from opto.optimizers.utils import print_color
-from opto.trainer.algorithms.basic_algorithms import Minibatch, Trainer, batchify
 from opto.trainer.loader import DataLoader
 
 # Some helper functions to convert between trace.Module and update_dict

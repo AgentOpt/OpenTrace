@@ -5,7 +5,7 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.utils.auto_retry import retry_with_exponential_backoff
 import litellm
 import time
-from opto.features.priority_search.priority_search import ModuleCandidate
+from opto.trainer.algorithms.priority_search import ModuleCandidate
 
 
 def embed_text(model, text):
@@ -364,4 +364,3 @@ class ModuleCandidateRegressor:
             candidate.predicted_score = predicted_score
             
         return predicted_scores
-       

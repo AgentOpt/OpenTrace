@@ -10,11 +10,11 @@ import heapq
 from opto import trace
 from opto.trainer.guide import Guide
 from opto.trainer.objectives import ObjectiveConfig
-from opto.trainer.algorithms.beamsearch_algorithm import (
+from opto.trainer.examples.beamsearch_algorithm import (
     BeamsearchAlgorithm,
     BeamsearchHistoryAlgorithm,
 )
-from opto.features.priority_search.priority_search import (
+from opto.trainer.algorithms.priority_search import (
     PrioritySearch,
     ModuleCandidate,
     HeapMemory,
