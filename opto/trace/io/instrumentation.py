@@ -13,9 +13,10 @@ import inspect
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterator, Optional, Set
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set
 
 from opto.trace.io.bindings import Binding, make_dict_binding
+from opto.trace.io.graph_instrumentation import instrument_trace_graph
 from opto.trace.io.langgraph_otel_runtime import TracingLLM
 from opto.trace.io.telemetry_session import TelemetrySession
 
@@ -106,6 +107,13 @@ class InstrumentedGraph:
 def instrument_graph(
     graph: Any = None,
     *,
+    adapter: Optional[Any] = None,
+    backend: str = "otel",
+    graph_factory: Optional[Callable[[], Any]] = None,
+    scope: Optional[Dict[str, Any]] = None,
+    graph_agents_functions: Optional[List[str]] = None,
+    graph_prompts_list: Optional[List[Any]] = None,
+    train_graph_agents_functions: bool = True,
     session: Optional[TelemetrySession] = None,
     service_name: str = "langgraph-agent",
     trainable_keys: Optional[Set[str]] = None,
@@ -119,7 +127,7 @@ def instrument_graph(
     llm_span_name: str = "llm.chat.completion",
     input_key: str = "query",
     output_key: Optional[str] = None,
-) -> InstrumentedGraph:
+) -> Any:
     """Wrap a LangGraph with automatic OTEL instrumentation.
 
     Parameters
@@ -164,6 +172,71 @@ def instrument_graph(
     -------
     InstrumentedGraph
     """
+    try:
+        from opto.trace.graph.adapter import GraphAdapter
+    except Exception:
+        GraphAdapter = None
+
+    if adapter is not None:
+        if GraphAdapter is not None and not isinstance(adapter, GraphAdapter):
+            raise TypeError("adapter must be an instance of GraphAdapter")
+        return adapter.instrument(
+            backend=backend,
+            service_name=service_name,
+            input_key=input_key,
+            output_key=output_key,
+            session=session,
+            trainable_keys=trainable_keys,
+            enable_code_optimization=enable_code_optimization,
+            llm=llm,
+            emit_genai_child_spans=emit_genai_child_spans,
+            bindings=bindings,
+            in_place=in_place,
+            initial_templates=initial_templates,
+            provider_name=provider_name,
+            llm_span_name=llm_span_name,
+        )
+
+    if GraphAdapter is not None and isinstance(graph, GraphAdapter):
+        return graph.instrument(
+            backend=backend,
+            service_name=service_name,
+            input_key=input_key,
+            output_key=output_key,
+            session=session,
+            trainable_keys=trainable_keys,
+            enable_code_optimization=enable_code_optimization,
+            llm=llm,
+            emit_genai_child_spans=emit_genai_child_spans,
+            bindings=bindings,
+            in_place=in_place,
+            initial_templates=initial_templates,
+            provider_name=provider_name,
+            llm_span_name=llm_span_name,
+        )
+
+    if backend == "trace":
+        if graph_factory is None:
+            if callable(graph):
+                graph_factory = graph
+            else:
+                raise ValueError(
+                    "backend='trace' requires graph_factory or a callable graph"
+                )
+        return instrument_trace_graph(
+            graph_factory,
+            scope=scope,
+            graph_agents_functions=list(graph_agents_functions or []),
+            graph_prompts_list=graph_prompts_list,
+            train_graph_agents_functions=train_graph_agents_functions,
+            service_name=service_name,
+            input_key=input_key,
+            output_key=output_key,
+        )
+
+    if backend != "otel":
+        raise ValueError("Unsupported backend. Expected 'otel' or 'trace'.")
+
     # -- compile graph if needed --
     compiled = graph
     if graph is not None and hasattr(graph, "compile"):

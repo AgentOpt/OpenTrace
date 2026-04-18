@@ -71,7 +71,7 @@ def set_module_parameters(agent, update_dict):
     """
     remapped_update_dict = remap_update_dict(agent, update_dict)  # remap the update dict to the agent's parameters
     for k, v in remapped_update_dict.items():
-        k._data = v  # set the parameter's data to the value in the update_dict
+        k._set(v)  # preserve Node-unwrapping semantics consistently
 
 def create_module_from_update_dict(agent, update_dict):
     """ Create a new agent from the update_dict.

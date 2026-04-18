@@ -29,6 +29,17 @@ OpenTrace provides a unified API for instrumenting LangGraph agents with OpenTel
 
 **Total: ~645 lines reduced to ~10 lines.**
 
+### Backend modes
+
+`instrument_graph()` and `optimize_graph()` support two backends:
+
+| Backend | Carrier | Best for |
+|---|---|---|
+| `backend="otel"` (default) | OTLP spans → TGJ → ingest | observability-first optimization |
+| `backend="trace"` | native Trace nodes (`bundle()` / `node()`) | direct graph-native optimization |
+
+The OTEL path remains the default and most interoperable mode.
+
 ### Code Diff
 
 ```diff
@@ -112,6 +123,7 @@ OpenTrace provides a unified API for instrumenting LangGraph agents with OpenTel
 | `otel_adapter` | `otel_adapter.py` | Converts OTLP JSON to Trace-Graph JSON (TGJ) with temporal hierarchy |
 | `tgj_ingest` | `tgj_ingest.py` | Ingests TGJ documents into `ParameterNode` / `MessageNode` objects |
 | `otel_semconv` | `otel_semconv.py` | Helpers: `emit_reward()`, `emit_trace()`, `record_genai_chat()` |
+| `graph_instrumentation` | `graph_instrumentation.py` | Trace-native graph instrumentation (`TraceGraph`) |
 
 ### Supported Graph Kinds
 

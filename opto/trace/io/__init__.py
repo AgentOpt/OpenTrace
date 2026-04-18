@@ -22,6 +22,7 @@ Lower-level
 
 # -- high-level API --------------------------------------------------------
 from opto.trace.io.instrumentation import instrument_graph, InstrumentedGraph
+from opto.trace.io.graph_instrumentation import instrument_trace_graph, TraceGraph
 from opto.trace.io.optimization import (
     optimize_graph,
     EvalResult,
@@ -50,6 +51,22 @@ from opto.trace.io.langgraph_otel_runtime import (
 )
 from opto.trace.io.otel_adapter import otlp_traces_to_trace_json
 from opto.trace.io.tgj_ingest import ingest_tgj, merge_tgj
+try:
+    from opto.trace.graph import (
+        GraphAdapter,
+        LangGraphAdapter,
+        GraphModule,
+        GraphRunSidecar,
+        OTELRunSidecar,
+        GraphCandidateSnapshot,
+    )
+except Exception:  # pragma: no cover - optional/lazy import safety
+    GraphAdapter = None
+    LangGraphAdapter = None
+    GraphModule = None
+    GraphRunSidecar = None
+    OTELRunSidecar = None
+    GraphCandidateSnapshot = None
 
 __all__ = [
     # High-level
@@ -68,6 +85,8 @@ __all__ = [
     "record_genai_chat",
     # Data classes
     "InstrumentedGraph",
+    "instrument_trace_graph",
+    "TraceGraph",
     "RunResult",
     "OptimizationResult",
     # Lower-level
@@ -81,3 +100,15 @@ __all__ = [
     "ingest_tgj",
     "merge_tgj",
 ]
+
+if GraphAdapter is not None:
+    __all__.extend(
+        [
+            "GraphAdapter",
+            "LangGraphAdapter",
+            "GraphModule",
+            "GraphRunSidecar",
+            "OTELRunSidecar",
+            "GraphCandidateSnapshot",
+        ]
+    )

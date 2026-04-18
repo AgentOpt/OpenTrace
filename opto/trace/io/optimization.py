@@ -21,11 +21,13 @@ from typing import (
     Callable,
     Dict,
     List,
+    Tuple,
     Optional,
     Union,
 )
 
 from opto.trace.io.bindings import Binding, apply_updates
+from opto.trace.io.graph_instrumentation import TraceGraph
 from opto.trace.io.instrumentation import InstrumentedGraph
 
 logger = logging.getLogger(__name__)
@@ -239,13 +241,23 @@ def _select_output_node(nodes: dict) -> Any:
     return top_level[-1]
 
 
+def _batchify_items(*items: Any) -> Any:
+    """Build a batched Trace node payload without importing trainer packages."""
+    from opto.trace import node
+
+    output = ""
+    for i, item in enumerate(items):
+        output += f"ID {[i]}: {item}\n"
+    return node(output, name="batch_output")
+
+
 # ---------------------------------------------------------------------------
 # optimize_graph
 # ---------------------------------------------------------------------------
 
 
 def optimize_graph(
-    graph: InstrumentedGraph,
+    graph: Any,
     queries: Union[List[str], List[Dict[str, Any]]],
     *,
     iterations: int = 5,
@@ -305,6 +317,18 @@ def optimize_graph(
     -------
     OptimizationResult
     """
+    if getattr(graph, "backend", None) == "trace":
+        return _optimize_trace_graph(
+            graph,
+            queries=queries,
+            iterations=iterations,
+            optimizer=optimizer,
+            optimizer_kwargs=optimizer_kwargs,
+            eval_fn=eval_fn,
+            output_key=output_key,
+            on_iteration=on_iteration,
+        )
+
     # Resolve bindings / templates
     effective_bindings = bindings or graph.bindings
     if initial_templates:
@@ -354,8 +378,7 @@ def optimize_graph(
             except ImportError:
                 _GraphPropagator = None
         if _batchify is None:
-            from opto.trainer.algorithms.basic_algorithms import batchify
-            _batchify = batchify
+            _batchify = _batchify_items
 
     def _ensure_optimizer(param_nodes):
         nonlocal _optimizer
@@ -583,6 +606,131 @@ def optimize_graph(
         best_parameters=best_parameters,
         best_updates=best_updates,
         final_parameters=final_params,
+        score_history=score_history,
+        all_runs=all_runs,
+    )
+
+
+def _optimize_trace_graph(
+    graph: TraceGraph,
+    *,
+    queries: Union[List[str], List[Dict[str, Any]]],
+    iterations: int = 5,
+    optimizer: Optional[Any] = None,
+    optimizer_kwargs: Optional[Dict[str, Any]] = None,
+    eval_fn: Optional[EvalFn] = None,
+    output_key: Optional[str] = None,
+    on_iteration: Optional[Callable[[int, List[RunResult], Dict[str, Any]], None]] = None,
+) -> OptimizationResult:
+    from opto.optimizers.optoprime_v2 import OptoPrimeV2
+    from opto.trace.nodes import Node
+
+    if eval_fn is None:
+        raise ValueError("backend='trace' requires an explicit eval_fn")
+
+    key = output_key or getattr(graph, "output_key", None)
+    score_history: List[float] = []
+    all_runs: List[List[RunResult]] = []
+    best_score = float("-inf")
+    best_iteration = 0
+    best_updates: Dict[str, Any] = {}
+    last_applied_updates: Dict[str, Any] = {}
+
+    def _snapshot(parameters: List[Any]) -> Dict[str, Any]:
+        snapshot: Dict[str, Any] = {}
+        for p in parameters:
+            snapshot[getattr(p, "name", repr(p))] = getattr(p, "data", None)
+        return snapshot
+
+    best_parameters = _snapshot(graph.parameters)
+    opt = optimizer or OptoPrimeV2(parameters=list(graph.parameters), **dict(optimizer_kwargs or {}))
+
+    def _extract_output(result: Any, sidecar: Any = None) -> Tuple[Any, Any]:
+        if sidecar is not None and getattr(sidecar, "output_node", None) is not None:
+            output_node = sidecar.output_node
+            return output_node, getattr(output_node, "data", output_node)
+        answer = result.get(key, result) if (key and isinstance(result, dict)) else result
+        if key and isinstance(answer, Node) and isinstance(getattr(answer, "data", None), dict):
+            answer = answer.data.get(key, answer)
+        if isinstance(answer, Node):
+            return answer, getattr(answer, "data", answer)
+        raise TypeError(
+            "trace backend requires the graph result (or result[output_key]) to be a Trace Node"
+        )
+
+    for iteration in range(iterations + 1):
+        state_parameters = _snapshot(graph.parameters)
+        applied_updates_for_iteration = dict(last_applied_updates)
+        runs: List[RunResult] = []
+        output_nodes: List[Any] = []
+        updates: Dict[str, Any] = {}
+
+        for query in queries:
+            state = query if isinstance(query, dict) else {graph.input_key: query}
+            result = graph.invoke(state)
+            sidecar = getattr(graph, "_last_sidecar", None)
+            output_node, answer = _extract_output(result, sidecar=sidecar)
+            er = _normalise_eval(
+                eval_fn(
+                    {
+                        "query": query,
+                        "answer": answer,
+                        "result": result,
+                        "iteration": iteration,
+                    }
+                )
+            )
+            runs.append(
+                RunResult(
+                    answer=answer,
+                    score=er.score,
+                    feedback=er.feedback,
+                    metrics=er.metrics,
+                    otlp={},
+                )
+            )
+            output_nodes.append(output_node)
+
+        avg_score = sum((run.score or 0.0) for run in runs) / max(1, len(runs))
+        score_history.append(avg_score)
+        all_runs.append(runs)
+
+        if avg_score > best_score:
+            best_score = avg_score
+            best_iteration = iteration
+            best_parameters = state_parameters
+            best_updates = dict(applied_updates_for_iteration) if iteration > 0 else {}
+
+        if iteration > 0 and output_nodes:
+            opt.zero_feedback()
+            if len(output_nodes) == 1:
+                opt.backward(output_nodes[0], runs[0].feedback or f"Score: {runs[0].score}")
+            else:
+                target = _batchify_items(*output_nodes)
+                feedback = _batchify_items(
+                    *[(r.feedback or f"Score: {r.score}") for r in runs]
+                ).data
+                opt.backward(target, feedback)
+            raw_updates = opt.step()
+            if isinstance(raw_updates, dict):
+                updates = raw_updates
+                if getattr(graph, "bindings", None) and all(isinstance(k, str) for k in raw_updates):
+                    last_applied_updates = apply_updates(raw_updates, graph.bindings, strict=False)
+                else:
+                    last_applied_updates = dict(raw_updates)
+            else:
+                last_applied_updates = {}
+
+        if on_iteration:
+            on_iteration(iteration, runs, updates)
+
+    return OptimizationResult(
+        baseline_score=score_history[0],
+        best_score=best_score,
+        best_iteration=best_iteration,
+        best_parameters=best_parameters,
+        best_updates=best_updates,
+        final_parameters=_snapshot(graph.parameters),
         score_history=score_history,
         all_runs=all_runs,
     )

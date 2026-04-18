@@ -295,7 +295,7 @@ class Optimizer(AbstractOptimizer):
         """
         for p, d in update_dict.items():
             if p.trainable:
-                p._data = d
+                p._set(d)
 
     def zero_feedback(self):
         """Clear accumulated feedback from all parameters.

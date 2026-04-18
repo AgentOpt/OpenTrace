@@ -1,0 +1,100 @@
+import pytest
+
+langgraph = pytest.importorskip("langgraph.graph")
+StateGraph = langgraph.StateGraph
+START = langgraph.START
+END = langgraph.END
+
+from opto.trace import node
+from opto.trace.graph import GraphModule, GraphRunSidecar, LangGraphAdapter
+
+
+def _raw(x):
+    return getattr(x, "data", x)
+
+
+def _collect_ancestors(n):
+    seen = set()
+    stack = [n]
+    out = []
+    while stack:
+        cur = stack.pop()
+        if id(cur) in seen:
+            continue
+        seen.add(id(cur))
+        out.append(cur)
+        for parent in getattr(cur, "parents", []):
+            stack.append(parent)
+    return out
+
+
+def make_adapter():
+    planner_prompt = node("Plan: {query}", trainable=True, name="planner_prompt")
+    synth_prompt = node("Answer: {query} :: {plan}", trainable=True, name="synth_prompt")
+
+    def planner_node(state):
+        query = _raw(state["query"])
+        return {"plan": planner_prompt.data.replace("{query}", str(query))}
+
+    def synth_node(state):
+        query = _raw(state["query"])
+        plan = _raw(state["plan"])
+        answer = synth_prompt.data.replace("{query}", str(query)).replace("{plan}", str(plan))
+        return {"final_answer": answer}
+
+    def build_graph(planner_node=planner_node, synth_node=synth_node, route_policy="direct"):
+        graph = StateGraph(dict)
+        graph.add_node("planner", planner_node)
+        graph.add_node("synth", synth_node)
+        graph.add_edge(START, "planner")
+        graph.add_edge("planner", "synth")
+        graph.add_edge("synth", END)
+        return graph
+
+    return LangGraphAdapter(
+        backend="trace",
+        graph_factory=build_graph,
+        function_targets={"planner_node": planner_node, "synth_node": synth_node},
+        prompt_targets={"planner_prompt": planner_prompt, "synth_prompt": synth_prompt},
+        graph_knobs={"route_policy": "direct"},
+        input_key="query",
+        output_key="final_answer",
+    )
+
+
+def test_invoke_runtime_trace_returns_plain_dict_and_sidecar_node():
+    adapter = make_adapter()
+    result, sidecar = adapter.invoke_runtime({"query": "What is CRISPR?"}, backend="trace")
+    assert isinstance(result, dict)
+    assert isinstance(sidecar, GraphRunSidecar)
+    assert "final_answer" in result
+    assert sidecar.output_node is not None
+    assert sidecar.output_node.data == result["final_answer"]
+
+
+def test_shadow_state_preserves_cross_node_dependencies():
+    adapter = make_adapter()
+    model = adapter.as_module()
+    out = model("What is CRISPR?")
+    sidecar = model._last_sidecar
+    assert out is sidecar.output_node
+    assert "planner_node" in sidecar.node_outputs
+    assert "synth_node" in sidecar.node_outputs
+
+
+def test_graph_module_parameters_include_prompts_and_graph_knobs():
+    adapter = make_adapter()
+    model = adapter.as_module()
+    assert isinstance(model, GraphModule)
+    names = {getattr(p, "name", "") for p in model.parameters()}
+    assert any("planner_prompt" in n for n in names)
+    assert any("synth_prompt" in n for n in names)
+    assert any("route_policy" in n for n in names)
+
+
+def test_bindings_are_auto_generated_and_transparent():
+    adapter = make_adapter()
+    assert adapter.bindings["planner_prompt"].kind == "prompt"
+    assert adapter.bindings["route_policy"].kind == "graph"
+    adapter.bindings["route_policy"].set("alternate")
+    assert adapter.graph_knobs["route_policy"].data == "alternate"
