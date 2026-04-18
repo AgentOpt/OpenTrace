@@ -281,11 +281,15 @@ class LangGraphAdapter(GraphAdapter):
         sidecar = self.new_run_sidecar()
         for key, value in state.items():
             sidecar.shadow_state[key] = value if isinstance(value, Node) else node(value, name=key)
+        for key, value in self.graph_knobs.items():
+            sidecar.shadow_state[key] = value
 
         self._active_sidecar = sidecar
+        runtime_state = dict(state)
+        runtime_state.update(self._knob_values())
         try:
             graph = self.build_graph(backend="trace")
-            result = graph.invoke(state, **kwargs)
+            result = graph.invoke(runtime_state, **kwargs)
         finally:
             self._active_sidecar = None
 

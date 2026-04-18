@@ -7,6 +7,7 @@ END = langgraph.END
 
 from opto.trace import node
 from opto.trace.graph import GraphModule, GraphRunSidecar, LangGraphAdapter
+from opto.trace.io import TraceGraph, instrument_graph, optimize_graph
 
 
 def _raw(x):
@@ -98,3 +99,29 @@ def test_bindings_are_auto_generated_and_transparent():
     assert adapter.bindings["route_policy"].kind == "graph"
     adapter.bindings["route_policy"].set("alternate")
     assert adapter.graph_knobs["route_policy"].data == "alternate"
+
+
+def test_instrument_graph_accepts_adapter_in_trace_mode_and_optimize_graph_uses_sidecar():
+    adapter = make_adapter()
+    graph = instrument_graph(adapter=adapter, backend="trace", output_key="final_answer")
+    assert isinstance(graph, TraceGraph)
+    result = optimize_graph(
+        graph,
+        queries=["What is CRISPR?"],
+        iterations=0,
+        eval_fn=lambda payload: {
+            "score": 1.0 if "CRISPR" in str(payload["answer"]) else 0.0,
+            "feedback": "Keep CRISPR in the final answer.",
+        },
+    )
+    assert result.best_iteration == 0
+    assert result.best_score == 1.0
+
+
+def test_instrument_graph_accepts_graph_argument_when_it_is_a_graph_adapter():
+    adapter = make_adapter()
+    graph = instrument_graph(graph=adapter, backend="trace", output_key="final_answer")
+    assert isinstance(graph, TraceGraph)
+    out = graph.invoke({"query": "What is CRISPR?"})
+    assert isinstance(out, dict)
+    assert "final_answer" in out

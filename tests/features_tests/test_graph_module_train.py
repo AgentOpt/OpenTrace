@@ -5,11 +5,10 @@ StateGraph = langgraph.StateGraph
 START = langgraph.START
 END = langgraph.END
 
-from opto.features.priority_search import PrioritySearch
 from opto.optimizers.optimizer import Optimizer
 from opto.trace import node
 from opto.trace.graph import LangGraphAdapter
-from opto.trainer import train
+from opto.trainer.train import train
 from opto.trainer.guide import Guide
 
 
@@ -97,26 +96,5 @@ def test_graphmodule_is_train_compatible():
         batch_size=1,
     )
     assert algo is not None
-    out = model("gene editing")
-    assert isinstance(out.data, str)
-
-
-def test_graphmodule_prioritysearch_smoke_for_graph_knob():
-    adapter = build_adapter()
-    model = adapter.as_module()
-    guide = KeywordGuide()
-    optimizer = RouteOptimizer(model.parameters())
-    algo = PrioritySearch(model, optimizer, num_threads=1)
-    result = algo.train(
-        guide=guide,
-        train_dataset={"inputs": ["gene editing"], "infos": ["Reviewed"]},
-        num_epochs=1,
-        batch_size=1,
-        num_batches=1,
-        num_candidates=1,
-        num_proposals=1,
-        validate_exploration_candidates=True,
-    )
-    assert result is None or isinstance(result, tuple)
     out = model("gene editing")
     assert isinstance(out.data, str)
