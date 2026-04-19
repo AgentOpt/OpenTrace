@@ -18,6 +18,8 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Set
 from opto.trace.io.bindings import Binding, make_dict_binding
 from opto.trace.io.graph_instrumentation import instrument_trace_graph
 from opto.trace.io.langgraph_otel_runtime import TracingLLM
+from opto.trace.io.observers import GraphObserver, OTelObserver
+from opto.trace.io.sysmonitoring import SysMonObserver, SysMonitoringSession
 from opto.trace.io.telemetry_session import TelemetrySession
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,8 @@ class InstrumentedGraph:
     service_name: str = "langgraph-agent"
     input_key: str = "query"
     output_key: Optional[str] = None
+    observers: List[GraphObserver] = field(default_factory=list)
+    _last_observer_artifacts: List[Any] = field(default_factory=list, init=False, repr=False)
 
     # Holds the active root span context for eval_fn to attach reward spans
     _root_span: Any = field(default=None, repr=False, init=False)
@@ -84,15 +88,28 @@ class InstrumentedGraph:
         if isinstance(state, dict):
             query_hint = str(state.get(self.input_key, ""))
 
-        with self._root_invocation_span(query_hint) as root_sp:
-            result = self.graph.invoke(state, **kwargs)
-            # Attach a summary attribute to the root span (generic)
-            if isinstance(result, dict) and self.output_key and self.output_key in result:
-                root_sp.set_attribute(
-                    "langgraph.output.preview",
-                    str(result[self.output_key])[:500],
-                )
-            return result
+        for obs in self.observers:
+            obs.start(bindings=self.bindings, meta={"service_name": self.service_name})
+
+        result = None
+        error = None
+        try:
+            with self._root_invocation_span(query_hint) as root_sp:
+                result = self.graph.invoke(state, **kwargs)
+                # Attach a summary attribute to the root span (generic)
+                if isinstance(result, dict) and self.output_key and self.output_key in result:
+                    root_sp.set_attribute(
+                        "langgraph.output.preview",
+                        str(result[self.output_key])[:500],
+                    )
+                return result
+        except BaseException as exc:
+            error = exc
+            raise
+        finally:
+            self._last_observer_artifacts = []
+            for obs in reversed(self.observers):
+                self._last_observer_artifacts.append(obs.stop(result=result, error=error))
 
     def stream(self, state: Any, **kwargs: Any) -> Iterator[Dict[str, Any]]:
         """Stream graph execution with telemetry."""
@@ -104,11 +121,56 @@ class InstrumentedGraph:
             yield from self.graph.stream(state, **kwargs)
 
 
+@dataclass
+class SysMonInstrumentedGraph:
+    graph: Any
+    session: SysMonitoringSession
+    bindings: Dict[str, Binding] = field(default_factory=dict)
+    service_name: str = "langgraph-sysmon"
+    input_key: str = "query"
+    output_key: Optional[str] = None
+    backend: str = "sysmon"
+    _last_profile_doc: Optional[dict] = field(default=None, init=False, repr=False)
+
+    def invoke(self, state: Any, **kwargs: Any):
+        self.session.start(bindings=self.bindings)
+        result = None
+        error = None
+        try:
+            result = self.graph.invoke(state, **kwargs)
+            return result
+        except BaseException as exc:
+            error = exc
+            raise
+        finally:
+            self._last_profile_doc = self.session.stop(result=result, error=error)
+
+    def stream(self, state: Any, **kwargs: Any):
+        raise NotImplementedError("SysMonInstrumentedGraph.stream is not implemented")
+
+
+def _make_observers(
+    observe_with: tuple[str, ...],
+    *,
+    service_name: str,
+) -> List[GraphObserver]:
+    observers: List[GraphObserver] = []
+    for name in observe_with:
+        if name == "otel":
+            observers.append(OTelObserver(service_name=f"{service_name}-otel-observer"))
+        elif name == "sysmon":
+            observers.append(SysMonObserver(SysMonitoringSession(service_name=f"{service_name}-sysmon-observer")))
+        else:
+            raise ValueError(f"Unsupported observer: {name!r}")
+    return observers
+
+
 def instrument_graph(
     graph: Any = None,
     *,
     adapter: Optional[Any] = None,
     backend: str = "otel",
+    observe_with: tuple[str, ...] = (),
     graph_factory: Optional[Callable[[], Any]] = None,
     scope: Optional[Dict[str, Any]] = None,
     graph_agents_functions: Optional[List[str]] = None,
@@ -180,7 +242,7 @@ def instrument_graph(
     if adapter is not None:
         if GraphAdapter is not None and not isinstance(adapter, GraphAdapter):
             raise TypeError("adapter must be an instance of GraphAdapter")
-        return adapter.instrument(
+        out = adapter.instrument(
             backend=backend,
             service_name=service_name,
             input_key=input_key,
@@ -196,9 +258,12 @@ def instrument_graph(
             provider_name=provider_name,
             llm_span_name=llm_span_name,
         )
+        if hasattr(out, "observers"):
+            out.observers = _make_observers(observe_with, service_name=service_name)
+        return out
 
     if GraphAdapter is not None and isinstance(graph, GraphAdapter):
-        return graph.instrument(
+        out = graph.instrument(
             backend=backend,
             service_name=service_name,
             input_key=input_key,
@@ -214,6 +279,9 @@ def instrument_graph(
             provider_name=provider_name,
             llm_span_name=llm_span_name,
         )
+        if hasattr(out, "observers"):
+            out.observers = _make_observers(observe_with, service_name=service_name)
+        return out
 
     if backend == "trace":
         if graph_factory is None:
@@ -223,7 +291,7 @@ def instrument_graph(
                 raise ValueError(
                     "backend='trace' requires graph_factory or a callable graph"
                 )
-        return instrument_trace_graph(
+        out = instrument_trace_graph(
             graph_factory,
             scope=scope,
             graph_agents_functions=list(graph_agents_functions or []),
@@ -233,9 +301,34 @@ def instrument_graph(
             input_key=input_key,
             output_key=output_key,
         )
+        out.observers = _make_observers(observe_with, service_name=service_name)
+        return out
+
+    if backend == "sysmon":
+        if observe_with:
+            raise ValueError("observe_with is not supported when backend='sysmon'")
+        compiled = graph
+        if graph is not None and hasattr(graph, "compile"):
+            compiled = graph.compile()
+        templates = dict(initial_templates or {})
+        if bindings is None:
+            bindings = {}
+            for key in templates:
+                bindings[key] = make_dict_binding(templates, key, kind="prompt")
+        return SysMonInstrumentedGraph(
+            graph=compiled,
+            session=SysMonitoringSession(service_name=service_name),
+            bindings=bindings,
+            service_name=service_name,
+            input_key=input_key,
+            output_key=output_key,
+        )
 
     if backend != "otel":
-        raise ValueError("Unsupported backend. Expected 'otel' or 'trace'.")
+        raise ValueError("Unsupported backend. Expected 'otel', 'trace', or 'sysmon'.")
+
+    if "otel" in observe_with:
+        raise ValueError("observe_with=('otel', ...) is invalid when backend='otel'")
 
     # -- compile graph if needed --
     compiled = graph
@@ -301,4 +394,5 @@ def instrument_graph(
         service_name=service_name,
         input_key=input_key,
         output_key=output_key,
+        observers=_make_observers(observe_with, service_name=service_name),
     )

@@ -21,7 +21,7 @@ Lower-level
 """
 
 # -- high-level API --------------------------------------------------------
-from opto.trace.io.instrumentation import instrument_graph, InstrumentedGraph
+from opto.trace.io.instrumentation import instrument_graph, InstrumentedGraph, SysMonInstrumentedGraph
 from opto.trace.io.graph_instrumentation import instrument_trace_graph, TraceGraph
 from opto.trace.io.optimization import (
     optimize_graph,
@@ -51,6 +51,8 @@ from opto.trace.io.langgraph_otel_runtime import (
 )
 from opto.trace.io.otel_adapter import otlp_traces_to_trace_json
 from opto.trace.io.tgj_ingest import ingest_tgj, merge_tgj
+from opto.trace.io.observers import ObserverArtifact, GraphObserver, OTelObserver
+from opto.trace.io.sysmonitoring import SysMonitoringSession, SysMonObserver, sysmon_profile_to_tgj
 try:
     from opto.trace.graph import (
         GraphAdapter,
@@ -85,6 +87,7 @@ __all__ = [
     "record_genai_chat",
     # Data classes
     "InstrumentedGraph",
+    "SysMonInstrumentedGraph",
     "instrument_trace_graph",
     "TraceGraph",
     "RunResult",
@@ -99,6 +102,12 @@ __all__ = [
     "otlp_traces_to_trace_json",
     "ingest_tgj",
     "merge_tgj",
+    "ObserverArtifact",
+    "GraphObserver",
+    "OTelObserver",
+    "SysMonitoringSession",
+    "SysMonObserver",
+    "sysmon_profile_to_tgj",
 ]
 
 if GraphAdapter is not None:

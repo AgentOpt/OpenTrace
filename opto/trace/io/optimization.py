@@ -28,7 +28,8 @@ from typing import (
 
 from opto.trace.io.bindings import Binding, apply_updates
 from opto.trace.io.graph_instrumentation import TraceGraph
-from opto.trace.io.instrumentation import InstrumentedGraph
+from opto.trace.io.instrumentation import InstrumentedGraph, SysMonInstrumentedGraph
+from opto.trace.io.sysmonitoring import sysmon_profile_to_tgj
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +326,19 @@ def optimize_graph(
             optimizer=optimizer,
             optimizer_kwargs=optimizer_kwargs,
             eval_fn=eval_fn,
+            output_key=output_key,
+            on_iteration=on_iteration,
+        )
+    if getattr(graph, "backend", None) == "sysmon":
+        return _optimize_sysmon_graph(
+            graph,
+            queries=queries,
+            iterations=iterations,
+            optimizer=optimizer,
+            optimizer_kwargs=optimizer_kwargs,
+            eval_fn=eval_fn,
+            bindings=bindings,
+            apply_updates_flag=apply_updates_flag,
             output_key=output_key,
             on_iteration=on_iteration,
         )
@@ -731,6 +745,123 @@ def _optimize_trace_graph(
         best_parameters=best_parameters,
         best_updates=best_updates,
         final_parameters=_snapshot(graph.parameters),
+        score_history=score_history,
+        all_runs=all_runs,
+    )
+
+
+def _optimize_sysmon_graph(
+    graph: SysMonInstrumentedGraph,
+    *,
+    queries: Union[List[str], List[Dict[str, Any]]],
+    iterations: int = 5,
+    optimizer: Optional[Any] = None,
+    optimizer_kwargs: Optional[Dict[str, Any]] = None,
+    eval_fn: Optional[EvalFn] = None,
+    bindings: Optional[Dict[str, Binding]] = None,
+    apply_updates_flag: bool = True,
+    output_key: Optional[str] = None,
+    on_iteration: Optional[Callable[[int, List[RunResult], Dict[str, Any]], None]] = None,
+) -> OptimizationResult:
+    from opto.optimizers.optoprime_v2 import OptoPrimeV2
+    from opto.trace.io.tgj_ingest import ingest_tgj
+    from opto.trace.io.tgj_ingest import merge_tgj
+
+    effective_bindings = bindings or graph.bindings
+    if eval_fn is None:
+        raise ValueError("backend='sysmon' requires an explicit eval_fn")
+
+    def _snapshot_parameters_from_bindings(bindings_dict: Dict[str, Binding]) -> Dict[str, Any]:
+        return {k: b.get() for k, b in bindings_dict.items()}
+
+    score_history: List[float] = []
+    all_runs: List[List[RunResult]] = []
+    best_score = float("-inf")
+    best_iteration = 0
+    best_updates: Dict[str, Any] = {}
+    best_parameters = _snapshot_parameters_from_bindings(effective_bindings)
+    optimizer_instance = optimizer
+
+    for iteration in range(iterations + 1):
+        docs = []
+        runs: List[RunResult] = []
+        update_dict: Dict[str, Any] = {}
+
+        for qi, query in enumerate(queries):
+            state = query if isinstance(query, dict) else {graph.input_key: query}
+            result = graph.invoke(state)
+            answer = result.get(output_key, result) if (output_key and isinstance(result, dict)) else result
+            er = _normalise_eval(
+                eval_fn(
+                    {
+                        "query": query,
+                        "answer": answer,
+                        "result": result,
+                        "iteration": iteration,
+                    }
+                )
+            )
+            runs.append(
+                RunResult(
+                    answer=answer,
+                    score=er.score,
+                    feedback=er.feedback,
+                    metrics=er.metrics,
+                    otlp={},
+                )
+            )
+            docs.append(
+                sysmon_profile_to_tgj(
+                    graph._last_profile_doc or {},
+                    run_id=f"{graph.service_name}:{iteration}:{qi}",
+                    graph_id="sysmon-graph",
+                    scope=f"{graph.service_name}/0",
+                )
+            )
+
+        merged_doc = merge_tgj(docs) if len(docs) > 1 else docs[0]
+        nodes = ingest_tgj(merged_doc)
+
+        avg_score = sum((r.score or 0.0) for r in runs) / max(1, len(runs))
+        score_history.append(avg_score)
+        all_runs.append(runs)
+
+        if avg_score > best_score:
+            best_score = avg_score
+            best_iteration = iteration
+            best_parameters = _snapshot_parameters_from_bindings(effective_bindings)
+
+        if iteration > 0:
+            output_node = _select_output_node(nodes)
+            if optimizer_instance is None:
+                trainable_params = [n for n in nodes.values() if getattr(n, "trainable", False)]
+                optimizer_instance = OptoPrimeV2(parameters=trainable_params, **dict(optimizer_kwargs or {}))
+            optimizer_instance.zero_feedback()
+            optimizer_instance.backward(output_node, runs[-1].feedback or f"Score: {runs[-1].score}")
+            raw_updates = optimizer_instance.step()
+            if isinstance(raw_updates, dict):
+                for key, value in raw_updates.items():
+                    if isinstance(key, str):
+                        update_dict[key] = value
+                    else:
+                        name = getattr(key, "name", None) or getattr(key, "py_name", None)
+                        if name:
+                            update_dict[str(name)] = value
+                if update_dict and apply_updates_flag:
+                    applied = apply_updates(update_dict, effective_bindings, strict=False)
+                    if avg_score >= best_score:
+                        best_updates = dict(applied)
+
+        if on_iteration:
+            on_iteration(iteration, runs, update_dict)
+
+    return OptimizationResult(
+        baseline_score=score_history[0],
+        best_score=best_score,
+        best_iteration=best_iteration,
+        best_parameters=best_parameters,
+        best_updates=best_updates,
+        final_parameters=_snapshot_parameters_from_bindings(effective_bindings),
         score_history=score_history,
         all_runs=all_runs,
     )

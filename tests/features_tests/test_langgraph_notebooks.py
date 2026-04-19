@@ -13,6 +13,7 @@ pytest.importorskip("langgraph.graph")
     [
         "examples/notebooks/demo_langgraph_instrument_and_optimize.ipynb",
         "examples/notebooks/demo_langgraph_instrument_and_optimize_trace.ipynb",
+        "examples/notebooks/demo_langgraph_instrument_and_compare_observers.ipynb",
     ],
 )
 def test_notebook_executes(notebook_path):

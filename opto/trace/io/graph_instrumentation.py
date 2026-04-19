@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from opto.trace import bundle, node
 from opto.trace.bundle import FunModule
+from opto.trace.io.observers import GraphObserver
 
 
 @dataclass
@@ -27,13 +28,29 @@ class TraceGraph:
     output_key: Optional[str] = None
     backend: str = "trace"
     _last_sidecar: Any = field(default=None, repr=False, init=False)
+    observers: List[GraphObserver] = field(default_factory=list)
+    _last_observer_artifacts: List[Any] = field(default_factory=list, init=False, repr=False)
 
     def invoke(self, state: Any, **kwargs: Any) -> Any:
-        if hasattr(self.graph, "invoke_runtime"):
-            result, sidecar = self.graph.invoke_runtime(state, backend="trace", **kwargs)
-            self._last_sidecar = sidecar
+        for obs in self.observers:
+            obs.start(bindings=self.bindings, meta={"service_name": self.service_name})
+
+        result = None
+        error = None
+        try:
+            if hasattr(self.graph, "invoke_runtime"):
+                result, sidecar = self.graph.invoke_runtime(state, backend="trace", **kwargs)
+                self._last_sidecar = sidecar
+                return result
+            result = self.graph.invoke(state, **kwargs)
             return result
-        return self.graph.invoke(state, **kwargs)
+        except BaseException as exc:
+            error = exc
+            raise
+        finally:
+            self._last_observer_artifacts = []
+            for obs in reversed(self.observers):
+                self._last_observer_artifacts.append(obs.stop(result=result, error=error))
 
     def stream(self, state: Any, **kwargs: Any):
         yield from self.graph.stream(state, **kwargs)
