@@ -8,7 +8,7 @@ END = langgraph.END
 from opto.features.priority_search.priority_search import ModuleCandidate
 from opto.optimizers.optimizer import Optimizer
 from opto.trace import node
-from opto.trace.graph import LangGraphAdapter
+from opto.features.graph import LangGraphAdapter
 
 
 def _raw(x):

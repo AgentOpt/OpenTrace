@@ -6,8 +6,8 @@ START = langgraph.START
 END = langgraph.END
 
 from opto.trace import node
-from opto.trace.graph import GraphModule, GraphRunSidecar, LangGraphAdapter
-from opto.trace.io import TraceGraph, instrument_graph, optimize_graph
+from opto.features.graph import GraphModule, GraphRunSidecar, LangGraphAdapter
+from opto.trace.io import TraceGraph, InstrumentedGraph, instrument_graph, optimize_graph
 
 
 def _raw(x):
@@ -35,7 +35,10 @@ def make_adapter():
 
     def planner_node(state):
         query = _raw(state["query"])
-        return {"plan": planner_prompt.data.replace("{query}", str(query))}
+        return {
+            "query": query,
+            "plan": planner_prompt.data.replace("{query}", str(query)),
+        }
 
     def synth_node(state):
         query = _raw(state["query"])
@@ -124,4 +127,22 @@ def test_instrument_graph_accepts_graph_argument_when_it_is_a_graph_adapter():
     assert isinstance(graph, TraceGraph)
     out = graph.invoke({"query": "What is CRISPR?"})
     assert isinstance(out, dict)
+    assert "final_answer" in out
+
+
+def test_adapter_dispatch_respects_service_override_in_trace_and_otel_modes():
+    adapter = make_adapter()
+
+    trace_graph = instrument_graph(
+        graph=adapter,
+        backend="trace",
+        service_name="trace-override",
+    )
+    assert isinstance(trace_graph, TraceGraph)
+    assert trace_graph.service_name == "trace-override"
+
+    otel_graph = instrument_graph(graph=adapter, backend="otel", service_name="otel-override")
+    assert isinstance(otel_graph, InstrumentedGraph)
+    assert otel_graph.service_name == "otel-override"
+    out = otel_graph.invoke({"query": "What is CRISPR?"})
     assert "final_answer" in out

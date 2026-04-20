@@ -546,6 +546,20 @@ class FunModule(Module):
             )  # We don't need to keep track of the inputs if we are not tracing.
         # Wrap the output as a MessageNode or an ExceptionNode
         nodes = self.wrap(output, inputs, external_dependencies)
+        try:
+            from opto.trace.io.telemetry_session import TelemetrySession
+
+            session = TelemetrySession.current()
+            if session is not None and isinstance(nodes, MessageNode):
+                observer_inputs = dict(inputs)
+                for idx, dep in enumerate(external_dependencies):
+                    observer_inputs.setdefault(
+                        getattr(dep, "name", f"dep_{idx}"),
+                        dep,
+                    )
+                session.on_message_node_created(nodes, inputs=observer_inputs)
+        except Exception:
+            pass
         return nodes
 
     def forward(self, *args, **kwargs):
@@ -567,14 +581,28 @@ class FunModule(Module):
         """
         # Wrap the inputs as nodes
         inputs, args, kwargs, _args, _kwargs = self._wrap_inputs(fun, args, kwargs)
-        # Execute fun
-        with trace_nodes() as used_nodes:
-            # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
-            _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
-            output = self.sync_call_fun(fun, *_args, **_kwargs)
-        # Wrap the output as a MessageNode or an ExceptionNode
-        nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
-        return nodes
+        try:
+            from opto.trace.io.telemetry_session import TelemetrySession
+
+            session = TelemetrySession.current()
+        except Exception:
+            session = None
+
+        if session is None:
+            with trace_nodes() as used_nodes:
+                _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
+                output = self.sync_call_fun(fun, *_args, **_kwargs)
+            return self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
+
+        with session.bundle_span(
+            fun_name=self.info["fun_name"],
+            file_path=self.info["file"],
+            inputs=inputs,
+        ):
+            with trace_nodes() as used_nodes:
+                _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
+                output = self.sync_call_fun(fun, *_args, **_kwargs)
+            return self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
 
     async def async_forward(self, fun, *args, **kwargs):
         """
@@ -585,16 +613,28 @@ class FunModule(Module):
         """
         # Wrap the inputs as nodes
         inputs, args, kwargs, _args, _kwargs = self._wrap_inputs(fun, args, kwargs)
-        # Execute fun
-        with trace_nodes() as used_nodes:
-            # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
-            _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
-            output = await self.async_call_fun(
-                fun, *_args, **_kwargs
-            )  # use await to call the async function
-        # Wrap the output as a MessageNode or an ExceptionNode
-        nodes = self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
-        return nodes
+        try:
+            from opto.trace.io.telemetry_session import TelemetrySession
+
+            session = TelemetrySession.current()
+        except Exception:
+            session = None
+
+        if session is None:
+            with trace_nodes() as used_nodes:
+                _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
+                output = await self.async_call_fun(fun, *_args, **_kwargs)
+            return self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
+
+        with session.bundle_span(
+            fun_name=self.info["fun_name"],
+            file_path=self.info["file"],
+            inputs=inputs,
+        ):
+            with trace_nodes() as used_nodes:
+                _args, _kwargs = self.preprocess_inputs(args, kwargs, _args, _kwargs)
+                output = await self.async_call_fun(fun, *_args, **_kwargs)
+            return self.postprocess_output(output, fun, _args, _kwargs, used_nodes, inputs)
 
     def wrap(
         self,

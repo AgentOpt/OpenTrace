@@ -375,6 +375,54 @@ class TracingLLM:
 
             return content
 
+    def template_prompt_call(
+        self,
+        *,
+        span_name: str,
+        template_name: str,
+        template: str,
+        variables: Optional[Mapping[str, Any]] = None,
+        system_prompt: Optional[str] = None,
+        optimizable_key: Optional[str] = None,
+        code_key: Optional[str] = None,
+        code_fn: Any = None,
+        user_query: Optional[str] = None,
+        extra_inputs: Optional[Dict[str, Any]] = None,
+        **llm_kwargs: Any,
+    ) -> str:
+        """Render a prompt template, then forward to ``node_call``."""
+        rendered_vars = {
+            key: str(getattr(value, "data", value))
+            for key, value in (variables or {}).items()
+        }
+        prompt = template.format(**rendered_vars)
+
+        messages: List[Dict[str, Any]] = []
+        if system_prompt is not None:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        merged_inputs: Dict[str, str] = {
+            key: str(value) for key, value in (extra_inputs or {}).items()
+        }
+        for key, value in rendered_vars.items():
+            merged_inputs.setdefault(key, value)
+        if user_query is None and "query" in rendered_vars:
+            user_query = rendered_vars["query"]
+
+        return self.node_call(
+            span_name=span_name,
+            template_name=template_name,
+            template=template,
+            optimizable_key=optimizable_key,
+            code_key=code_key,
+            code_fn=code_fn,
+            user_query=user_query,
+            extra_inputs=merged_inputs,
+            messages=messages,
+            **llm_kwargs,
+        )
+
 
 DEFAULT_EVAL_METRIC_KEYS: Mapping[str, str] = {
     "score": "eval.score",

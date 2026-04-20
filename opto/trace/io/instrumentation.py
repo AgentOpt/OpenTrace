@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set
 
 from opto.trace.io.bindings import Binding, make_dict_binding
-from opto.trace.io.graph_instrumentation import instrument_trace_graph
+from opto.features.graph.graph_instrumentation import instrument_trace_graph
 from opto.trace.io.langgraph_otel_runtime import TracingLLM
 from opto.trace.io.observers import GraphObserver, OTelObserver
 from opto.trace.io.sysmonitoring import SysMonObserver, SysMonitoringSession
@@ -235,7 +235,7 @@ def instrument_graph(
     InstrumentedGraph
     """
     try:
-        from opto.trace.graph.adapter import GraphAdapter
+        from opto.features.graph.adapter import GraphAdapter
     except Exception:
         GraphAdapter = None
 

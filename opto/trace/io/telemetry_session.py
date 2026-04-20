@@ -369,6 +369,14 @@ class TelemetrySession:
             try:
                 ctx = cur.get_span_context()
                 if getattr(ctx, "is_valid", False) and cur.is_recording():
+                    if inputs:
+                        in_attrs, p_attrs = self._inputs_and_params_from_trace_inputs(inputs)
+                        for attrs in (in_attrs, p_attrs):
+                            for key, value in attrs.items():
+                                try:
+                                    cur.set_attribute(key, value)
+                                except Exception:
+                                    cur.set_attribute(key, str(value))
                     cur.set_attribute("message.id", str(getattr(node, "name", "")))
                     self._remember_node_span(node, cur)
                     return

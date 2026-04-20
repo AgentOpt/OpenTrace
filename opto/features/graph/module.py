@@ -5,7 +5,7 @@ from typing import Any, TYPE_CHECKING
 from opto.trace.modules import Module
 
 if TYPE_CHECKING:
-    from opto.trace.graph.adapter import GraphAdapter
+    from opto.features.graph.adapter import GraphAdapter
 
 
 class GraphModule(Module):

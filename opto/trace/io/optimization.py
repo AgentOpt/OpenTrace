@@ -27,7 +27,7 @@ from typing import (
 )
 
 from opto.trace.io.bindings import Binding, apply_updates
-from opto.trace.io.graph_instrumentation import TraceGraph
+from opto.features.graph.graph_instrumentation import TraceGraph
 from opto.trace.io.instrumentation import InstrumentedGraph, SysMonInstrumentedGraph
 from opto.trace.io.sysmonitoring import sysmon_profile_to_tgj
 
@@ -819,8 +819,13 @@ def _optimize_sysmon_graph(
                 )
             )
 
-        merged_doc = merge_tgj(docs) if len(docs) > 1 else docs[0]
-        nodes = ingest_tgj(merged_doc)
+        if len(docs) > 1:
+            merged_docs = merge_tgj(docs)
+            nodes = {}
+            for doc_nodes in merged_docs.values():
+                nodes.update(doc_nodes)
+        else:
+            nodes = ingest_tgj(docs[0])
 
         avg_score = sum((r.score or 0.0) for r in runs) / max(1, len(runs))
         score_history.append(avg_score)

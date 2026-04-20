@@ -6,8 +6,9 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from opto.trace import bundle, node
+from opto.trace import node
 from opto.trace.bundle import FunModule
+from opto.trace.io.bindings import Binding
 from opto.trace.io.observers import GraphObserver
 
 
@@ -30,10 +31,13 @@ class TraceGraph:
     _last_sidecar: Any = field(default=None, repr=False, init=False)
     observers: List[GraphObserver] = field(default_factory=list)
     _last_observer_artifacts: List[Any] = field(default_factory=list, init=False, repr=False)
+    observer_meta: Dict[str, Any] = field(default_factory=dict)
 
     def invoke(self, state: Any, **kwargs: Any) -> Any:
         for obs in self.observers:
-            obs.start(bindings=self.bindings, meta={"service_name": self.service_name})
+            meta = {"service_name": self.service_name}
+            meta.update(self.observer_meta)
+            obs.start(bindings=self.bindings, meta=meta)
 
         result = None
         error = None
@@ -74,15 +78,18 @@ def _to_funmodule(
     trainable: bool = True,
     traceable_code: bool = True,
     allow_external_dependencies: bool = True,
+    scope: Optional[Dict[str, Any]] = None,
 ) -> Any:
     if isinstance(func, FunModule) or hasattr(func, "_fun"):
         return func
 
-    wrapped = bundle(
+    wrapped = FunModule(
+        fun=func,
         trainable=trainable,
         traceable_code=traceable_code,
         allow_external_dependencies=allow_external_dependencies,
-    )(func)
+        _ldict=(scope or {}),
+    )
 
     try:
         wrapped.__signature__ = inspect.signature(wrapped._fun)
@@ -125,6 +132,7 @@ def instrument_trace_graph(
         raise ValueError("backend='trace' requires a callable graph_factory")
 
     parameters: List[Any] = []
+    bindings: Dict[str, Binding] = {}
 
     for name in graph_agents_functions:
         if name not in scope:
@@ -138,6 +146,7 @@ def instrument_trace_graph(
             trainable=train_graph_agents_functions,
             traceable_code=True,
             allow_external_dependencies=True,
+            scope=scope,
         )
         scope[name] = wrapped
         if hasattr(wrapped, "parameters"):
@@ -147,6 +156,13 @@ def instrument_trace_graph(
         for idx, prompt in enumerate(list(graph_prompts_list)):
             if hasattr(prompt, "data") and hasattr(prompt, "name"):
                 parameters.append(prompt)
+                prompt_name = str(getattr(prompt, "name", f"prompt_{idx}")).split(":")[0]
+                if hasattr(prompt, "_set"):
+                    bindings[prompt_name] = Binding(
+                        get=lambda p=prompt: p.data,
+                        set=lambda v, p=prompt: p._set(v),
+                        kind="prompt",
+                    )
                 continue
 
             new_prompt = node(str(getattr(prompt, "data", prompt)), trainable=True)
@@ -158,6 +174,13 @@ def instrument_trace_graph(
 
             graph_prompts_list[idx] = new_prompt
             parameters.append(new_prompt)
+            prompt_name = str(getattr(new_prompt, "name", f"prompt_{idx}")).split(":")[0]
+            if hasattr(new_prompt, "_set"):
+                bindings[prompt_name] = Binding(
+                    get=lambda p=new_prompt: p.data,
+                    set=lambda v, p=new_prompt: p._set(v),
+                    kind="prompt",
+                )
 
     graph = graph_factory()
     compiled = graph.compile() if hasattr(graph, "compile") else graph
@@ -165,8 +188,11 @@ def instrument_trace_graph(
     return TraceGraph(
         graph=compiled,
         parameters=_dedupe_identity(parameters),
-        bindings={},
+        bindings=bindings,
         service_name=service_name,
         input_key=input_key,
         output_key=output_key,
+        observer_meta={
+            "semantic_names": [str(name).split(".")[-1] for name in (graph_agents_functions or [])]
+        },
     )

@@ -36,19 +36,50 @@ class SysMonitoringSession:
         self._tls = threading.local()
         self._bindings_snapshot: Dict[str, Dict[str, Any]] = {}
 
+    def _claim_tool_id(self) -> int:
+        """Claim a valid sys.monitoring tool id.
+
+        Python accepts tool ids in a small runtime-defined range (commonly 0..5).
+        If the configured id is invalid or already taken, fall back to the first
+        available id in that valid range.
+        """
+        candidate_ids = [self.tool_id] + [i for i in range(5, -1, -1) if i != self.tool_id]
+        for candidate in candidate_ids:
+            try:
+                sys.monitoring.use_tool_id(candidate, self.service_name)
+                self.tool_id = candidate
+                return candidate
+            except Exception:
+                continue
+        raise RuntimeError("Unable to claim a valid sys.monitoring tool id")
+
     def _stack(self) -> List[SysMonEvent]:
         if not hasattr(self._tls, "stack"):
             self._tls.stack = []
         return self._tls.stack
 
-    def start(self, *, bindings: Dict[str, Any]) -> None:
+    def start(
+        self,
+        *,
+        bindings: Dict[str, Any],
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self._events.clear()
         self._bindings_snapshot = {
             k: {"value": b.get(), "kind": b.kind, "trainable": True}
             for k, b in (bindings or {}).items()
         }
+        semantic_names = set((meta or {}).get("semantic_names") or ())
+
+        def _safe_preview(value: Any) -> str:
+            try:
+                return repr(value)[:200]
+            except Exception:
+                return f"<{type(value).__name__}>"
 
         def on_start(code, instruction_offset):
+            if semantic_names and code.co_name not in semantic_names:
+                return
             stack = self._stack()
             eid = uuid.uuid4().hex[:16]
             ev = SysMonEvent(
@@ -65,27 +96,27 @@ class SysMonitoringSession:
 
         def on_return(code, instruction_offset, retval):
             stack = self._stack()
-            if not stack:
+            if not stack or stack[-1].name != code.co_name:
                 return
             ev = stack.pop()
             ev.end_ns = time.perf_counter_ns()
             ev.duration_ns = ev.end_ns - ev.start_ns
-            ev.return_preview = repr(retval)[:200]
+            ev.return_preview = _safe_preview(retval)
 
         def on_unwind(code, instruction_offset, exc):
             stack = self._stack()
-            if not stack:
+            if not stack or stack[-1].name != code.co_name:
                 return
             ev = stack.pop()
             ev.end_ns = time.perf_counter_ns()
             ev.duration_ns = ev.end_ns - ev.start_ns
-            ev.return_preview = f"[UNWIND] {type(exc).__name__}: {exc}"
+            ev.return_preview = f"[UNWIND] {type(exc).__name__}: {_safe_preview(exc)}"
 
         self._on_start = on_start
         self._on_return = on_return
         self._on_unwind = on_unwind
 
-        sys.monitoring.use_tool_id(self.tool_id, self.service_name)
+        self._claim_tool_id()
         sys.monitoring.register_callback(self.tool_id, sys.monitoring.events.PY_START, on_start)
         sys.monitoring.register_callback(self.tool_id, sys.monitoring.events.PY_RETURN, on_return)
         sys.monitoring.register_callback(self.tool_id, sys.monitoring.events.PY_UNWIND, on_unwind)
@@ -153,7 +184,7 @@ class SysMonObserver:
         bindings: Dict[str, Any],
         meta: Optional[Dict[str, Any]] = None,
     ) -> None:
-        self.session.start(bindings=bindings)
+        self.session.start(bindings=bindings, meta=meta)
 
     def stop(
         self,
@@ -188,7 +219,7 @@ def sysmon_profile_to_tgj(
     for ev in doc.get("events", []):
         inputs = {}
         if ev.get("parent_id"):
-            inputs["parent"] = f"message:msg:{ev['parent_id']}"
+            inputs["parent"] = {"ref": f"msg:{ev['parent_id']}"}
         nodes[f"msg:{ev['id']}"] = {
             "id": f"msg:{ev['id']}",
             "kind": "message",

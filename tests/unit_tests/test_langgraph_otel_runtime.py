@@ -178,3 +178,40 @@ def test_extract_eval_metrics_from_otlp_defaults_when_missing():
     for v in metrics.values():
         assert 0.0 <= v <= 1.0
     assert reasons == ""
+
+
+def test_template_prompt_call_records_raw_template_and_rendered_prompt():
+    tracer, exporter = init_otel_runtime("test-template-helper")
+    llm = FakeLLM("ANSWER")
+    tllm = TracingLLM(
+        llm=llm,
+        tracer=tracer,
+        trainable_keys={"planner"},
+        emit_llm_child_span=False,
+    )
+
+    result = tllm.template_prompt_call(
+        span_name="planner",
+        template_name="planner_prompt",
+        template="Plan for: {query}",
+        variables={"query": "What is CRISPR?"},
+        system_prompt="sys",
+        optimizable_key="planner",
+    )
+
+    assert result == "ANSWER"
+    assert len(llm.calls) == 1
+    assert llm.calls[0]["messages"] == [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "Plan for: What is CRISPR?"},
+    ]
+
+    otlp = flush_otlp(exporter, scope_name="test-template-helper")
+    spans = otlp["resourceSpans"][0]["scopeSpans"][0]["spans"]
+    assert len(spans) == 1
+
+    attrs = _attrs_to_dict(spans[0]["attributes"])
+    assert attrs["param.planner_prompt"] == "Plan for: {query}"
+    assert attrs["inputs.gen_ai.prompt"] == "Plan for: What is CRISPR?"
+    assert attrs["inputs.query"] == "What is CRISPR?"
+    assert attrs["inputs.user_query"] == "What is CRISPR?"

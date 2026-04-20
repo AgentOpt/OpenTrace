@@ -7,10 +7,10 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 from opto.trace import bundle, node
 from opto.trace.bundle import FunModule, to_data
-from opto.trace.graph.module import GraphModule
-from opto.trace.graph.sidecars import GraphRunSidecar, OTELRunSidecar
+from opto.features.graph.module import GraphModule
+from opto.features.graph.sidecars import GraphRunSidecar, OTELRunSidecar
 from opto.trace.io.bindings import Binding
-from opto.trace.io.graph_instrumentation import TraceGraph
+from opto.features.graph.graph_instrumentation import TraceGraph
 from opto.trace.nodes import Node, ParameterNode
 
 
@@ -77,14 +77,17 @@ class GraphAdapter:
 
     def instrument(self, backend: Optional[str] = None, **kwargs: Any):
         effective_backend = backend or self.backend
+        service_name = kwargs.pop("service_name", self.service_name)
+        input_key = kwargs.pop("input_key", self.input_key)
+        output_key = kwargs.pop("output_key", self.output_key)
         if effective_backend == "trace":
             return TraceGraph(
                 graph=self,
                 parameters=self.parameters(),
                 bindings=self.bindings_dict(),
-                service_name=self.service_name,
-                input_key=self.input_key,
-                output_key=self.output_key,
+                service_name=service_name,
+                input_key=input_key,
+                output_key=output_key,
             )
         if effective_backend == "otel":
             from opto.trace.io.instrumentation import instrument_graph
@@ -96,9 +99,9 @@ class GraphAdapter:
                 graph=graph,
                 backend="otel",
                 bindings=merged,
-                service_name=self.service_name,
-                input_key=self.input_key,
-                output_key=self.output_key,
+                service_name=service_name,
+                input_key=input_key,
+                output_key=output_key,
                 **kwargs,
             )
         raise ValueError(f"Unsupported backend: {effective_backend!r}")

@@ -7,7 +7,7 @@ END = langgraph.END
 
 from opto.optimizers.optimizer import Optimizer
 from opto.trace import node
-from opto.trace.graph import LangGraphAdapter
+from opto.features.graph import LangGraphAdapter
 from opto.trainer.train import train
 from opto.trainer.guide import Guide
 

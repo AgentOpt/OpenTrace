@@ -22,7 +22,10 @@ def _make_trace_graph():
 
     def planner_node(state):
         query = _raw(state["query"])
-        return {"plan": planner_prompt.data.replace("{query}", str(query))}
+        return {
+            "query": query,
+            "plan": planner_prompt.data.replace("{query}", str(query)),
+        }
 
     def synth_node(state):
         query = _raw(state["query"])
