@@ -154,10 +154,10 @@ def test_optimize_graph_trace_backend_reports_progress_and_best_updates():
     result = optimize_graph(
         graph,
         queries=["What is gene editing?"],
-        iterations=2,
+        iterations=3,
         optimizer=optimizer,
         eval_fn=lambda payload: {
-            "score": 1.0 if "CRISPR optimized" in str(payload["answer"]) else 0.0,
+            "score": {0: 0.0, 1: 0.2, 2: 0.8, 3: 1.0}[payload["iteration"]],
             "feedback": "Prefer mentioning CRISPR optimized explicitly.",
         },
         on_iteration=lambda i, runs, updates: callbacks.append((i, len(runs), dict(updates))),
@@ -165,15 +165,16 @@ def test_optimize_graph_trace_backend_reports_progress_and_best_updates():
 
     assert result.baseline_score == 0.0
     assert result.best_score == 1.0
-    assert result.best_iteration == 2
+    assert result.best_iteration == 3
     assert result.best_updates == {"synth_prompt": "CRISPR optimized :: {query} :: {plan}"}
-    assert optimizer.zero_calls == 2
-    assert optimizer.backward_calls == 2
-    assert optimizer.step_calls == 2
+    assert optimizer.zero_calls == 3
+    assert optimizer.backward_calls == 3
+    assert optimizer.step_calls == 3
     assert callbacks == [
         (0, 1, {}),
         (1, 1, {"synth_prompt": "CRISPR optimized :: {query} :: {plan}"}),
         (2, 1, {}),
+        (3, 1, {}),
     ]
 
 

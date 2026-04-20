@@ -54,6 +54,7 @@ class InstrumentedGraph:
     input_key: str = "query"
     output_key: Optional[str] = None
     observers: List[GraphObserver] = field(default_factory=list)
+    observer_meta: Dict[str, Any] = field(default_factory=dict)
     _last_observer_artifacts: List[Any] = field(default_factory=list, init=False, repr=False)
 
     # Holds the active root span context for eval_fn to attach reward spans
@@ -88,8 +89,10 @@ class InstrumentedGraph:
         if isinstance(state, dict):
             query_hint = str(state.get(self.input_key, ""))
 
+        meta = {"service_name": self.service_name}
+        meta.update(self.observer_meta)
         for obs in self.observers:
-            obs.start(bindings=self.bindings, meta={"service_name": self.service_name})
+            obs.start(bindings=self.bindings, meta=meta)
 
         result = None
         error = None
@@ -130,10 +133,13 @@ class SysMonInstrumentedGraph:
     input_key: str = "query"
     output_key: Optional[str] = None
     backend: str = "sysmon"
+    observer_meta: Dict[str, Any] = field(default_factory=dict)
     _last_profile_doc: Optional[dict] = field(default=None, init=False, repr=False)
 
     def invoke(self, state: Any, **kwargs: Any):
-        self.session.start(bindings=self.bindings)
+        meta = {"service_name": self.service_name}
+        meta.update(self.observer_meta)
+        self.session.start(bindings=self.bindings, meta=meta)
         result = None
         error = None
         try:
@@ -238,6 +244,11 @@ def instrument_graph(
         from opto.features.graph.adapter import GraphAdapter
     except Exception:
         GraphAdapter = None
+    observer_meta = {
+        "semantic_names": [
+            str(name).split(".")[-1] for name in (graph_agents_functions or [])
+        ]
+    }
 
     if adapter is not None:
         if GraphAdapter is not None and not isinstance(adapter, GraphAdapter):
@@ -260,6 +271,8 @@ def instrument_graph(
         )
         if hasattr(out, "observers"):
             out.observers = _make_observers(observe_with, service_name=service_name)
+        if hasattr(out, "observer_meta"):
+            out.observer_meta = dict(observer_meta)
         return out
 
     if GraphAdapter is not None and isinstance(graph, GraphAdapter):
@@ -281,6 +294,8 @@ def instrument_graph(
         )
         if hasattr(out, "observers"):
             out.observers = _make_observers(observe_with, service_name=service_name)
+        if hasattr(out, "observer_meta"):
+            out.observer_meta = dict(observer_meta)
         return out
 
     if backend == "trace":
@@ -322,6 +337,7 @@ def instrument_graph(
             service_name=service_name,
             input_key=input_key,
             output_key=output_key,
+            observer_meta=dict(observer_meta),
         )
 
     if backend != "otel":
@@ -395,4 +411,5 @@ def instrument_graph(
         input_key=input_key,
         output_key=output_key,
         observers=_make_observers(observe_with, service_name=service_name),
+        observer_meta=dict(observer_meta),
     )

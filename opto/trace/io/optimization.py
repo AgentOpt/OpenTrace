@@ -726,14 +726,12 @@ def _optimize_trace_graph(
                 ).data
                 opt.backward(target, feedback)
             raw_updates = opt.step()
-            if isinstance(raw_updates, dict):
+            if isinstance(raw_updates, dict) and raw_updates:
                 updates = raw_updates
                 if getattr(graph, "bindings", None) and all(isinstance(k, str) for k in raw_updates):
                     last_applied_updates = apply_updates(raw_updates, graph.bindings, strict=False)
                 else:
                     last_applied_updates = dict(raw_updates)
-            else:
-                last_applied_updates = {}
 
         if on_iteration:
             on_iteration(iteration, runs, updates)

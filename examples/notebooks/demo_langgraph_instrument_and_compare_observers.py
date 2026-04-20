@@ -2,29 +2,24 @@
 """
 Live LangGraph optimization comparison across Trace / OTEL / sys.monitoring.
 
-This script intentionally benchmarks optimization over 5 iterations using
-a real OpenRouter-backed LLM when OPENROUTER_API_KEY is available.
-
-Compared configurations:
-  - trace
-  - trace + otel
-  - trace + sysmon
-  - trace + otel + sysmon
-  - otel
-  - otel + sysmon
-  - sysmon
-
-When OPENROUTER_API_KEY is not set, the script exits successfully after
-printing a skip message. This keeps notebook CI deterministic while still
-making the demo a true live benchmark for local/manual use.
+This script benchmarks optimization over 5 iterations using a real
+OpenRouter-backed LLM when OPENROUTER_API_KEY is available, then converts
+every backend's captured artifacts to a shared TGJ view so the notebook can
+show the same semantic graph logic across configurations.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import statistics
 import sys
+import time
+from contextlib import nullcontext, redirect_stdout
+from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Tuple
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -32,15 +27,17 @@ if str(ROOT) not in sys.path:
 
 from langgraph.graph import StateGraph, START, END
 from opto.trace import node
-from opto.trace.nodes import MessageNode, ParameterNode
 from opto.trace.io import (
+    EvalResult,
     instrument_graph,
-    optimize_graph,
     make_dict_binding,
+    optimize_graph,
     otlp_traces_to_trace_json,
 )
 from opto.trace.io.sysmonitoring import sysmon_profile_to_tgj
+from opto.trace.io.tgj_export import export_subgraph_to_tgj
 from opto.trace.io.tgj_ingest import ingest_tgj
+from opto.trace.nodes import MessageNode, ParameterNode
 
 try:
     from openai import OpenAI
@@ -51,21 +48,71 @@ except Exception:
 HAS_SYSMON = hasattr(sys, "monitoring")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "gpt-4o-mini")
-OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_BASE_URL = os.environ.get(
+    "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+)
 ITERATIONS = 5
 QUERIES = [
     "What is CRISPR?",
     "How does CRISPR enable gene editing?",
 ]
-OPTIMIZED_SYNTH_PROMPT = (
-    "Start the answer exactly with [BENCH_OK]. "
-    "Then answer carefully: {query}\nPlan: {plan}"
-)
+SYNTH_UPDATE_SCHEDULE = [
+    {
+        "synth_prompt": (
+            "Answer directly in the first sentence. "
+            "Then add two short titled sections with concrete details: {query}\nPlan: {plan}"
+        )
+    },
+    {
+        "synth_prompt": (
+            "Answer directly in the first sentence. "
+            "Then add three short titled sections with concrete mechanisms, examples, "
+            "and caveats when useful. Keep it factual and concise: {query}\nPlan: {plan}"
+        )
+    },
+]
 PLANNER_SYSTEM_PROMPT = "You are a careful planner."
 SYNTH_SYSTEM_PROMPT = "You are a careful scientific assistant."
 DEFAULT_TEMPLATES = {
     "planner_prompt": "Create a short plan for: {query}",
     "synth_prompt": "Answer briefly and factually: {query}\nPlan: {plan}",
+}
+SEMANTIC_NAMES = ("planner_node", "synth_node")
+STOPWORDS = {
+    "about",
+    "add",
+    "also",
+    "answer",
+    "briefly",
+    "carefully",
+    "concise",
+    "does",
+    "directly",
+    "exactly",
+    "factually",
+    "from",
+    "give",
+    "have",
+    "into",
+    "keep",
+    "plan",
+    "short",
+    "start",
+    "than",
+    "that",
+    "their",
+    "them",
+    "then",
+    "there",
+    "this",
+    "using",
+    "what",
+    "when",
+    "where",
+    "which",
+    "with",
+    "would",
+    "your",
 }
 
 
@@ -73,8 +120,92 @@ def _raw(value: Any) -> Any:
     return getattr(value, "data", value)
 
 
+def _truncate(value: Any, limit: int = 140) -> str:
+    text = str(_raw(value))
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def _base_name(value: Any) -> str:
+    name = str(getattr(value, "name", getattr(value, "py_name", "")))
+    return name.split("/")[-1].split(":")[0]
+
+
+def _semantic_alias(name: str) -> str | None:
+    suffix = name.split(".")[-1]
+    if suffix in SEMANTIC_NAMES:
+        return suffix
+    return None
+
+
 def _str_map(values: Mapping[str, Any]) -> Dict[str, str]:
     return {key: str(_raw(value)) for key, value in values.items()}
+
+
+def _node_records(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_nodes = doc.get("nodes") or {}
+    if isinstance(raw_nodes, dict):
+        return list(raw_nodes.values())
+    return list(raw_nodes)
+
+
+def _unique_nodes(nodes: Dict[str, Any], cls: type) -> List[Any]:
+    return list(
+        {
+            id(obj): obj
+            for obj in nodes.values()
+            if isinstance(obj, cls)
+        }.values()
+    )
+
+
+def _terms(text: str) -> List[str]:
+    return [
+        token
+        for token in re.findall(r"[a-z0-9]+", text.lower())
+        if len(token) >= 4 and token not in STOPWORDS
+    ]
+
+
+def _coverage(needles: List[str], haystack: str) -> float:
+    keys = list(dict.fromkeys(needles))
+    if not keys:
+        return 1.0
+    body = haystack.lower()
+    return sum(token in body for token in keys) / len(keys)
+
+
+def _lead_text(answer: str) -> str:
+    first_line = answer.splitlines()[0] if answer.splitlines() else answer
+    first_sentence = re.split(r"(?<=[.!?])\s+", answer, maxsplit=1)[0]
+    return (first_sentence if len(first_sentence) >= len(first_line) else first_line)[:220]
+
+
+def _structure_score(answer: str) -> float:
+    lines = [line.strip() for line in answer.splitlines() if line.strip()]
+    headings = sum(line.startswith("#") for line in lines)
+    bullets = sum(
+        line.startswith(("-", "*")) or re.match(r"^\d+[.)]\s", line) is not None
+        for line in lines
+    )
+    return min(
+        1.0,
+        0.35 * min(headings, 3) / 3
+        + 0.45 * min(bullets, 4) / 4
+        + 0.20 * min(len(lines), 12) / 12,
+    )
+
+
+def _length_score(answer: str) -> float:
+    return min(max(len(answer) - 120, 0) / 720.0, 1.0)
+
+
+def _directness_score(query: str, answer: str) -> float:
+    lead = _lead_text(answer).strip()
+    if not lead or lead.startswith(("#", "-", "*")):
+        return 0.0
+    return 0.5 * _coverage(_terms(query), lead) + 0.5 * float(len(lead) >= 60)
 
 
 def render_template(template: str, **variables: Any) -> str:
@@ -99,22 +230,167 @@ def call_chat_text(
     return response.choices[0].message.content
 
 
-def _message_names(nodes: Dict[str, Any]):
-    names = []
-    seen = set()
-    for obj in nodes.values():
-        if isinstance(obj, MessageNode):
-            nm = str(getattr(obj, "name", getattr(obj, "py_name", "")))
-            base = nm.split("/")[-1].split(":")[0]
-            if base not in seen:
-                seen.add(base)
-                names.append(base)
-    return sorted(names)
+def summarize_tgj(doc: Dict[str, Any]) -> Dict[str, Any]:
+    nodes = ingest_tgj(doc)
+    message_nodes = _unique_nodes(nodes, MessageNode)
+    param_nodes = _unique_nodes(nodes, ParameterNode)
+    message_names = sorted(_base_name(obj) for obj in message_nodes if _base_name(obj))
+    param_names = sorted(_base_name(obj) for obj in param_nodes if _base_name(obj))
+    semantic_messages = sorted(
+        {
+            alias
+            for name in message_names
+            if (alias := _semantic_alias(name)) is not None
+        }
+    )
+    param_values = {
+        name: _truncate(obj.data, 220)
+        for obj in param_nodes
+        if (name := _base_name(obj)).endswith("_prompt")
+    }
+    return {
+        "node_count": len(_node_records(doc)),
+        "message_names": message_names,
+        "semantic_messages": semantic_messages,
+        "param_names": param_names,
+        "param_values": param_values,
+    }
+
+
+def _make_trace_view(
+    trace_nodes: List[Any],
+    *,
+    config: str,
+    origin: str,
+) -> Dict[str, Any]:
+    doc = export_subgraph_to_tgj(
+        trace_nodes,
+        run_id="compare",
+        agent_id=config,
+        graph_id="trace",
+        scope=f"{config}/{origin}",
+    )
+    return {
+        "carrier": "trace",
+        "origin": origin,
+        "doc": doc,
+        "summary": summarize_tgj(doc),
+    }
+
+
+def _make_otel_view(
+    otlp: Dict[str, Any],
+    *,
+    config: str,
+    origin: str,
+) -> Dict[str, Any]:
+    spans = (
+        otlp.get("resourceSpans", [{}])[0]
+        .get("scopeSpans", [{}])[0]
+        .get("spans", [])
+    )
+    param_keys = sorted(
+        {
+            attr["key"]
+            for span in spans
+            for attr in span.get("attributes", [])
+            if str(attr.get("key", "")).startswith("param.")
+        }
+    )
+    docs = otlp_traces_to_trace_json(
+        otlp,
+        agent_id_hint=config,
+        use_temporal_hierarchy=True,
+    )
+    doc = docs[0] if docs else {"tgj": "1.0", "nodes": {}}
+    summary = summarize_tgj(doc)
+    summary["span_count"] = len(spans)
+    summary["span_names"] = [span.get("name") for span in spans]
+    summary["param_keys"] = param_keys
+    return {
+        "carrier": "otel",
+        "origin": origin,
+        "doc": doc,
+        "summary": summary,
+    }
+
+
+def _make_sysmon_view(
+    profile_doc: Dict[str, Any],
+    *,
+    config: str,
+    origin: str,
+) -> Dict[str, Any]:
+    doc = sysmon_profile_to_tgj(
+        profile_doc,
+        run_id="compare",
+        graph_id=config,
+        scope=f"{config}/{origin}",
+    )
+    summary = summarize_tgj(doc)
+    summary["event_count"] = len(profile_doc.get("events", []))
+    return {
+        "carrier": "sysmon",
+        "origin": origin,
+        "doc": doc,
+        "summary": summary,
+    }
+
+
+def tgj_to_digraph(doc: Dict[str, Any], *, title: str):
+    try:
+        from graphviz import Digraph
+    except Exception:
+        return None
+
+    records = _node_records(doc)
+    known_ids = {str(record.get("id")) for record in records}
+    graph = Digraph(comment=title)
+    graph.attr(rankdir="LR")
+
+    for record in records:
+        node_id = str(record.get("id"))
+        kind = str(record.get("kind", "value"))
+        name = str(record.get("name", node_id))
+        if kind == "parameter":
+            preview = record.get("value", "")
+            fill = "khaki1"
+        elif kind == "message":
+            preview = (record.get("output") or {}).get("value", "")
+            fill = "lightblue"
+        elif kind == "exception":
+            preview = (record.get("error") or {}).get("message", "")
+            fill = "mistyrose"
+        else:
+            preview = record.get("value", "")
+            fill = "white"
+        label = f"{name}\\n[{kind}]"
+        if preview not in (None, ""):
+            label += f"\\n{_truncate(preview, 80)}"
+        graph.node(
+            node_id,
+            label=label,
+            shape="box",
+            style="rounded,filled",
+            fillcolor=fill,
+        )
+
+    for record in records:
+        child_id = str(record.get("id"))
+        for ref in (record.get("inputs") or {}).values():
+            parent_id = ref.get("ref") if isinstance(ref, dict) else ref
+            if parent_id is not None and str(parent_id) in known_ids:
+                graph.edge(str(parent_id), child_id)
+
+    return graph
 
 
 class DictUpdateOptimizer:
-    def __init__(self, update_dict: Dict[str, Any]):
-        self.update_dict = dict(update_dict)
+    def __init__(self, update_spec: Dict[str, Any] | List[Dict[str, Any]]):
+        if isinstance(update_spec, list):
+            self.update_schedule = [dict(update) for update in update_spec]
+        else:
+            self.update_schedule = [dict(update_spec)]
         self.calls = 0
 
     def zero_feedback(self):
@@ -124,30 +400,11 @@ class DictUpdateOptimizer:
         return None
 
     def step(self):
+        if self.calls < len(self.update_schedule):
+            update = dict(self.update_schedule[self.calls])
+            self.calls += 1
+            return update
         self.calls += 1
-        if self.calls == 1:
-            return dict(self.update_dict)
-        return {}
-
-
-class TraceMutatingOptimizer:
-    def __init__(self, prompt_node, update_value: str, key: str):
-        self.prompt_node = prompt_node
-        self.update_value = update_value
-        self.key = key
-        self.calls = 0
-
-    def zero_feedback(self):
-        return None
-
-    def backward(self, *_args, **_kwargs):
-        return None
-
-    def step(self):
-        self.calls += 1
-        if self.calls == 1:
-            self.prompt_node._set(self.update_value)
-            return {self.key: self.update_value}
         return {}
 
 
@@ -172,55 +429,24 @@ def make_live_llm():
     return _llm
 
 
-def eval_fn(payload: Dict[str, Any]) -> Dict[str, Any]:
+def eval_fn(payload: Dict[str, Any]) -> EvalResult:
+    query = str(payload.get("query", ""))
     answer = str(_raw(payload.get("answer", ""))).strip()
-    ok = answer.startswith("[BENCH_OK]")
-    return {
-        "score": 1.0 if ok else 0.0,
-        "feedback": "Start the answer exactly with [BENCH_OK].",
-    }
+    if answer.startswith("[ERROR]") or not answer:
+        return EvalResult(score=0.0, feedback="LLM failure/empty answer")
 
-
-def summarize_otlp(otlp: Dict[str, Any]) -> Dict[str, Any]:
-    spans = otlp.get("resourceSpans", [{}])[0].get("scopeSpans", [{}])[0].get("spans", [])
-    param_keys = sorted(
-        {
-            a["key"]
-            for s in spans
-            for a in s.get("attributes", [])
-            if str(a.get("key", "")).startswith("param.")
-        }
+    coverage = _coverage(_terms(query), answer)
+    directness = _directness_score(query, answer)
+    structure = _structure_score(answer)
+    length = _length_score(answer)
+    score = 0.08 + 0.30 * coverage + 0.26 * directness + 0.20 * structure + 0.16 * length
+    return EvalResult(
+        score=round(min(score, 0.95), 4),
+        feedback=(
+            f"coverage={coverage:.2f}, directness={directness:.2f}, "
+            f"structure={structure:.2f}, length={length:.2f}"
+        ),
     )
-    docs = otlp_traces_to_trace_json(
-        otlp,
-        agent_id_hint="compare",
-        use_temporal_hierarchy=True,
-    )
-    nodes = ingest_tgj(docs[0]) if docs else {}
-    return {
-        "span_count": len(spans),
-        "span_names": [s.get("name") for s in spans],
-        "param_keys": param_keys,
-        "message_names": _message_names(nodes),
-    }
-
-
-def summarize_sysmon(profile_doc: Dict[str, Any]) -> Dict[str, Any]:
-    tgj = sysmon_profile_to_tgj(profile_doc, run_id="compare", graph_id="demo", scope="compare/0")
-    nodes = ingest_tgj(tgj)
-    param_names = sorted(
-        {
-            str(getattr(obj, "name", getattr(obj, "py_name", ""))).split("/")[-1].split(":")[0]
-            for obj in nodes.values()
-            if isinstance(obj, ParameterNode)
-        }
-    )
-    return {
-        "event_count": len(profile_doc.get("events", [])),
-        "tgj_node_count": len(tgj.get("nodes", {})),
-        "message_names": _message_names(nodes),
-        "param_names": param_names,
-    }
 
 
 def build_semantic_graph(planner_fn, synth_fn):
@@ -314,12 +540,12 @@ def make_trace_case(llm, observe_with: Tuple[str, ...] = ()):
         observe_with=observe_with,
         graph_factory=build_graph,
         scope=scope,
-        graph_agents_functions=["planner_node", "synth_node"],
+        graph_agents_functions=list(SEMANTIC_NAMES),
         graph_prompts_list=[planner_prompt, synth_prompt],
         train_graph_agents_functions=False,
         output_key="final_answer",
     )
-    optimizer = TraceMutatingOptimizer(synth_prompt, OPTIMIZED_SYNTH_PROMPT, "synth_prompt")
+    optimizer = DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
     return instrumented, optimizer, lambda: synth_prompt.data
 
 
@@ -328,6 +554,7 @@ def make_otel_case(llm, observe_with: Tuple[str, ...] = ()):
         graph=None,
         backend="otel",
         observe_with=observe_with,
+        graph_agents_functions=list(SEMANTIC_NAMES),
         llm=llm,
         initial_templates=dict(DEFAULT_TEMPLATES),
         output_key="final_answer",
@@ -338,7 +565,7 @@ def make_otel_case(llm, observe_with: Tuple[str, ...] = ()):
 
     def planner_call(query: str) -> str:
         return tracing_llm.template_prompt_call(
-            span_name="planner",
+            span_name="planner_node",
             template_name="planner_prompt",
             template=templates["planner_prompt"],
             variables={"query": query},
@@ -349,7 +576,7 @@ def make_otel_case(llm, observe_with: Tuple[str, ...] = ()):
 
     def synth_call(query: str, plan: str) -> str:
         return tracing_llm.template_prompt_call(
-            span_name="synth",
+            span_name="synth_node",
             template_name="synth_prompt",
             template=templates["synth_prompt"],
             variables={"query": query, "plan": plan},
@@ -364,7 +591,7 @@ def make_otel_case(llm, observe_with: Tuple[str, ...] = ()):
             synth_call=synth_call,
         )
     )
-    optimizer = DictUpdateOptimizer({"synth_prompt": OPTIMIZED_SYNTH_PROMPT})
+    optimizer = DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
     return instrumented, optimizer, lambda: instrumented.templates["synth_prompt"]
 
 
@@ -399,14 +626,37 @@ def make_sysmon_case(llm):
         ),
         backend="sysmon",
         bindings=bindings,
+        graph_agents_functions=list(SEMANTIC_NAMES),
         output_key="final_answer",
     )
-    optimizer = DictUpdateOptimizer({"synth_prompt": OPTIMIZED_SYNTH_PROMPT})
+    optimizer = DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
     return instrumented, optimizer, lambda: templates["synth_prompt"]
+
+
+def build_cases(llm):
+    cases = [
+        ("trace", lambda: make_trace_case(llm, ())),
+        ("trace+otel", lambda: make_trace_case(llm, ("otel",))),
+        ("otel", lambda: make_otel_case(llm, ())),
+    ]
+    if HAS_SYSMON:
+        cases.extend(
+            [
+                ("trace+sysmon", lambda: make_trace_case(llm, ("sysmon",))),
+                (
+                    "trace+otel+sysmon",
+                    lambda: make_trace_case(llm, ("otel", "sysmon")),
+                ),
+                ("otel+sysmon", lambda: make_otel_case(llm, ("sysmon",))),
+                ("sysmon", lambda: make_sysmon_case(llm)),
+            ]
+        )
+    return cases
 
 
 def run_case(name: str, builder):
     instrumented, optimizer, prompt_getter = builder()
+    started_at = time.perf_counter()
     result = optimize_graph(
         instrumented,
         queries=QUERIES,
@@ -415,45 +665,255 @@ def run_case(name: str, builder):
         eval_fn=eval_fn,
         output_key="final_answer",
     )
+    runtime_s = time.perf_counter() - started_at
 
-    probe = instrumented.invoke({"query": "What is CRISPR?"})
-    answer_preview = str(_raw(probe.get("final_answer", probe)))[:120]
+    probe = instrumented.invoke({"query": QUERIES[0]})
+    if hasattr(probe, "data") and isinstance(probe.data, dict):
+        answer_value = probe.data.get("final_answer", probe.data)
+    elif isinstance(probe, dict):
+        answer_value = probe.get("final_answer", probe)
+    else:
+        answer_value = probe
+    answer_text = str(_raw(answer_value))
+    views = []
 
-    summary = {
-        "config": name,
-        "score_history": [round(x, 3) for x in result.score_history],
-        "best_iteration": result.best_iteration,
-        "best_updates": dict(result.best_updates),
-        "final_synth_prompt": prompt_getter(),
-        "answer_preview": answer_preview,
-        "observers": [a.carrier for a in getattr(instrumented, "_last_observer_artifacts", [])],
-        "trace_summary": None,
-        "otel_summary": None,
-        "sysmon_summary": None,
-    }
-
-    if getattr(instrumented, "backend", None) == "trace":
-        answer_node = probe.get("final_answer")
-        summary["trace_summary"] = {
-            "is_node": hasattr(answer_node, "parents"),
-            "parent_count": len(getattr(answer_node, "parents", [])),
-            "parameter_count": len(getattr(instrumented, "parameters", [])),
-        }
-    elif getattr(instrumented, "backend", None) == "otel":
-        otlp = instrumented.session.flush_otlp(clear=True)
-        summary["otel_summary"] = summarize_otlp(otlp)
-    elif getattr(instrumented, "backend", None) == "sysmon":
-        summary["sysmon_summary"] = summarize_sysmon(instrumented._last_profile_doc)
+    backend = getattr(instrumented, "backend", None)
+    if backend == "trace":
+        views.append(
+            _make_trace_view(
+                [probe, *list(getattr(instrumented, "parameters", []))],
+                config=name,
+                origin="backend",
+            )
+        )
+    elif backend == "otel":
+        views.append(
+            _make_otel_view(
+                instrumented.session.flush_otlp(clear=True),
+                config=name,
+                origin="backend",
+            )
+        )
+    elif backend == "sysmon":
+        views.append(
+            _make_sysmon_view(
+                instrumented._last_profile_doc or {},
+                config=name,
+                origin="backend",
+            )
+        )
 
     for artifact in getattr(instrumented, "_last_observer_artifacts", []):
         if artifact.carrier == "otel":
-            summary["otel_summary"] = summarize_otlp(artifact.raw)
+            views.append(
+                _make_otel_view(
+                    artifact.raw,
+                    config=name,
+                    origin="observer",
+                )
+            )
         elif artifact.carrier == "sysmon":
-            summary["sysmon_summary"] = summarize_sysmon(artifact.profile_doc)
+            views.append(
+                _make_sysmon_view(
+                    artifact.profile_doc,
+                    config=name,
+                    origin="observer",
+                )
+            )
 
-    assert summary["best_iteration"] >= 2
-    assert "Start the answer exactly with [BENCH_OK]." in summary["final_synth_prompt"]
-    return summary
+    assert result.best_iteration >= 2
+    final_prompt = prompt_getter()
+    assert final_prompt == SYNTH_UPDATE_SCHEDULE[-1]["synth_prompt"]
+    tail_scores = result.score_history[max(2, result.best_iteration):]
+
+    return {
+        "config": name,
+        "runtime_s": round(runtime_s, 3),
+        "baseline_score": round(result.baseline_score, 3),
+        "best_score": round(result.best_score, 3),
+        "score_gain": round(result.best_score - result.baseline_score, 3),
+        "best_iteration": result.best_iteration,
+        "score_history": [round(x, 3) for x in result.score_history],
+        "stability_std": round(
+            statistics.pstdev(tail_scores) if len(tail_scores) > 1 else 0.0,
+            3,
+        ),
+        "best_updates": dict(result.best_updates),
+        "final_synth_prompt": final_prompt,
+        "final_answer": answer_text,
+        "answer_preview": _truncate(answer_text, 180),
+        "observers": [
+            artifact.carrier
+            for artifact in getattr(instrumented, "_last_observer_artifacts", [])
+        ],
+        "views": views,
+    }
+
+
+def live_skip_reason() -> str | None:
+    if not OPENROUTER_API_KEY:
+        return (
+            "[SKIP] OPENROUTER_API_KEY is not set. "
+            "This comparison stays live-only so notebook CI can skip cleanly."
+        )
+    if OpenAI is None:
+        return "[SKIP] openai package is unavailable."
+    return None
+
+
+def run_live_comparison(*, echo_progress: bool = True) -> List[Dict[str, Any]]:
+    reason = live_skip_reason()
+    if reason is not None:
+        if echo_progress:
+            print(reason)
+        return []
+
+    llm = make_live_llm()
+    context = nullcontext()
+    sink = None
+    if not echo_progress:
+        sink = StringIO()
+        context = redirect_stdout(sink)
+    with context:
+        rows = [run_case(name, builder) for name, builder in build_cases(llm)]
+    return rows
+
+
+def print_cli_report(rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        return
+
+    print(f"\nOptimization comparison ({ITERATIONS} iterations)\n")
+    print(
+        "| config | runtime_s | baseline | best | gain | best_iteration | stability_std | "
+        "score_history | semantic_messages | params |"
+    )
+    print("|---|---:|---:|---:|---:|---:|---:|---|---|---|")
+    for row in rows:
+        primary = row["views"][0]["summary"] if row["views"] else {}
+        print(
+            f"| {row['config']} | {row['runtime_s']:.3f} | {row['baseline_score']:.3f} "
+            f"| {row['best_score']:.3f} | {row['score_gain']:.3f} | {row['best_iteration']} "
+            f"| {row['stability_std']:.3f} | {row['score_history']} "
+            f"| {primary.get('semantic_messages', [])} | {primary.get('param_names', [])} |"
+        )
+
+    print("\nPer-configuration artifacts\n")
+    for row in rows:
+        print(f"## {row['config']}")
+        print(f"runtime_s: {row['runtime_s']:.3f}")
+        print(f"baseline_score: {row['baseline_score']:.3f}")
+        print(f"best_score: {row['best_score']:.3f}")
+        print(f"score_gain: {row['score_gain']:.3f}")
+        print(f"stability_std: {row['stability_std']:.3f}")
+        print(f"score_history: {row['score_history']}")
+        print(f"best_updates: {row['best_updates']}")
+        print(f"final_synth_prompt: {row['final_synth_prompt']}")
+        print(f"final_answer: {row['answer_preview']}")
+        for view in row["views"]:
+            summary = view["summary"]
+            extras = []
+            if "span_count" in summary:
+                extras.append(f"span_count={summary['span_count']}")
+            if "event_count" in summary:
+                extras.append(f"event_count={summary['event_count']}")
+            extra_text = f" ({', '.join(extras)})" if extras else ""
+            print(
+                f"  - {view['origin']} {view['carrier']}{extra_text}: "
+                f"messages={summary['message_names']} "
+                f"params={summary['param_names']}"
+            )
+        print()
+
+
+def display_notebook_report(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    try:
+        from IPython.display import Markdown, display
+    except Exception:
+        print_cli_report(rows)
+        return rows
+
+    if not rows:
+        display(Markdown(live_skip_reason() or "_No rows captured._"))
+        return rows
+
+    lines = [
+        "| config | runtime_s | baseline | best | gain | best_iteration | stability_std | score_history |",
+        "|---|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row['config']} | {row['runtime_s']:.3f} | {row['baseline_score']:.3f} "
+            f"| {row['best_score']:.3f} | {row['score_gain']:.3f} | {row['best_iteration']} "
+            f"| {row['stability_std']:.3f} | {row['score_history']} |"
+        )
+    display(Markdown("## Optimization comparison\n\n" + "\n".join(lines)))
+
+    for row in rows:
+        display(
+            Markdown(
+                "\n".join(
+                    [
+                        f"## {row['config']}",
+                        f"- Runtime: `{row['runtime_s']:.3f}s`",
+                        f"- Baseline score: `{row['baseline_score']:.3f}`",
+                        f"- Best score: `{row['best_score']:.3f}`",
+                        f"- Score gain: `{row['score_gain']:.3f}`",
+                        f"- Best iteration: `{row['best_iteration']}`",
+                        f"- Post-update stability std: `{row['stability_std']:.3f}`",
+                        f"- Score history: `{row['score_history']}`",
+                        f"- Best updates: `{list(row['best_updates'].keys())}`",
+                        "",
+                        "### Final synth prompt",
+                        "```text",
+                        str(row["final_synth_prompt"]),
+                        "```",
+                        "### Final answer",
+                        "```text",
+                        _truncate(row["final_answer"], 500),
+                        "```",
+                    ]
+                )
+            )
+        )
+        for view in row["views"]:
+            summary = view["summary"]
+            extra_lines = []
+            if "span_count" in summary:
+                extra_lines.append(f"- Span count: `{summary['span_count']}`")
+                extra_lines.append(f"- Span names: `{summary['span_names']}`")
+            if "event_count" in summary:
+                extra_lines.append(f"- Event count: `{summary['event_count']}`")
+            display(
+                Markdown(
+                    "\n".join(
+                        [
+                            f"### {view['origin']} {view['carrier']}",
+                            f"- Semantic message names: `{summary['semantic_messages']}`",
+                            f"- All message names: `{summary['message_names']}`",
+                            f"- Parameter names: `{summary['param_names']}`",
+                            *extra_lines,
+                            "",
+                            "```json",
+                            json.dumps(summary["param_values"], indent=2),
+                            "```",
+                        ]
+                    )
+                )
+            )
+            graph = tgj_to_digraph(
+                view["doc"],
+                title=f"{row['config']} {view['origin']} {view['carrier']}",
+            )
+            if graph is not None:
+                display(graph)
+
+    return rows
+
+
+def run_notebook_demo() -> List[Dict[str, Any]]:
+    rows = run_live_comparison(echo_progress=False)
+    return display_notebook_report(rows)
 
 
 def main():
@@ -464,54 +924,8 @@ def main():
     print(f"sys.monitoring available: {HAS_SYSMON}")
     print(f"OPENROUTER_MODEL={OPENROUTER_MODEL}")
 
-    if not OPENROUTER_API_KEY:
-        print("\n[SKIP] OPENROUTER_API_KEY is not set.")
-        print("This demo is intentionally live-only. Set OPENROUTER_API_KEY to run the benchmark.")
-        return
-    if OpenAI is None:
-        print("\n[SKIP] openai package is unavailable.")
-        return
-
-    llm = make_live_llm()
-    cases = [
-        ("trace", lambda: make_trace_case(llm, ())),
-        ("trace+otel", lambda: make_trace_case(llm, ("otel",))),
-        ("otel", lambda: make_otel_case(llm, ())),
-    ]
-    if HAS_SYSMON:
-        cases.extend(
-            [
-                ("trace+sysmon", lambda: make_trace_case(llm, ("sysmon",))),
-                ("trace+otel+sysmon", lambda: make_trace_case(llm, ("otel", "sysmon"))),
-                ("otel+sysmon", lambda: make_otel_case(llm, ("sysmon",))),
-                ("sysmon", lambda: make_sysmon_case(llm)),
-            ]
-        )
-
-    rows = [run_case(name, builder) for name, builder in cases]
-
-    print("\nOptimization comparison (5 iterations)\n")
-    print("| config | score_history | best_iteration | observers |")
-    print("|---|---|---:|---|")
-    for row in rows:
-        print(
-            f"| {row['config']} | {row['score_history']} | {row['best_iteration']} "
-            f"| {','.join(row['observers']) or '-'} |"
-        )
-
-    print("\nBinding / update inspection\n")
-    for row in rows:
-        print(f"## {row['config']}")
-        print(f"best_updates: {row['best_updates']}")
-        print(f"final_synth_prompt: {row['final_synth_prompt']}")
-        print(f"answer_preview: {row['answer_preview']}")
-        if row['trace_summary'] is not None:
-            print(f"trace_summary: {row['trace_summary']}")
-        if row['otel_summary'] is not None:
-            print(f"otel_summary: {row['otel_summary']}")
-        if row['sysmon_summary'] is not None:
-            print(f"sysmon_summary: {row['sysmon_summary']}")
-        print()
+    rows = run_live_comparison(echo_progress=True)
+    print_cli_report(rows)
 
 
 if __name__ == "__main__":

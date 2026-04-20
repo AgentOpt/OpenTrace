@@ -76,6 +76,9 @@ def export_subgraph_to_tgj(
                 q.append(p)
 
             inputs = {f"in_{i}": {"ref": nid(p)} for i, p in enumerate(n.parents)}
+            for i, dep in enumerate(getattr(n, "hidden_dependencies", ()) or ()):
+                q.append(dep)
+                inputs[f"hidden_{i}"] = {"ref": nid(dep)}
 
             op = getattr(n, "op_name", None)
             if not op:

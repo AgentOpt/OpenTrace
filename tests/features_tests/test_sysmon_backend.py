@@ -52,6 +52,7 @@ def test_sysmon_backend_invoke_exports_profile_doc():
         graph=build_graph(),
         backend="sysmon",
         initial_templates={"planner_prompt": "Plan {query}", "synth_prompt": "answer::{query}::{plan}"},
+        graph_agents_functions=["planner", "synth"],
         output_key="final_answer",
     )
     assert isinstance(ig, SysMonInstrumentedGraph)
@@ -59,6 +60,7 @@ def test_sysmon_backend_invoke_exports_profile_doc():
     assert "final_answer" in out
     assert ig._last_profile_doc["version"] == "trace-json/1.0+sysmon"
     assert len(ig._last_profile_doc["events"]) > 0
+    assert [ev["name"] for ev in ig._last_profile_doc["events"]] == ["planner", "synth"]
 
 
 class _DictUpdateOptimizer:
@@ -103,6 +105,7 @@ def test_sysmon_backend_optimize_applies_binding_updates():
         graph=build_graph(templates),
         backend="sysmon",
         bindings=bindings,
+        graph_agents_functions=["planner", "synth"],
         output_key="final_answer",
     )
     result = optimize_graph(
