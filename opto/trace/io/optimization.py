@@ -147,7 +147,7 @@ class OptimizationResult:
 
 def _default_eval_fn(payload: Dict[str, Any]) -> EvalResult:
     """Extract evaluation from the OTLP trace's evaluator span, if present."""
-    from opto.trace.io.langgraph_otel_runtime import extract_eval_metrics_from_otlp
+    from opto.trace.io.otel_runtime import extract_eval_metrics_from_otlp
 
     otlp = payload.get("otlp", {})
     score, metrics, reasons = extract_eval_metrics_from_otlp(otlp)

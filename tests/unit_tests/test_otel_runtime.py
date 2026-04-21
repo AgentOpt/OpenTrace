@@ -1,6 +1,6 @@
 import pytest
 
-from opto.trace.io.langgraph_otel_runtime import (
+from opto.trace.io.otel_runtime import (
     init_otel_runtime,
     TracingLLM,
     flush_otlp,

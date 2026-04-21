@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Set
 
 from opto.trace.io.bindings import Binding, make_dict_binding
 from opto.features.graph.graph_instrumentation import instrument_trace_graph
-from opto.trace.io.langgraph_otel_runtime import TracingLLM
+from opto.trace.io.otel_runtime import TracingLLM
 from opto.trace.io.observers import GraphObserver, OTelObserver
 from opto.trace.io.sysmonitoring import SysMonObserver, SysMonitoringSession
 from opto.trace.io.telemetry_session import TelemetrySession

@@ -24,7 +24,7 @@ class LLMCallError(Exception):
 
 
 class InMemorySpanExporter(SpanExporter):
-    """In-memory span exporter used by LangGraph + OTEL demos."""
+    """In-memory OTEL span exporter used by tests and demos."""
 
     def __init__(self) -> None:
         self._finished_spans: List[ReadableSpan] = []

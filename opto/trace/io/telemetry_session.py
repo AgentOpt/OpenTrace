@@ -31,7 +31,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from opentelemetry import trace as oteltrace
 from opentelemetry.sdk.trace import TracerProvider
 
-from opto.trace.io.langgraph_otel_runtime import (
+from opto.trace.io.otel_runtime import (
     InMemorySpanExporter,
     flush_otlp as _flush_otlp_raw,
 )
