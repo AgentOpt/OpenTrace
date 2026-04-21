@@ -113,6 +113,7 @@ class TelemetrySession:
         mlflow_autolog: bool = False,
         mlflow_autolog_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
+        """Initialize OTEL exporters, optional MLflow bridges, and node/span bookkeeping."""
         self.service_name = service_name
         self.record_spans = record_spans
         self.span_attribute_filter = span_attribute_filter
@@ -182,11 +183,13 @@ class TelemetrySession:
             _CURRENT_SESSION.reset(token)
 
     def __enter__(self) -> "TelemetrySession":
+        """Activate the session for the current context-manager scope."""
         token = _CURRENT_SESSION.set(self)
         self._token_stack.append(token)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        """Restore the previous active session when leaving a ``with`` block."""
         if self._token_stack:
             token = self._token_stack.pop()
             _CURRENT_SESSION.reset(token)
@@ -226,6 +229,7 @@ class TelemetrySession:
 
     @staticmethod
     def _span_id_hex(span) -> Optional[str]:
+        """Return the current span id as a zero-padded hex string."""
         try:
             ctx = span.get_span_context()
             if not getattr(ctx, "is_valid", False):
@@ -235,23 +239,28 @@ class TelemetrySession:
             return None
 
     def _truncate(self, v: Any) -> str:
+        """Convert a value to a bounded string suitable for span attributes."""
         s = str(v)
         if self.max_attr_chars and len(s) > self.max_attr_chars:
             return s[: self.max_attr_chars] + "…"
         return s
 
     def _is_trace_node(self, obj: Any) -> bool:
+        """Best-effort check for Trace node-like objects without importing node classes."""
         mod = getattr(obj.__class__, "__module__", "")
         return mod.startswith("opto.trace") and hasattr(obj, "name") and hasattr(obj, "data")
 
     def _is_parameter_node(self, obj: Any) -> bool:
+        """Return whether an object looks like a Trace ``ParameterNode``."""
         return self._is_trace_node(obj) and obj.__class__.__name__ == "ParameterNode"
 
     def _param_key(self, param_node: Any) -> str:
+        """Derive the binding key used for a Trace parameter node."""
         raw = getattr(param_node, "name", "param")
         return str(raw).split(":")[0]
 
     def _remember_node_span(self, node: Any, span) -> None:
+        """Remember the span associated with a node for later input lifting."""
         sid = self._span_id_hex(span)
         if sid is None:
             return
@@ -261,6 +270,7 @@ class TelemetrySession:
             return
 
     def _lookup_node_ref(self, node: Any) -> Optional[str]:
+        """Resolve a node into the stable reference format expected by TGJ export."""
         try:
             sid = self._node_span_ids.get(node)
         except Exception:
@@ -305,6 +315,7 @@ class TelemetrySession:
         return inputs_attrs, params_attrs
 
     def _is_default_op(self, fun_name: str, file_path: str) -> bool:
+        """Detect default Trace operators that should be skipped when configured."""
         if fun_name == "call_llm":
             return False
         norm = str(file_path).replace("\\", "/")
@@ -503,6 +514,7 @@ class TelemetrySession:
     # -- MLflow helpers (best-effort) -----------------------------------------
 
     def _mlflow_log_artifacts(self, output_dir: str) -> None:
+        """Best-effort bridge that mirrors exported bundles into MLflow artifacts."""
         if not self.mlflow_log_artifacts:
             return
         try:

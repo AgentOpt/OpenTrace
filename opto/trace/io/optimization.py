@@ -381,6 +381,7 @@ def optimize_graph(
     _optimizer = optimizer
 
     def _ensure_trace_imports():
+        """Lazily import Trace ingestion and propagation helpers on demand."""
         nonlocal _ingest_tgj, _GraphPropagator, _batchify
         if _ingest_tgj is None:
             from opto.trace.io.tgj_ingest import ingest_tgj as _fn
@@ -395,6 +396,7 @@ def optimize_graph(
             _batchify = _batchify_items
 
     def _ensure_optimizer(param_nodes):
+        """Instantiate the default optimizer only when trainable params exist."""
         nonlocal _optimizer
         if _optimizer is not None:
             return
@@ -411,6 +413,7 @@ def optimize_graph(
     _input_key = getattr(graph, "input_key", "query") or "query"
 
     def _make_state(query: Any) -> Dict[str, Any]:
+        """Normalize a query payload into the graph's expected input-state shape."""
         if isinstance(query, dict):
             return query
         return {_input_key: query}
@@ -636,6 +639,7 @@ def _optimize_trace_graph(
     output_key: Optional[str] = None,
     on_iteration: Optional[Callable[[int, List[RunResult], Dict[str, Any]], None]] = None,
 ) -> OptimizationResult:
+    """Optimize a trace-native graph using traced output nodes directly."""
     from opto.optimizers.optoprime_v2 import OptoPrimeV2
     from opto.trace.nodes import Node
 
@@ -651,6 +655,7 @@ def _optimize_trace_graph(
     last_applied_updates: Dict[str, Any] = {}
 
     def _snapshot(parameters: List[Any]) -> Dict[str, Any]:
+        """Capture the current parameter payload keyed by node name."""
         snapshot: Dict[str, Any] = {}
         for p in parameters:
             snapshot[getattr(p, "name", repr(p))] = getattr(p, "data", None)
@@ -660,6 +665,7 @@ def _optimize_trace_graph(
     opt = optimizer or OptoPrimeV2(parameters=list(graph.parameters), **dict(optimizer_kwargs or {}))
 
     def _extract_output(result: Any, sidecar: Any = None) -> Tuple[Any, Any]:
+        """Resolve the traced output node and the plain answer value for evaluation."""
         if sidecar is not None and getattr(sidecar, "output_node", None) is not None:
             output_node = sidecar.output_node
             return output_node, getattr(output_node, "data", output_node)
@@ -761,6 +767,7 @@ def _optimize_sysmon_graph(
     output_key: Optional[str] = None,
     on_iteration: Optional[Callable[[int, List[RunResult], Dict[str, Any]], None]] = None,
 ) -> OptimizationResult:
+    """Optimize a sys.monitoring-backed graph via TGJ conversion and replay."""
     from opto.optimizers.optoprime_v2 import OptoPrimeV2
     from opto.trace.io.tgj_ingest import ingest_tgj
     from opto.trace.io.tgj_ingest import merge_tgj
@@ -770,6 +777,7 @@ def _optimize_sysmon_graph(
         raise ValueError("backend='sysmon' requires an explicit eval_fn")
 
     def _snapshot_parameters_from_bindings(bindings_dict: Dict[str, Binding]) -> Dict[str, Any]:
+        """Read the current values exposed through the active bindings."""
         return {k: b.get() for k, b in bindings_dict.items()}
 
     score_history: List[float] = []

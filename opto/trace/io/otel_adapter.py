@@ -1,3 +1,5 @@
+"""Adapters that convert OTLP span payloads into Trace-Graph JSON documents."""
+
 from __future__ import annotations
 from typing import Dict, Any, List
 
@@ -6,10 +8,12 @@ PROFILE_VERSION = "trace-json/1.0+otel"
 
 
 def _sanitize(name: str) -> str:
+    """Make span names safe for use as TGJ node names."""
     return (name or "node").replace(":", "_")
 
 
 def _op(attrs, span):
+    """Infer a TGJ operation name from OTEL attributes and span metadata."""
     if "gen_ai.operation" in attrs or "gen_ai.model" in attrs:
         return "llm_call"
     if "rpc.system" in attrs:
@@ -22,6 +26,7 @@ def _op(attrs, span):
 
 
 def _attrs(l):
+    """Flatten OTLP attribute records into a plain ``dict``."""
     out = {}
     for a in l or []:
         k = a["key"]
@@ -32,6 +37,7 @@ def _attrs(l):
 
 
 def _lift_inputs(attrs: Dict[str, Any]) -> Dict[str, str]:
+    """Extract ``inputs.*`` references and synthesize key literal inputs."""
     inputs = {}
     for k, v in list(attrs.items()):
         if k.startswith("inputs.") and isinstance(v, str):
@@ -47,6 +53,7 @@ def _lift_inputs(attrs: Dict[str, Any]) -> Dict[str, str]:
 
 
 def _params(attrs: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Extract ``param.*`` attributes and trainable flags from a span."""
     out = {}
     for k, v in attrs.items():
         if k.startswith("param.") and not k.endswith(".trainable"):
@@ -220,4 +227,3 @@ def otlp_traces_to_trace_json(otlp: Dict[str, Any], agent_id_hint: str = "", use
                 }
             )
     return docs
-

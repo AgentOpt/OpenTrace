@@ -1,3 +1,5 @@
+"""Runtime helpers for recording, exporting, and annotating OTEL spans."""
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +21,7 @@ class LLMCallError(Exception):
     """Raised when the underlying LLM provider returns a non-success response."""
 
     def __init__(self, message: str, *, status_code: Optional[int] = None):
+        """Store the provider-facing error message and optional status code."""
         super().__init__(message)
         self.status_code = status_code
 
@@ -27,19 +30,24 @@ class InMemorySpanExporter(SpanExporter):
     """In-memory OTEL span exporter used by tests and demos."""
 
     def __init__(self) -> None:
+        """Initialize the exporter with an empty finished-span buffer."""
         self._finished_spans: List[ReadableSpan] = []
 
     def export(self, spans: List[ReadableSpan]) -> SpanExportResult:
+        """Append spans to the in-memory buffer."""
         self._finished_spans.extend(spans)
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
+        """Clear all recorded spans."""
         self._finished_spans.clear()
 
     def get_finished_spans(self) -> List[ReadableSpan]:
+        """Return a copy of the spans collected so far."""
         return list(self._finished_spans)
 
     def clear(self) -> None:
+        """Discard any spans currently held in memory."""
         self._finished_spans.clear()
 
 
@@ -99,6 +107,7 @@ def flush_otlp(
     spans = exporter.get_finished_spans()
 
     def hex_id(x: int, n: int) -> str:
+        """Format trace/span ids as zero-padded lowercase hex strings."""
         return f"{x:0{2*n}x}"
 
     otlp_spans: List[Dict[str, Any]] = []
@@ -206,6 +215,7 @@ class TracingLLM:
         llm_span_name: str = "llm.chat.completion",
         emit_llm_child_span: bool = True,
     ) -> None:
+        """Configure how OTEL spans are emitted around provider calls."""
         self.llm = llm
         self.tracer = tracer
         # None -> all trainable; explicit set otherwise
@@ -224,6 +234,7 @@ class TracingLLM:
     # ---- helpers ---------------------------------------------------------
 
     def _is_trainable(self, optimizable_key: Optional[str]) -> bool:
+        """Return whether a prompt key should be exposed as trainable."""
         if optimizable_key is None:
             return False
         if self._trainable_keys_all:
@@ -245,6 +256,7 @@ class TracingLLM:
         prompt: str,
         extra_inputs: Optional[Dict[str, str]] = None,
     ) -> None:
+        """Attach prompt, code, and input metadata to the parent LLM span."""
         if template_name and template is not None:
             sp.set_attribute(f"param.{template_name}", template)
             sp.set_attribute(
@@ -432,6 +444,7 @@ DEFAULT_EVAL_METRIC_KEYS: Mapping[str, str] = {
 
 
 def _attrs_to_dict(attrs: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Convert OTLP-style attribute records into a string-keyed mapping."""
     out: Dict[str, str] = {}
     for a in attrs or []:
         key = a.get("key")

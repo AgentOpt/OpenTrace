@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Utilities to export an already-built Trace graph (Node / MessageNode / ParameterNode)
 to TGJ format.
@@ -13,6 +11,8 @@ Non-goals:
 - this does NOT reconstruct a graph from telemetry; it only exports an existing Trace graph
 """
 
+from __future__ import annotations
+
 from typing import Dict, Any, Iterable, Set
 from opto.trace.nodes import (
     Node,
@@ -25,6 +25,7 @@ from opto.trace.nodes import (
 
 
 def _base_name(n: Node) -> str:
+    """Drop Trace scope suffixes from a node name for export readability."""
     return n.name.split(":")[0]
 
 
@@ -35,6 +36,7 @@ def export_subgraph_to_tgj(
     graph_id: str,
     scope: str = "",
 ) -> Dict[str, Any]:
+    """Export a reachable Trace subgraph to TGJ v1.0."""
     seen: Set[Node] = set()
     q = list(nodes)
     tgj_nodes = []
@@ -42,6 +44,7 @@ def export_subgraph_to_tgj(
     used_ids: Set[str] = set()
 
     def nid(n: Node) -> str:
+        """Assign a stable, collision-free TGJ id to each exported node."""
         if n not in idmap:
             base = _base_name(n)
             candidate = base
@@ -159,5 +162,6 @@ def export_full_graph_to_tgj(
     graph_id: str,
     scope: str = "",
 ) -> Dict[str, Any]:
+    """Export every node currently held in the global Trace graph registry."""
     all_nodes = [n for lst in GRAPH._nodes.values() for n in lst]
     return export_subgraph_to_tgj(all_nodes, run_id, agent_id, graph_id, scope)

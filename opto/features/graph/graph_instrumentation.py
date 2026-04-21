@@ -34,6 +34,7 @@ class TraceGraph:
     observer_meta: Dict[str, Any] = field(default_factory=dict)
 
     def invoke(self, state: Any, **kwargs: Any) -> Any:
+        """Invoke the wrapped graph while notifying any configured observers."""
         for obs in self.observers:
             meta = {"service_name": self.service_name}
             meta.update(self.observer_meta)
@@ -57,10 +58,12 @@ class TraceGraph:
                 self._last_observer_artifacts.append(obs.stop(result=result, error=error))
 
     def stream(self, state: Any, **kwargs: Any):
+        """Delegate streaming execution to the wrapped graph object."""
         yield from self.graph.stream(state, **kwargs)
 
 
 def _dedupe_identity(values: List[Any]) -> List[Any]:
+    """Remove duplicates while preserving the first occurrence by object identity."""
     seen = set()
     out = []
     for value in values:
@@ -80,6 +83,7 @@ def _to_funmodule(
     allow_external_dependencies: bool = True,
     scope: Optional[Dict[str, Any]] = None,
 ) -> Any:
+    """Return a ``FunModule`` wrapper for a callable when needed."""
     if isinstance(func, FunModule) or hasattr(func, "_fun"):
         return func
 
@@ -101,6 +105,7 @@ def _to_funmodule(
 
 
 def _replace_scope_object(scope: Dict[str, Any], old_obj: Any, new_obj: Any) -> bool:
+    """Replace all identity matches in ``scope`` and report whether one was found."""
     replaced = False
     for key, value in list(scope.items()):
         if value is old_obj:

@@ -1,3 +1,5 @@
+"""Lightweight per-run sidecars shared by graph instrumentation backends."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -19,15 +21,18 @@ class GraphRunSidecar:
         traced_output: Any,
         runtime_value: Any = None,
     ) -> None:
+        """Store the traced node output and any dict-shaped runtime shadow state."""
         self.node_outputs[node_name] = traced_output
         if runtime_value is not None and isinstance(runtime_value, dict):
             self.shadow_state.update(runtime_value)
 
     def set_output(self, output_node: Any, runtime_result: Any) -> None:
+        """Record the final traced output node alongside the raw runtime result."""
         self.output_node = output_node
         self.runtime_result = runtime_result
 
     def clear(self) -> None:
+        """Reset the sidecar for reuse in tests or debugging flows."""
         self.node_outputs.clear()
         self.shadow_state.clear()
         self.output_node = None

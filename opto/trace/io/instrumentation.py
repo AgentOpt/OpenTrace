@@ -126,6 +126,8 @@ class InstrumentedGraph:
 
 @dataclass
 class SysMonInstrumentedGraph:
+    """Graph wrapper that captures execution profiles through ``sys.monitoring``."""
+
     graph: Any
     session: SysMonitoringSession
     bindings: Dict[str, Binding] = field(default_factory=dict)
@@ -137,6 +139,7 @@ class SysMonInstrumentedGraph:
     _last_profile_doc: Optional[dict] = field(default=None, init=False, repr=False)
 
     def invoke(self, state: Any, **kwargs: Any):
+        """Run the graph while recording a sys.monitoring profile document."""
         meta = {"service_name": self.service_name}
         meta.update(self.observer_meta)
         self.session.start(bindings=self.bindings, meta=meta)
@@ -152,6 +155,7 @@ class SysMonInstrumentedGraph:
             self._last_profile_doc = self.session.stop(result=result, error=error)
 
     def stream(self, state: Any, **kwargs: Any):
+        """Streaming is intentionally unsupported for the sys.monitoring backend."""
         raise NotImplementedError("SysMonInstrumentedGraph.stream is not implemented")
 
 
@@ -160,6 +164,7 @@ def _make_observers(
     *,
     service_name: str,
 ) -> List[GraphObserver]:
+    """Instantiate the passive observers requested by ``instrument_graph``."""
     observers: List[GraphObserver] = []
     for name in observe_with:
         if name == "otel":
@@ -370,6 +375,7 @@ def instrument_graph(
         CODE_ATTR_MAX_CHARS = 10_000
 
         def _emit_code_param(span, code_key: str, code_fn: Any) -> None:
+            """Serialize code into bounded OTEL attributes for optimizer consumption."""
             try:
                 src = inspect.getsource(code_fn)
             except Exception:

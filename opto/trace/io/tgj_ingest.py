@@ -1,3 +1,5 @@
+"""Helpers for rebuilding Trace nodes from TGJ and OTEL-derived documents."""
+
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Union
 from contextlib import contextmanager
@@ -8,6 +10,7 @@ OTEL_PROFILE_VERSION = "trace-json/1.0+otel"
 
 @contextmanager
 def _scoped(scope: str):
+    """Temporarily push a Trace name scope while ingesting one document."""
     if scope:
         NAME_SCOPES.append(scope)
     try:
@@ -17,10 +20,12 @@ def _scoped(scope: str):
             NAME_SCOPES.pop()
 
 def _mk_value(name: str, value: Any, desc: str="[Node]") -> Node:
+    """Create a plain ``Node`` using a TGJ-safe name."""
     safe = name.replace(":", "_")
     return Node(value, name=safe, description=desc)
 
 def _as_node(ref: Union[str, Dict[str,Any]], local: Dict[str,Node], ports: Dict[str,Node], port_index: Optional[Dict[str,Node]] = None) -> Node:
+    """Resolve a TGJ input/output reference into a concrete Trace node."""
     if isinstance(ref, str):
         ref = {"ref": ref}
     if "ref" in ref:
@@ -48,6 +53,7 @@ def _as_node(ref: Union[str, Dict[str,Any]], local: Dict[str,Node], ports: Dict[
 
 
 def _kind_norm(k: str) -> str:
+    """Normalize legacy TGJ kind aliases to canonical names."""
     k = (k or "").lower()
     if k in ("param", "parameter"):
         return "parameter"
@@ -61,6 +67,7 @@ def _kind_norm(k: str) -> str:
 
 
 def _nodes_iter(nodes_field: Union[List[Dict[str,Any]], Dict[str,Dict[str,Any]]]) -> List[Dict[str,Any]]:
+    """Accept either list- or dict-shaped TGJ node collections."""
     if isinstance(nodes_field, dict):
         out = []
         for nid, rec in nodes_field.items():
@@ -72,6 +79,7 @@ def _nodes_iter(nodes_field: Union[List[Dict[str,Any]], Dict[str,Dict[str,Any]]]
 
 
 def _convert_otel_profile(doc: Dict[str,Any]) -> Dict[str,Any]:
+    """Convert ``trace-json/1.0+otel`` payloads into canonical TGJ v1 records."""
     raw_nodes = _nodes_iter(doc.get("nodes", {}))
     known_ids = {
         rec.get("id") or rec.get("name")
@@ -154,6 +162,7 @@ def ingest_tgj(
     *,
     param_cache: Optional[Dict[str,"ParameterNode"]] = None,
 ) -> Dict[str,Node]:
+    """Rebuild Trace nodes from a TGJ document and return them by id/name."""
     version = doc.get("tgj") or doc.get("version")
     if version == OTEL_PROFILE_VERSION:
         doc = _convert_otel_profile(doc)
@@ -250,6 +259,7 @@ def ingest_tgj(
     return nodes
 
 def merge_tgj(docs: List[Dict[str,Any]]) -> Dict[str,Dict[str,Node]]:
+    """Ingest multiple TGJ documents while resolving cross-document exports."""
     merged: Dict[str,Dict[str,Node]] = {}
     port_index: Dict[str,Node] = {}
     for d in docs:
@@ -264,6 +274,7 @@ class TLSFIngestor:
     """Minimal TLSF ingestor supporting TGJ/trace-json documents."""
 
     def __init__(self, run_id: Optional[str] = None):
+        """Initialize the ingestor and its accumulated node index."""
         self.run_id = run_id
         self._nodes: Dict[str, Node] = {}
 
@@ -272,4 +283,5 @@ class TLSFIngestor:
         self._nodes.update(ingest_tgj(doc))
 
     def get(self, name_or_event_id: str) -> Optional[Node]:
+        """Look up a previously ingested node by name or event id."""
         return self._nodes.get(name_or_event_id)

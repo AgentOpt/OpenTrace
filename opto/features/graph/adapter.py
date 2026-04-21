@@ -1,3 +1,5 @@
+"""Adapters that build graph objects for trace-native and OTEL execution."""
+
 from __future__ import annotations
 
 import contextlib
@@ -15,6 +17,7 @@ from opto.trace.nodes import Node, ParameterNode
 
 
 def _raw(value: Any) -> Any:
+    """Return the underlying Python value for Trace nodes and wrappers."""
     return getattr(value, "data", value)
 
 
@@ -22,6 +25,7 @@ def _normalize_named_callables(
     targets: Union[None, List[str], List[Callable[..., Any]], Mapping[str, Callable[..., Any]]],
     scope: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Callable[..., Any]]:
+    """Normalize function targets into a ``{name: callable}`` mapping."""
     if targets is None:
         return {}
     if isinstance(targets, Mapping):
@@ -38,6 +42,7 @@ def _normalize_named_callables(
 
 
 def _as_parameter(name: str, value: Any) -> ParameterNode:
+    """Coerce a raw value or node into a trainable ``ParameterNode``."""
     if isinstance(value, ParameterNode):
         return value
     if isinstance(value, Node):
@@ -47,6 +52,8 @@ def _as_parameter(name: str, value: Any) -> ParameterNode:
 
 @dataclass
 class GraphAdapter:
+    """Abstract adapter that exposes a graph factory as an instrumentable object."""
+
     graph_factory: Callable[..., Any]
     backend: str = "trace"
     bindings: Dict[str, Binding] = field(default_factory=dict)
@@ -55,27 +62,35 @@ class GraphAdapter:
     output_key: Optional[str] = None
 
     def build_graph(self, backend: Optional[str] = None):
+        """Build and compile the graph for the requested backend."""
         raise NotImplementedError
 
     def invoke_runtime(self, state: Dict[str, Any], **kwargs: Any):
+        """Execute the runtime-facing graph and return ``(result, sidecar)``."""
         raise NotImplementedError
 
     def invoke_trace(self, state: Dict[str, Any], **kwargs: Any):
+        """Execute the trace-native graph and return ``(result, sidecar)``."""
         raise NotImplementedError
 
     def new_run_sidecar(self):
+        """Create the per-invocation sidecar used to preserve traced state."""
         return GraphRunSidecar()
 
     def bindings_dict(self) -> Dict[str, Binding]:
+        """Return a shallow copy of the adapter bindings."""
         return dict(self.bindings)
 
     def parameters(self) -> List[ParameterNode]:
+        """Return the trainable parameters surfaced by this adapter."""
         raise NotImplementedError
 
     def as_module(self) -> GraphModule:
+        """Expose the adapter through the ``trace.modules.Module`` interface."""
         return GraphModule(self)
 
     def instrument(self, backend: Optional[str] = None, **kwargs: Any):
+        """Wrap the adapter with the instrumentation backend requested by the caller."""
         effective_backend = backend or self.backend
         service_name = kwargs.pop("service_name", self.service_name)
         input_key = kwargs.pop("input_key", self.input_key)
@@ -109,6 +124,8 @@ class GraphAdapter:
 
 @dataclass
 class LangGraphAdapter(GraphAdapter):
+    """Concrete adapter for LangGraph-style factories and scoped callables."""
+
     function_targets: Union[None, List[str], List[Callable[..., Any]], Mapping[str, Callable[..., Any]]] = None
     prompt_targets: Optional[Mapping[str, Any]] = None
     graph_knobs: Optional[Mapping[str, Any]] = None
@@ -116,6 +133,7 @@ class LangGraphAdapter(GraphAdapter):
     train_graph_agents_functions: bool = True
 
     def __post_init__(self) -> None:
+        """Normalize targets, create traced wrappers, and auto-build bindings."""
         self.function_targets = _normalize_named_callables(self.function_targets, self.scope)
         self.prompt_targets = {k: _as_parameter(k, v) for k, v in dict(self.prompt_targets or {}).items()}
         self.graph_knobs = {k: _as_parameter(k, v) for k, v in dict(self.graph_knobs or {}).items()}
@@ -139,12 +157,14 @@ class LangGraphAdapter(GraphAdapter):
         self._build_bindings()
 
     def __getstate__(self):
+        """Drop transient runtime state so the adapter remains pickle-friendly."""
         state = self.__dict__.copy()
         state["_active_sidecar"] = None
         state["_compiled_cache"] = {}
         return state
 
     def _build_bindings(self) -> None:
+        """Derive bindings for prompts, graph knobs, and traced code parameters."""
         auto: Dict[str, Binding] = {}
         for name, prompt in self.prompt_targets.items():
             auto[name] = Binding(
@@ -171,6 +191,7 @@ class LangGraphAdapter(GraphAdapter):
         self.bindings = auto
 
     def parameters(self) -> List[ParameterNode]:
+        """Collect the unique trainable parameters owned by the adapter."""
         params: List[ParameterNode] = []
         params.extend(self.prompt_targets.values())
         params.extend(self.graph_knobs.values())
@@ -191,13 +212,16 @@ class LangGraphAdapter(GraphAdapter):
         return out
 
     def _knob_values(self) -> Dict[str, Any]:
+        """Read graph knob values as raw Python objects."""
         return {k: _raw(v) for k, v in self.graph_knobs.items()}
 
     def _cache_key(self, backend: str):
+        """Build the compiled-graph cache key for a backend/knob combination."""
         return backend, tuple(sorted((k, repr(v)) for k, v in self._knob_values().items()))
 
     @contextlib.contextmanager
     def _scope_override(self, overrides: Dict[str, Any]):
+        """Temporarily patch adapter scope entries while constructing the graph."""
         if not self.scope:
             yield
             return
@@ -211,6 +235,7 @@ class LangGraphAdapter(GraphAdapter):
                     self.scope[key] = backup[key]
 
     def _merge_shadow(self, sidecar: GraphRunSidecar, runtime_out: Any, traced_out: Any) -> None:
+        """Merge traced outputs back into the sidecar's shadow state."""
         if not isinstance(runtime_out, dict):
             return
         if isinstance(traced_out, Node) and isinstance(getattr(traced_out, "data", None), dict):
@@ -224,7 +249,9 @@ class LangGraphAdapter(GraphAdapter):
                 sidecar.shadow_state[key] = value if isinstance(value, Node) else node(value, name=key)
 
     def _trace_runtime_wrapper(self, name: str, traced_fn: FunModule):
+        """Wrap a traced function so runtime execution still updates Trace state."""
         def _wrapped(state: Dict[str, Any], *args: Any, **kwargs: Any):
+            """Replay shadow inputs through the traced callable for one graph node."""
             if self._active_sidecar is None:
                 raise RuntimeError("Trace runtime wrapper called without active sidecar")
             sidecar = self._active_sidecar
@@ -241,6 +268,7 @@ class LangGraphAdapter(GraphAdapter):
         return _wrapped
 
     def build_graph(self, backend: Optional[str] = None):
+        """Build, compile, and cache the graph for ``trace`` or ``otel`` execution."""
         effective_backend = backend or self.backend
         key = self._cache_key(effective_backend)
         if key in self._compiled_cache:
@@ -270,6 +298,7 @@ class LangGraphAdapter(GraphAdapter):
         return compiled
 
     def invoke_runtime(self, state: Dict[str, Any], backend: Optional[str] = None, **kwargs: Any):
+        """Run the adapter using the runtime backend selected for this call."""
         effective_backend = backend or self.backend
         if effective_backend == "otel":
             graph = self.build_graph(backend="otel")
@@ -281,6 +310,7 @@ class LangGraphAdapter(GraphAdapter):
         return self.invoke_trace(state, **kwargs)
 
     def invoke_trace(self, state: Dict[str, Any], **kwargs: Any):
+        """Execute the graph with traced wrappers and capture the output node."""
         sidecar = self.new_run_sidecar()
         for key, value in state.items():
             sidecar.shadow_state[key] = value if isinstance(value, Node) else node(value, name=key)

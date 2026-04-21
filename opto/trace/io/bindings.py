@@ -75,6 +75,7 @@ def apply_updates(
     """
 
     def _normalize_key(k: Any) -> str:
+        """Coerce update keys into binding names used by the runtime."""
         if isinstance(k, str):
             s = k
         else:
