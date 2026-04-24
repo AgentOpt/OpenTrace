@@ -68,3 +68,20 @@ def test_modulecandidate_get_module_works_with_graphmodule():
     assert getattr(new_model.adapter, "_compiled_cache", {}) == {}
     out = new_model("What is CRISPR?")
     assert isinstance(out.data, str)
+
+
+def test_modulecandidate_prompt_update_changes_runtime_without_mutating_base_module():
+    model = make_searchable_model()
+    optimizer = DummyOptimizer(model.parameters())
+    prompt_param = next(p for p in model.parameters() if "answer_prompt" in p.name)
+    candidate = ModuleCandidate(
+        model,
+        update_dict={prompt_param: "Updated: {query}"},
+        optimizer=optimizer,
+    )
+
+    new_model = candidate.get_module()
+    out = new_model("What is CRISPR?")
+
+    assert out.data == "Updated: What is CRISPR?"
+    assert model.adapter.prompt_targets["answer_prompt"].data == "Base: {query}"

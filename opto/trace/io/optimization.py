@@ -104,6 +104,7 @@ class RunResult:
     feedback: str
     metrics: Dict[str, Any]
     otlp: Dict[str, Any]
+    artifacts: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -707,6 +708,9 @@ def _optimize_trace_graph(
                     feedback=er.feedback,
                     metrics=er.metrics,
                     otlp={},
+                    artifacts={
+                        "trace_record": sidecar.to_record() if sidecar is not None else None,
+                    },
                 )
             )
             output_nodes.append(output_node)

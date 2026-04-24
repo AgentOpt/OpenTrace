@@ -1,3 +1,7 @@
+import copy
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 langgraph = pytest.importorskip("langgraph.graph")
@@ -104,6 +108,91 @@ def test_bindings_are_auto_generated_and_transparent():
     assert adapter.graph_knobs["route_policy"].data == "alternate"
 
 
+def test_deepcopy_adapter_bindings_target_clone_state():
+    adapter = make_adapter()
+    clone = copy.deepcopy(adapter)
+
+    clone.bindings["planner_prompt"].set("Clone plan: {query}")
+    clone.bindings["route_policy"].set("review")
+
+    assert clone.prompt_targets["planner_prompt"].data == "Clone plan: {query}"
+    assert clone.graph_knobs["route_policy"].data == "review"
+    assert adapter.prompt_targets["planner_prompt"].data == "Plan: {query}"
+    assert adapter.graph_knobs["route_policy"].data == "direct"
+
+
+def test_deepcopy_adapter_runtime_uses_clone_prompt_targets():
+    adapter = make_adapter()
+    clone = copy.deepcopy(adapter)
+
+    clone.prompt_targets["planner_prompt"]._set("Clone plan: {query}")
+    clone.prompt_targets["synth_prompt"]._set("Clone answer: {query} :: {plan}")
+
+    result, sidecar = clone.invoke_trace({"query": "CRISPR"})
+
+    assert result["final_answer"] == "Clone answer: CRISPR :: Clone plan: CRISPR"
+    assert sidecar.output_node.data == result["final_answer"]
+    assert adapter.prompt_targets["planner_prompt"].data == "Plan: {query}"
+    assert adapter.prompt_targets["synth_prompt"].data == "Answer: {query} :: {plan}"
+
+
+def test_parallel_invoke_trace_keeps_sidecars_isolated():
+    planner_prompt = node("Plan: {query}", trainable=True, name="planner_prompt")
+    synth_prompt = node("Answer: {query} :: {plan}", trainable=True, name="synth_prompt")
+
+    def planner_node(state):
+        time.sleep(0.05)
+        query = _raw(state["query"])
+        return {
+            "query": query,
+            "plan": planner_prompt.data.replace("{query}", str(query)),
+        }
+
+    def synth_node(state):
+        time.sleep(0.05)
+        query = _raw(state["query"])
+        plan = _raw(state["plan"])
+        answer = synth_prompt.data.replace("{query}", str(query)).replace("{plan}", str(plan))
+        return {"final_answer": answer}
+
+    def build_graph(planner_node=planner_node, synth_node=synth_node, route_policy="direct"):
+        graph = StateGraph(dict)
+        graph.add_node("planner", planner_node)
+        graph.add_node("synth", synth_node)
+        graph.add_edge(START, "planner")
+        graph.add_edge("planner", "synth")
+        graph.add_edge("synth", END)
+        return graph
+
+    adapter = LangGraphAdapter(
+        backend="trace",
+        graph_factory=build_graph,
+        function_targets={"planner_node": planner_node, "synth_node": synth_node},
+        prompt_targets={"planner_prompt": planner_prompt, "synth_prompt": synth_prompt},
+        graph_knobs={"route_policy": "direct"},
+        input_key="query",
+        output_key="final_answer",
+    )
+
+    def run(query):
+        result, sidecar = adapter.invoke_trace({"query": query})
+        return {
+            "query": query,
+            "answer": result["final_answer"],
+            "shadow_query": _raw(sidecar.shadow_state["query"]),
+            "shadow_plan": _raw(sidecar.shadow_state["plan"]),
+        }
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        runs = list(executor.map(run, ["A", "B"]))
+
+    answers = {item["query"]: item["answer"] for item in runs}
+    assert answers["A"] == "Answer: A :: Plan: A"
+    assert answers["B"] == "Answer: B :: Plan: B"
+    assert {item["query"]: item["shadow_query"] for item in runs} == {"A": "A", "B": "B"}
+    assert {item["query"]: item["shadow_plan"] for item in runs} == {"A": "Plan: A", "B": "Plan: B"}
+
+
 def test_instrument_graph_accepts_adapter_in_trace_mode_and_optimize_graph_uses_sidecar():
     adapter = make_adapter()
     graph = instrument_graph(adapter=adapter, backend="trace", output_key="final_answer")
@@ -119,6 +208,7 @@ def test_instrument_graph_accepts_adapter_in_trace_mode_and_optimize_graph_uses_
     )
     assert result.best_iteration == 0
     assert result.best_score == 1.0
+    assert result.all_runs[0][0].artifacts["trace_record"]["output_node"] is not None
 
 
 def test_instrument_graph_accepts_graph_argument_when_it_is_a_graph_adapter():

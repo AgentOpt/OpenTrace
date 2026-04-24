@@ -68,6 +68,7 @@ class TestRunResult:
         )
         assert rr.answer == "hello"
         assert rr.score == 0.8
+        assert rr.artifacts == {}
 
 
 class TestOptimizationResult:
