@@ -1,4 +1,9 @@
-
+# Ensure the repo root is importable so `examples.trainers` resolves in CI,
+# where `examples/` is not an installed package and pytest's default prepend
+# import mode only adds the test file's parent directory to sys.path.
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from opto import trace
 from opto.trainer.loader import DataLoader
