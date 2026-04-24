@@ -1,8 +1,8 @@
 from opto import trace
-from opto.trainer.supporting_files.sampler import Sampler
+from opto.trainer.sampler import Sampler
 from opto.trainer.loader import DataLoader
 from opto.trainer.guide import Guide
-from opto.trainer.supporting_files.utils import is_node_copy
+from opto.trainer.utils import is_node_copy
 
 
 class Guide(Guide):

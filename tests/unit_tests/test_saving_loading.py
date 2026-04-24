@@ -2,7 +2,7 @@
 
 from opto import trace
 from opto.trainer.loader import DataLoader
-from opto.trainer.examples import BasicSearchAlgorithm
+from examples.trainers import BasicSearchAlgorithm
 from opto.optimizers import OptoPrimeV2
 from opto.trainer.guide import Guide as _Guide
 from opto.utils.llm import DummyLLM

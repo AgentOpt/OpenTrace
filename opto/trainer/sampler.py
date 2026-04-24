@@ -5,7 +5,7 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.trainer.utils import batch_run
 from opto.trainer.guide import Guide
-from opto.trainer.supporting_files.utils import deepcopy_module
+from opto.trainer.utils import deepcopy_module
 
 @dataclass
 class Rollout:

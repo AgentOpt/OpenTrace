@@ -1,6 +1,6 @@
 from opto import trace, trainer
 from opto.trainer.loader import DataLoader
-from opto.trainer.supporting_files.sampler import Sampler
+from opto.trainer.sampler import Sampler
 from opto.trainer.algorithms.priority_search import PrioritySearch as _PrioritySearch
 from opto.trainer.algorithms.priority_search import ModuleCandidate
 from opto.optimizers import OptoPrimeV2

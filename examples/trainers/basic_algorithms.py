@@ -4,7 +4,7 @@ from typing import Union
 from opto import trace
 from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
-from opto.trainer.utils import batch_run, async_run
+from opto.trainer.utils import batch_run, async_run, batchify
 from opto.optimizers.utils import print_color
 from opto.trainer.evaluators import evaluate, evaluate_vector, aggregate_vector_scores
 from opto.trainer.objectives import ObjectiveConfig, select_best, apply_minimize, weighted_scalarize
@@ -427,31 +427,6 @@ class Minibatch(Trainer):
         num_threads = num_threads or self.num_threads  # Use provided num_threads or fall back to self.num_threads
         raise NotImplementedError("Subclasses must implement this method")
 
-
-
-@trace.bundle()
-def batchify(*items):
-    """Concatenate multiple items into a formatted batch string.
-
-    Parameters
-    ----------
-    *items : Any
-        Variable number of items to concatenate into a batch.
-
-    Returns
-    -------
-    str
-        Formatted string with each item labeled by ID.
-
-    Notes
-    -----
-    This function is decorated with @trace.bundle() and creates a formatted
-    string where each item is prefixed with 'ID [i]:' for identification.
-    """
-    output = ''
-    for i, item in enumerate(items):
-        output += f'ID {[i]}: {item}\n'
-    return output
 
 
 class MinibatchAlgorithm(Minibatch):

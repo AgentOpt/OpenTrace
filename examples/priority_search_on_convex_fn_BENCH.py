@@ -10,7 +10,7 @@ from priority_search_on_convex_fn import Rosenbrock, SixHumpCamel, RewardGuide
 import numpy as np
 from opto import trace
 from opto.trainer.algorithms import PrioritySearch as SearchAlgorithm
-from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
+from examples.trainers.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
 from typing import Any
 from opto import trainer
 from typing import Tuple

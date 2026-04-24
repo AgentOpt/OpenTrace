@@ -10,7 +10,7 @@ import heapq
 from opto import trace
 from opto.trainer.guide import Guide
 from opto.trainer.objectives import ObjectiveConfig
-from opto.trainer.examples.beamsearch_algorithm import (
+from examples.trainers.beamsearch_algorithm import (
     BeamsearchAlgorithm,
     BeamsearchHistoryAlgorithm,
 )

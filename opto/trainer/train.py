@@ -252,7 +252,7 @@ def load_trainer_class(trainer: Union[Trainer, str]) -> Trainer:
             trainers_module = importlib.import_module("opto.trainer.algorithms")
             trainer_class = getattr(trainers_module, trainer)
         except AttributeError:
-            trainers_module = importlib.import_module("opto.trainer.examples")
+            trainers_module = importlib.import_module("examples.trainers")
             trainer_class = getattr(trainers_module, trainer)
     elif issubclass(trainer, Trainer):
         trainer_class = trainer

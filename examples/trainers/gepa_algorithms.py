@@ -17,10 +17,10 @@ import numpy as np
 
 from opto.optimizers.optoprime_v2 import OptoPrimeV2
 from opto.trace.nodes import ParameterNode
-from opto.trainer.examples.UCBsearch import UCBSearchAlgorithm
-from opto.trainer.examples.beamsearch_algorithm import BeamsearchAlgorithm
+from examples.trainers.UCBsearch import UCBSearchAlgorithm
+from examples.trainers.beamsearch_algorithm import BeamsearchAlgorithm
 from opto.trainer.algorithms.algorithm import Trainer as AlgorithmBase
-from opto.trainer.examples.basic_algorithms import (
+from examples.trainers.basic_algorithms import (
     evaluate,
     batchify,
     standard_optimization_step,

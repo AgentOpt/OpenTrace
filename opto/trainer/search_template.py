@@ -5,7 +5,7 @@ from opto.optimizers.optimizer import Optimizer
 from opto.trainer.loggers import BaseLogger
 from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
-from opto.trainer.supporting_files.sampler import Sampler, BatchRollout
+from opto.trainer.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 from opto.trainer.utils import safe_mean
 from dataclasses import dataclass
