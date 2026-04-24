@@ -1,6 +1,11 @@
 
-from opto.trainer.algorithms.priority_search import PrioritySearch
+import copy
+import heapq
 from typing import Union, Optional
+
+from opto.optimizers.utils import print_color
+from opto.trainer.algorithms.priority_search import PrioritySearch, ModuleCandidate
+from opto.trainer.utils import safe_mean
 
 # Below we define several algorithms that use the PrioritySearch class.
 
@@ -212,3 +217,159 @@ class BeamSearch(PrioritySearch):
                        default_score=default_score,
                        validate_proposals=validate_proposals,
                        memory_size=memory_size, **kwargs)
+
+class ParetobasedPS(PrioritySearch):
+    """GEPA-style Pareto-based exploration on top of the PrioritySearch pipeline.
+
+    Instead of popping the top candidates by a scalar priority (the default
+    PrioritySearch behavior), this algorithm selects exploration candidates
+    via the Pareto frontier of per-task scores:
+
+        1. For every training input x, find the candidate(s) with the highest
+           empirical mean score on x (the "best set" for x).
+        2. Collect all candidates that appear in at least one such best set.
+        3. Remove strictly dominated candidates: candidate ``a`` strictly
+           dominates ``b`` iff the set of tasks on which ``a`` is best is a
+           proper superset of the set of tasks on which ``b`` is best.
+        4. Return the remaining (Pareto-optimal) candidates, truncated to
+           ``num_candidates`` (sorted by overall mean score as a tie-breaker).
+
+    Notes
+    -----
+    * To compute per-task scores we need the original ``x`` of each rollout,
+      so ``compress_candidate_memory`` is overridden to keep ``x`` and
+      ``score`` (instead of only ``score`` / ``score_dict`` as in the base
+      class).
+    * Scalar priorities are still pushed into the priority queue by
+      ``update_memory`` (via ``compute_exploration_priority``), so exploit
+      still works. Only ``explore`` is replaced with the Pareto selection.
+    """
+
+    def compress_candidate_memory(self, candidate: ModuleCandidate) -> ModuleCandidate:
+        """Keep ``x`` and ``score`` per rollout. Needed because Pareto selection groups rollouts by task ``x``; the parent class would drop it."""
+        def _process_rollout(rollout):
+            for k in rollout:
+                if k not in ['x', 'score']:
+                    rollout[k] = None
+        candidate = copy.copy(candidate)
+        candidate.rollouts = copy.deepcopy(candidate.rollouts)
+        for rollout in candidate.rollouts:
+            _process_rollout(rollout)
+        return candidate
+
+    def compute_score_for_task_x(self, candidate: ModuleCandidate, x) -> float:
+        """Empirical mean score of ``candidate`` on task ``x`` (0 if unseen)."""
+        scores = [r['score'] for r in candidate.rollouts if r.get('x') == x]
+        return safe_mean(scores, missing_value=0)
+
+    def get_best_candidates_for_x(self, x, candidates):
+        """Return the subset of ``candidates`` with the max score on task ``x``."""
+        if not candidates:
+            return []
+        scores = [self.compute_score_for_task_x(c, x) for c in candidates]
+        highest = max(scores)
+        return [c for c, s in zip(candidates, scores) if s == highest]
+
+    def explore(self, verbose: bool = False, **kwargs):
+        """Select exploration candidates from the Pareto frontier.
+
+        Returns
+        -------
+        top_candidates : list[ModuleCandidate]
+            The Pareto-frontier candidates, truncated to ``self.num_candidates``.
+        priorities : list[float]
+            Priorities associated with the selected candidates (as stored in
+            the heap memory, for logging).
+        info_dict : dict
+            Logging info analogous to ``PrioritySearch.explore``.
+        """
+        print_color("Using Pareto-based exploration to explore the parameter space...", "green")
+
+        # Gather all candidates currently in memory.
+        all_candidates = [c for _, c in self.memory.memory]
+        if not all_candidates:
+            return [], [], {
+                'num_exploration_candidates': 0,
+                'exploration_candidates_mean_priority': None,
+                'exploration_candidates_mean_score': None,
+                'exploration_candidates_average_num_rollouts': None,
+            }
+
+        # Training inputs (deduplicated in a stable way).
+        raw_xs = list(self.train_sampler.dataset['inputs'])
+        seen, xs = set(), []
+        for x in raw_xs:
+            try:
+                key = x
+                if key in seen:
+                    continue
+                seen.add(key)
+            except TypeError:
+                # unhashable x: keep all occurrences; semantics unchanged
+                pass
+            xs.append(x)
+
+        # Best candidates per task.
+        best_for_x = {i: self.get_best_candidates_for_x(x, all_candidates)
+                      for i, x in enumerate(xs)}
+
+        # Candidates that are best on at least one task.
+        frontier_pool = list({id(c): c for cs in best_for_x.values() for c in cs}.values())
+
+        # Strict Pareto dominance on task-index sets.
+        def tasks_where_best(c):
+            return frozenset(i for i, cs in best_for_x.items() if c in cs)
+
+        tasks_of = {id(c): tasks_where_best(c) for c in frontier_pool}
+
+        non_dominated = []
+        for b in frontier_pool:
+            tb = tasks_of[id(b)]
+            dominated = False
+            for a in frontier_pool:
+                if a is b:
+                    continue
+                ta = tasks_of[id(a)]
+                # Strict superset: ta ⊋ tb  (a is best everywhere b is best, and strictly more)
+                if tb.issubset(ta) and ta != tb:
+                    dominated = True
+                    break
+            if not dominated:
+                non_dominated.append(b)
+
+        self.logger.log('Update/num_pareto_candidates',
+                        len(non_dominated), self.n_iters, color='green')
+        print_color(
+            f"Pareto frontier size: {len(non_dominated)} / {len(frontier_pool)} "
+            f"(taking up to {self.num_candidates} for exploration).", "green")
+
+        # Truncate to num_candidates (break ties by mean score, descending).
+        non_dominated.sort(
+            key=lambda c: c.mean_score() if c.mean_score() is not None else 0.0,
+            reverse=True,
+        )
+        top_candidates = non_dominated[:self.num_candidates]
+
+        # Remove selected candidates from the heap memory and re-heapify.
+        selected_ids = {id(c) for c in top_candidates}
+        priorities = []
+        items_to_remove = []
+        for neg_priority, candidate in self.memory.memory:
+            if id(candidate) in selected_ids:
+                priorities.append(-neg_priority)
+                items_to_remove.append((neg_priority, candidate))
+        for item in items_to_remove:
+            self.memory.memory.remove(item)
+        heapq.heapify(self.memory.memory)
+
+        mean_scores = [c.mean_score() for c in top_candidates]
+        mean_scores = [s for s in mean_scores if s is not None]
+        info_dict = {
+            'num_exploration_candidates': len(top_candidates),
+            'exploration_candidates_mean_priority': safe_mean(priorities),
+            'exploration_candidates_mean_score': safe_mean(mean_scores),
+            'exploration_candidates_average_num_rollouts':
+                safe_mean([c.num_rollouts for c in top_candidates]),
+        }
+        return top_candidates, priorities, info_dict
+
