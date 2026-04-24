@@ -83,8 +83,8 @@ That separation is what lets the system remain compatible with LangGraph while s
 ```mermaid
 flowchart TD
     U[User]
-    IG[instrument_graph(...)]
-    OG[optimize_graph(...)]
+    IG[instrument_graph]
+    OG[optimize_graph]
 
     subgraph FG[opto.features.graph]
       GA[GraphAdapter]
@@ -116,7 +116,7 @@ flowchart TD
       NODE[node / ParameterNode / MessageNode]
       MOD[Module]
       OPT[Optimizer]
-      TRAIN[train()]
+      TRAIN[train]
       PS[PrioritySearch]
       MC[ModuleCandidate]
     end

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import inspect
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
@@ -19,6 +20,28 @@ from opto.trace.nodes import Node, ParameterNode
 def _raw(value: Any) -> Any:
     """Return the underlying Python value for Trace nodes and wrappers."""
     return getattr(value, "data", value)
+
+
+def _otel_attr_value(value: Any, *, max_chars: int = 2_000) -> str:
+    """Serialize runtime values into bounded OTEL string attributes."""
+    value = _raw(value)
+    if isinstance(value, str):
+        out = value
+    elif isinstance(value, (int, float, bool)) or value is None:
+        out = str(value)
+    else:
+        try:
+            out = json.dumps(value, ensure_ascii=False, default=str)
+        except Exception:
+            out = repr(value)
+    if len(out) > max_chars:
+        return out[:max_chars] + "...[truncated]"
+    return out
+
+
+def _trainable_attr(value: Any, *, default: bool = True) -> bool:
+    """Best-effort trainability flag for ParameterNode-like values."""
+    return bool(getattr(value, "trainable", default))
 
 
 def _normalize_named_callables(
@@ -123,6 +146,31 @@ class GraphAdapter:
 
 
 @dataclass
+class _AdapterOTELRuntimeGraph:
+    """Invoke OTEL graphs through the adapter so knobs stay live per run."""
+
+    adapter: "LangGraphAdapter"
+
+    def _runtime_state(self, state: Any) -> Any:
+        """Inject current graph knobs into dict-like runtime state."""
+        if not isinstance(state, dict):
+            return state
+        runtime_state = dict(state)
+        runtime_state.update(self.adapter._knob_values())
+        return runtime_state
+
+    def invoke(self, state: Any, **kwargs: Any):
+        """Build or reuse the current OTEL graph and invoke it."""
+        graph = self.adapter.build_graph(backend="otel")
+        return graph.invoke(self._runtime_state(state), **kwargs)
+
+    def stream(self, state: Any, **kwargs: Any):
+        """Build or reuse the current OTEL graph and stream it."""
+        graph = self.adapter.build_graph(backend="otel")
+        yield from graph.stream(self._runtime_state(state), **kwargs)
+
+
+@dataclass
 class LangGraphAdapter(GraphAdapter):
     """Concrete adapter for LangGraph-style factories and scoped callables."""
 
@@ -162,6 +210,31 @@ class LangGraphAdapter(GraphAdapter):
         state["_active_sidecar"] = None
         state["_compiled_cache"] = {}
         return state
+
+    def instrument(self, backend: Optional[str] = None, **kwargs: Any):
+        """Wrap the adapter, keeping OTEL graph knobs live across invocations."""
+        effective_backend = backend or self.backend
+        if effective_backend != "otel":
+            return super().instrument(backend=backend, **kwargs)
+
+        from opto.trace.io.instrumentation import instrument_graph
+
+        service_name = kwargs.pop("service_name", self.service_name)
+        input_key = kwargs.pop("input_key", self.input_key)
+        output_key = kwargs.pop("output_key", self.output_key)
+
+        merged = self.bindings_dict()
+        merged.update(kwargs.pop("bindings", {}) or {})
+        runtime_graph = _AdapterOTELRuntimeGraph(self)
+        return instrument_graph(
+            graph=runtime_graph,
+            backend="otel",
+            bindings=merged,
+            service_name=service_name,
+            input_key=input_key,
+            output_key=output_key,
+            **kwargs,
+        )
 
     def _build_bindings(self) -> None:
         """Derive bindings for prompts, graph knobs, and traced code parameters."""
@@ -267,6 +340,105 @@ class LangGraphAdapter(GraphAdapter):
         _wrapped.__name__ = name
         return _wrapped
 
+    def _emit_otel_parameters(self, span: Any, *, node_name: str) -> None:
+        """Emit adapter parameters on a node-level OTEL span.
+
+        The converter looks for ``param.*`` attributes and their
+        ``.trainable`` flags. The binding layer later normalizes optimizer
+        keys like ``param.route_policy:0`` back to ``route_policy``.
+        """
+        for key, param in self.prompt_targets.items():
+            span.set_attribute(f"param.{key}", _otel_attr_value(param, max_chars=10_000))
+            span.set_attribute(f"param.{key}.trainable", _trainable_attr(param))
+
+        for key, param in self.graph_knobs.items():
+            span.set_attribute(f"param.{key}", _otel_attr_value(param, max_chars=10_000))
+            span.set_attribute(f"param.{key}.trainable", _trainable_attr(param))
+            span.set_attribute(f"graph.knob.{key}", _otel_attr_value(param))
+
+        traced_fn = self._traced_functions.get(node_name)
+        code_param = getattr(traced_fn, "parameter", None)
+        if code_param is not None:
+            span.set_attribute(f"param.__code_{node_name}", _otel_attr_value(code_param, max_chars=50_000))
+            span.set_attribute(f"param.__code_{node_name}.trainable", _trainable_attr(code_param))
+
+    def _emit_otel_inputs(self, span: Any, state: Any, *args: Any, **kwargs: Any) -> None:
+        """Emit bounded input/state previews for graph reconstruction."""
+        if isinstance(state, Mapping):
+            for key, value in state.items():
+                span.set_attribute(f"inputs.{key}", _otel_attr_value(value))
+        else:
+            span.set_attribute("inputs.state", _otel_attr_value(state))
+        if args:
+            span.set_attribute("inputs.args", _otel_attr_value(args))
+        for key, value in kwargs.items():
+            span.set_attribute(f"inputs.kwargs.{key}", _otel_attr_value(value))
+
+    def _resolve_otel_runtime_fn(
+        self,
+        name: str,
+        fallback_fn: Callable[..., Any],
+    ) -> Callable[..., Any]:
+        """Resolve the live callable used by OTEL execution.
+
+        OTEL optimization updates land on adapter bindings, including
+        ``__code_*`` entries backed by ``FunModule.parameter``. To make those
+        updates affect runtime behavior, OTEL execution must consult the
+        traced wrapper's dynamic ``.fun`` property at call time instead of the
+        original function object captured when the graph was built.
+        """
+        traced_fn = self._traced_functions.get(name)
+        if isinstance(traced_fn, FunModule):
+            return traced_fn.fun
+        runtime_fn = getattr(traced_fn, "fun", None)
+        if callable(runtime_fn):
+            return runtime_fn
+        return fallback_fn
+
+    def _otel_runtime_wrapper(self, name: str, fn: Callable[..., Any]):
+        """Wrap a graph function with an OTEL node span.
+
+        ``InstrumentedGraph`` creates the root invocation span and activates a
+        ``TelemetrySession``. This wrapper emits the per-node spans that the
+        old LangGraph+OTEL prototype emitted manually inside each node.
+        """
+        def _wrapped(state: Any, *args: Any, **kwargs: Any) -> Any:
+            try:
+                from opto.trace.io.telemetry_session import TelemetrySession
+            except Exception:
+                return fn(state, *args, **kwargs)
+
+            session = TelemetrySession.current()
+            if session is None:
+                return fn(state, *args, **kwargs)
+
+            runtime_state = state
+            if isinstance(state, Mapping):
+                runtime_state = dict(state)
+                runtime_state.update(self._knob_values())
+
+            with session.tracer.start_as_current_span(name) as span:
+                span.set_attribute("message.id", name)
+                span.set_attribute("graph.node.name", name)
+                span.set_attribute("graph.backend", "otel")
+                self._emit_otel_inputs(span, runtime_state, *args, **kwargs)
+                self._emit_otel_parameters(span, node_name=name)
+
+                try:
+                    runtime_fn = self._resolve_otel_runtime_fn(name, fn)
+                    output = runtime_fn(runtime_state, *args, **kwargs)
+                except BaseException as exc:
+                    span.set_attribute("error", True)
+                    span.set_attribute("error.type", type(exc).__name__)
+                    span.set_attribute("error.message", str(exc))
+                    raise
+
+                span.set_attribute("outputs.preview", _otel_attr_value(output))
+                return output
+
+        _wrapped.__name__ = name
+        return _wrapped
+
     def build_graph(self, backend: Optional[str] = None):
         """Build, compile, and cache the graph for ``trace`` or ``otel`` execution."""
         effective_backend = backend or self.backend
@@ -280,7 +452,10 @@ class LangGraphAdapter(GraphAdapter):
                 for name, fn in self._traced_functions.items()
             }
         elif effective_backend == "otel":
-            fn_overrides = dict(self._original_functions)
+            fn_overrides = {
+                name: self._otel_runtime_wrapper(name, fn)
+                for name, fn in self._original_functions.items()
+            }
         else:
             raise ValueError(f"Unsupported backend: {effective_backend!r}")
 
