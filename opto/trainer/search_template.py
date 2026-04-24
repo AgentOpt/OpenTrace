@@ -3,9 +3,9 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.optimizers.optimizer import Optimizer
 from opto.trainer.loggers import BaseLogger
-from opto.trainer.algorithms.basic_algorithms import Trainer
+from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler, BatchRollout
+from opto.trainer.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 from opto.trainer.utils import safe_mean
 from dataclasses import dataclass

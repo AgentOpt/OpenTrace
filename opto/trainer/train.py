@@ -247,12 +247,12 @@ def load_logger(logger: Union[BaseLogger, str], **kwargs) -> BaseLogger:
 
 def load_trainer_class(trainer: Union[Trainer, str]) -> Trainer:
     if isinstance(trainer, str):
-        if trainer.lower() == 'PrioritySearch'.lower():
-            print('Warning: You are using PrioritySearch trainer, which is an experimental feature. Please report any issues you encounter.')
-            trainers_module = importlib.import_module("opto.features.priority_search")
-            trainer_class = getattr(trainers_module, trainer)
-        else:
+        # Try main algorithms first, then fall back to examples for legacy names
+        try:
             trainers_module = importlib.import_module("opto.trainer.algorithms")
+            trainer_class = getattr(trainers_module, trainer)
+        except AttributeError:
+            trainers_module = importlib.import_module("examples.trainers")
             trainer_class = getattr(trainers_module, trainer)
     elif issubclass(trainer, Trainer):
         trainer_class = trainer

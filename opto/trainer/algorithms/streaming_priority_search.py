@@ -1,8 +1,8 @@
 
 import numpy as np
 from typing import List
-from opto.features.priority_search.search_template import Samples, BatchRollout, save_train_config
-from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate
+from opto.trainer.search_template import Samples, BatchRollout, save_train_config
+from opto.trainer.algorithms.priority_search import PrioritySearch, ModuleCandidate
 
 
 

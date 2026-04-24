@@ -1,8 +1,8 @@
 from opto import trace, trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler
-from opto.features.priority_search.priority_search import PrioritySearch as _PrioritySearch
-from opto.features.priority_search.priority_search import ModuleCandidate
+from opto.trainer.sampler import Sampler
+from opto.trainer.algorithms.priority_search import PrioritySearch as _PrioritySearch
+from opto.trainer.algorithms.priority_search import ModuleCandidate
 from opto.optimizers import OptoPrimeV2
 from opto.trainer.guide import Guide
 from opto.utils.llm import DummyLLM

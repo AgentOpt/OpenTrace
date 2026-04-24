@@ -19,7 +19,7 @@ from opto.trace import model, bundle
 import opto.trace.operators as trace_ops
 import numpy as np
 from tqdm import tqdm
-from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, evaluate
+from examples.trainers.basic_algorithms import MinibatchAlgorithm, evaluate
 from opto.trainer.guide import Guide
 
 

@@ -1,10 +1,43 @@
-from opto.features.priority_search.priority_search import PrioritySearch, ModuleCandidate
-from opto.features.priority_search.module_regressor import RegressorTemplate
-from opto.features.priority_search.summarizer import Summarizer
+from opto.trainer.algorithms.priority_search import PrioritySearch, ModuleCandidate
+from opto.trainer.summarizer import Summarizer
 from typing import Union, List, Tuple, Dict, Any, Optional, Callable
 from opto.optimizers.utils import print_color
+from opto.trainer.utils import async_run
+from opto.utils.llm import embed
 import numpy as np
-from opto.features.priority_search.search_template import Samples
+from opto.trainer.search_template import Samples
+
+
+class _CandidateEmbedder:
+    """Adds an `embedding` attribute to ModuleCandidate objects via an embedding API."""
+
+    def __init__(self, embedding_model: str = "gemini/gemini-embedding-001"):
+        self.embedding_model = embedding_model
+
+    def _get_parameter_text(self, candidate):
+        assert hasattr(candidate, 'update_dict'), "ModuleCandidate must have an update_dict"
+        params_with_names = {k.py_name: v for k, v in candidate.update_dict.items()}
+        return str(params_with_names)
+
+    def _get_embedding(self, candidate, max_retries: int = 10, base_delay: float = 1.0):
+        parameter_text = self._get_parameter_text(candidate)
+        return embed(self.embedding_model, parameter_text,
+                     max_retries=max_retries, base_delay=base_delay)
+
+    def add_embeddings_to_candidates(self, candidates: List[ModuleCandidate], max_workers: int = 50):
+        """Attach embeddings to each candidate that doesn't already have one."""
+        candidates_needing_embeddings = [c for c in candidates if not hasattr(c, "embedding")]
+        if not candidates_needing_embeddings:
+            return
+        embedding_functions = [lambda c=candidate: self._get_embedding(c)
+                               for candidate in candidates_needing_embeddings]
+        new_embeddings = async_run(
+            embedding_functions,
+            max_workers=max_workers,
+            description=f"Generating embeddings for {len(candidates_needing_embeddings)} candidates",
+        )
+        for candidate, embedding in zip(candidates_needing_embeddings, new_embeddings):
+            candidate.embedding = embedding
 
 
 def calculate_distance_to_memory(memory, new_candidate):
@@ -29,6 +62,7 @@ class POLCA(PrioritySearch):
     Args:
         epsilon: The epsilon value for the epsilon-net. 0 means no filtering, the same as vanilla PrioritySearch.
         use_summarizer: Whether to use a summarizer to summarize the memory and the exploration candidates.
+        embedding_model: The embedding model used to compute candidate embeddings for the epsilon-net.
         summarizer_model_name: The model name for the summarizer.
         *args: Additional arguments for the parent class.
         **kwargs: Additional keyword arguments for the parent class.
@@ -37,12 +71,13 @@ class POLCA(PrioritySearch):
                  epsilon: float = 0.1,
                  use_summarizer: bool = False,
                  context: str = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: ",
+                 embedding_model: str = "gemini/gemini-embedding-001",
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.epsilon = epsilon
         self.use_summarizer = use_summarizer
-        self.regressor = RegressorTemplate()
+        self.regressor = _CandidateEmbedder(embedding_model=embedding_model)
         self.summarizer = Summarizer()
         self.context = context
         
