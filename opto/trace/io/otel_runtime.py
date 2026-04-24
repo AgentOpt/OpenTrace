@@ -287,6 +287,83 @@ class TracingLLM:
             )
         return content
 
+    @staticmethod
+    def _content_from_parts(content: Any) -> Optional[str]:
+        """Best-effort extraction for multimodal/list-based content payloads."""
+        if isinstance(content, str):
+            return content
+        if not isinstance(content, list):
+            return None
+
+        parts: List[str] = []
+        for item in content:
+            if isinstance(item, str):
+                if item.strip():
+                    parts.append(item)
+                continue
+            if not isinstance(item, Mapping):
+                continue
+
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text)
+                continue
+            if isinstance(text, Mapping):
+                value = text.get("value")
+                if isinstance(value, str) and value.strip():
+                    parts.append(value)
+                    continue
+
+            if item.get("type") in ("text", "output_text"):
+                value = item.get("value")
+                if isinstance(value, str) and value.strip():
+                    parts.append(value)
+
+        joined = "\n".join(p.strip() for p in parts if p and str(p).strip()).strip()
+        return joined or None
+
+    @classmethod
+    def _extract_response_content(cls, resp: Any) -> str:
+        """Extract assistant text from OpenAI-compatible or dict-like responses."""
+        if resp is None:
+            raise LLMCallError("LLM returned no response object")
+
+        if isinstance(resp, str):
+            return cls._validate_content(resp)
+
+        choices = getattr(resp, "choices", None)
+        if choices is None and isinstance(resp, Mapping):
+            choices = resp.get("choices")
+
+        if choices:
+            first = choices[0]
+
+            message = getattr(first, "message", None)
+            if message is None and isinstance(first, Mapping):
+                message = first.get("message")
+
+            content = None
+            if message is not None:
+                content = getattr(message, "content", None)
+                if content is None and isinstance(message, Mapping):
+                    content = message.get("content")
+
+            if content is None:
+                content = getattr(first, "text", None)
+                if content is None and isinstance(first, Mapping):
+                    content = first.get("text")
+
+            extracted = cls._content_from_parts(content)
+            return cls._validate_content(extracted)
+
+        output_text = getattr(resp, "output_text", None)
+        if output_text is None and isinstance(resp, Mapping):
+            output_text = resp.get("output_text")
+        if isinstance(output_text, str):
+            return cls._validate_content(output_text)
+
+        raise LLMCallError("LLM response missing choices/content")
+
     # ---- public API ------------------------------------------------------
 
     def node_call(
@@ -351,8 +428,7 @@ class TracingLLM:
 
                         try:
                             resp = self.llm(messages=messages, **llm_kwargs)
-                            content = resp.choices[0].message.content
-                            content = self._validate_content(content)
+                            content = self._extract_response_content(resp)
                         except LLMCallError as e:
                             llm_sp.set_attribute("error", "true")
                             llm_sp.set_attribute("error.type", "LLMCallError")
@@ -369,8 +445,7 @@ class TracingLLM:
                         )
                 else:
                     resp = self.llm(messages=messages, **llm_kwargs)
-                    content = resp.choices[0].message.content
-                    content = self._validate_content(content)
+                    content = self._extract_response_content(resp)
             except LLMCallError as e:
                 sp.set_attribute("error", "true")
                 sp.set_attribute("error.type", "LLMCallError")

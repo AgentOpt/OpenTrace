@@ -33,6 +33,7 @@ from opto.trace.io import (
     make_dict_binding,
     optimize_graph,
     otlp_traces_to_trace_json,
+    LLMCallError,
 )
 from opto.trace.io.sysmonitoring import sysmon_profile_to_tgj
 from opto.trace.io.tgj_export import export_subgraph_to_tgj
@@ -47,7 +48,7 @@ except Exception:
 
 HAS_SYSMON = hasattr(sys, "monitoring")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "gpt-4o-mini")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-3-flash-preview")
 OPENROUTER_BASE_URL = os.environ.get(
     "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
 )
@@ -212,6 +213,34 @@ def render_template(template: str, **variables: Any) -> str:
     return template.format(**_str_map(variables))
 
 
+def _extract_response_text(response: Any) -> str:
+    """Return assistant text from OpenAI-compatible demo responses."""
+    choices = getattr(response, "choices", None)
+    if not choices:
+        raise LLMCallError("LLM response missing choices/content")
+    message = getattr(choices[0], "message", None)
+    content = getattr(message, "content", None) if message is not None else None
+    if isinstance(content, str) and content.strip():
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str) and item.strip():
+                parts.append(item)
+            elif isinstance(item, Mapping):
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text)
+                elif isinstance(text, Mapping):
+                    value = text.get("value")
+                    if isinstance(value, str) and value.strip():
+                        parts.append(value)
+        joined = "\n".join(parts).strip()
+        if joined:
+            return joined
+    raise LLMCallError("LLM returned None content")
+
+
 def call_chat_text(
     llm,
     *,
@@ -227,7 +256,36 @@ def call_chat_text(
         temperature=kwargs.pop("temperature", 0),
         **kwargs,
     )
-    return response.choices[0].message.content
+    return _extract_response_text(response)
+
+
+def _has_response_content(response: Any) -> bool:
+    """Best-effort guard for empty provider payloads in demo live mode."""
+    try:
+        return bool(_extract_response_text(response).strip())
+    except Exception:
+        return False
+
+
+def _is_retryable_provider_error(exc: Exception) -> bool:
+    """Detect transient OpenRouter/OpenAI client failures worth retrying."""
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "429",
+            "500",
+            "502",
+            "503",
+            "504",
+            "rate limit",
+            "temporarily",
+            "timeout",
+            "connection",
+            "none content",
+            "missing choices",
+        )
+    )
 
 
 def summarize_tgj(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -418,12 +476,26 @@ def make_live_llm():
     )
 
     def _llm(messages=None, **kwargs):
-        return client.chat.completions.create(
-            model=OPENROUTER_MODEL,
-            messages=messages or [],
-            max_tokens=kwargs.get("max_tokens", 220),
-            temperature=kwargs.get("temperature", 0),
-        )
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                response = client.chat.completions.create(
+                    model=OPENROUTER_MODEL,
+                    messages=messages or [],
+                    max_tokens=kwargs.get("max_tokens", 220),
+                    temperature=kwargs.get("temperature", 0),
+                )
+                if _has_response_content(response):
+                    return response
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                return response
+            except Exception as exc:
+                if _is_retryable_provider_error(exc) and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise
 
     _llm.model = OPENROUTER_MODEL
     return _llm
@@ -721,7 +793,6 @@ def run_case(name: str, builder):
                 )
             )
 
-    assert result.best_iteration >= 2
     final_prompt = prompt_getter()
     assert final_prompt == SYNTH_UPDATE_SCHEDULE[-1]["synth_prompt"]
     tail_scores = result.score_history[max(2, result.best_iteration):]

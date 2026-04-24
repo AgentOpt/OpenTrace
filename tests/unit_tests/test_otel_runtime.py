@@ -1,6 +1,7 @@
 import pytest
 
 from opto.trace.io.otel_runtime import (
+    LLMCallError,
     init_otel_runtime,
     TracingLLM,
     flush_otlp,
@@ -32,6 +33,24 @@ class FakeLLM:
     def __call__(self, messages=None, **kwargs):
         self.calls.append({"messages": messages, "kwargs": kwargs})
         return FakeLLM._Response(self.content)
+
+
+class DictLikeLLM:
+    """LLM stub that returns dict-shaped OpenAI-compatible payloads."""
+
+    def __init__(self, content):
+        self.content = content
+
+    def __call__(self, messages=None, **kwargs):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": self.content,
+                    }
+                }
+            ]
+        }
 
 
 def _attrs_to_dict(attrs):
@@ -215,3 +234,50 @@ def test_template_prompt_call_records_raw_template_and_rendered_prompt():
     assert attrs["inputs.gen_ai.prompt"] == "Plan for: What is CRISPR?"
     assert attrs["inputs.query"] == "What is CRISPR?"
     assert attrs["inputs.user_query"] == "What is CRISPR?"
+
+
+def test_tracing_llm_extracts_dict_like_response_content():
+    tracer, _exporter = init_otel_runtime("test-dict-like")
+    tllm = TracingLLM(
+        llm=DictLikeLLM("ANSWER FROM DICT"),
+        tracer=tracer,
+        emit_llm_child_span=False,
+    )
+    result = tllm.node_call(
+        span_name="planner",
+        messages=[{"role": "user", "content": "hello"}],
+    )
+    assert result == "ANSWER FROM DICT"
+
+
+def test_tracing_llm_extracts_list_based_message_content():
+    tracer, _exporter = init_otel_runtime("test-list-content")
+    tllm = TracingLLM(
+        llm=DictLikeLLM([{"type": "text", "text": "part one"}, {"type": "output_text", "text": {"value": "part two"}}]),
+        tracer=tracer,
+        emit_llm_child_span=False,
+    )
+    result = tllm.node_call(
+        span_name="planner",
+        messages=[{"role": "user", "content": "hello"}],
+    )
+    assert result == "part one\npart two"
+
+
+def test_tracing_llm_raises_clear_error_on_missing_choices():
+    tracer, _exporter = init_otel_runtime("test-missing-choices")
+
+    class MissingChoicesLLM:
+        def __call__(self, messages=None, **kwargs):
+            return {"id": "resp-without-choices"}
+
+    tllm = TracingLLM(
+        llm=MissingChoicesLLM(),
+        tracer=tracer,
+        emit_llm_child_span=False,
+    )
+    with pytest.raises(LLMCallError, match="missing choices/content"):
+        tllm.node_call(
+            span_name="planner",
+            messages=[{"role": "user", "content": "hello"}],
+        )
