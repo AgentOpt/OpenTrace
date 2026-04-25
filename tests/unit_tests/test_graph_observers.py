@@ -8,10 +8,16 @@ END = langgraph.END
 
 from opto.trace import node
 from opto.trace.io import instrument_graph, TraceGraph, InstrumentedGraph
+from opto.trace.io.sysmonitoring import sysmon_profile_to_tgj
+from opto.trace.io.tgj_ingest import ingest_tgj
 
 
 def _raw(x):
     return getattr(x, "data", x)
+
+
+def _base_name(value):
+    return str(value).split("/")[-1].split(":")[0]
 
 
 def _make_trace_graph():
@@ -90,6 +96,34 @@ def test_trace_backend_accepts_sysmon_observer():
     art = graph._last_observer_artifacts[0]
     assert art.carrier == "sysmon"
     assert art.profile_doc["version"] == "trace-json/1.0+sysmon"
+
+
+def test_trace_backend_sysmon_observer_uses_binding_consumers_for_prompt_edges():
+    if not hasattr(sys, "monitoring"):
+        pytest.skip("sys.monitoring unavailable")
+    build_graph, scope = _make_trace_graph()
+    graph = instrument_graph(
+        backend="trace",
+        observe_with=("sysmon",),
+        graph_factory=build_graph,
+        scope=scope,
+        graph_agents_functions=["planner_node", "synth_node"],
+        graph_prompts_list=[scope["planner_prompt"], scope["synth_prompt"]],
+        binding_consumers={
+            "planner_prompt": ["planner_node"],
+            "synth_prompt": ["synth_node"],
+        },
+        output_key="final_answer",
+    )
+    out = graph.invoke({"query": "What is CRISPR?"})
+    assert "final_answer" in out
+    art = graph._last_observer_artifacts[0]
+    tgj = sysmon_profile_to_tgj(art.profile_doc, run_id="r", graph_id="g", scope="demo/0")
+    mp = ingest_tgj(tgj)
+    planner_parent_names = {_base_name(getattr(parent, "name", "")) for parent in mp["planner_node"].parents}
+    synth_parent_names = {_base_name(getattr(parent, "name", "")) for parent in mp["synth_node"].parents}
+    assert "planner_prompt" in planner_parent_names
+    assert "synth_prompt" in synth_parent_names
 
 
 def test_trace_backend_accepts_otel_and_sysmon_observers():

@@ -55,6 +55,8 @@ class OTelObserver:
         """Create an observer backed by its own or a shared telemetry session."""
         self.session = session or TelemetrySession(service_name=service_name)
         self._ctx = None
+        self._bindings: Dict[str, Any] = {}
+        self._meta: Dict[str, Any] = {}
 
     def start(
         self,
@@ -63,6 +65,8 @@ class OTelObserver:
         meta: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Activate the telemetry session before the primary graph run starts."""
+        self._bindings = dict(bindings or {})
+        self._meta = dict(meta or {})
         self._ctx = self.session.activate()
         self._ctx.__enter__()
 
@@ -74,6 +78,16 @@ class OTelObserver:
     ) -> ObserverArtifact:
         """Flush OTLP artifacts and close the activation context."""
         try:
+            if not self.session.exporter.get_finished_spans():
+                consumers = self._meta.get("binding_consumers") or {}
+                for name in self._meta.get("semantic_names") or ["observer"]:
+                    with self.session.tracer.start_as_current_span(str(name)) as span:
+                        span.set_attribute("message.id", str(name))
+                        for key, binding in self._bindings.items():
+                            if consumers and str(name) not in consumers.get(key, []):
+                                continue
+                            span.set_attribute(f"param.{key}", str(binding.get()))
+                            span.set_attribute(f"param.{key}.trainable", "true")
             otlp = self.session.flush_otlp(clear=True)
         finally:
             if self._ctx is not None:

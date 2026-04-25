@@ -245,12 +245,12 @@ def _select_output_node(nodes: dict) -> Any:
 
 def _batchify_items(*items: Any) -> Any:
     """Build a batched Trace node payload without importing trainer packages."""
-    from opto.trace import node
+    from opto.trace.nodes import MessageNode, node
 
     output = ""
     for i, item in enumerate(items):
         output += f"ID {[i]}: {item}\n"
-    return node(output, name="batch_output")
+    return MessageNode(output, inputs={f"in_{i}": item for i, item in enumerate(items) if hasattr(item, "parents")}, description="[batch] batch output", name="batch_output")
 
 
 # ---------------------------------------------------------------------------
@@ -791,11 +791,13 @@ def _optimize_sysmon_graph(
     best_updates: Dict[str, Any] = {}
     best_parameters = _snapshot_parameters_from_bindings(effective_bindings)
     optimizer_instance = optimizer
+    last_applied_updates: Dict[str, Any] = {}
 
     for iteration in range(iterations + 1):
         docs = []
         runs: List[RunResult] = []
         update_dict: Dict[str, Any] = {}
+        applied_updates_for_iteration = dict(last_applied_updates)
 
         for qi, query in enumerate(queries):
             state = query if isinstance(query, dict) else {graph.input_key: query}
@@ -845,6 +847,7 @@ def _optimize_sysmon_graph(
             best_score = avg_score
             best_iteration = iteration
             best_parameters = _snapshot_parameters_from_bindings(effective_bindings)
+            best_updates = dict(applied_updates_for_iteration) if iteration > 0 else {}
 
         if iteration > 0:
             output_node = _select_output_node(nodes)
@@ -863,9 +866,7 @@ def _optimize_sysmon_graph(
                         if name:
                             update_dict[str(name)] = value
                 if update_dict and apply_updates_flag:
-                    applied = apply_updates(update_dict, effective_bindings, strict=False)
-                    if avg_score >= best_score:
-                        best_updates = dict(applied)
+                    last_applied_updates = apply_updates(update_dict, effective_bindings, strict=False)
 
         if on_iteration:
             on_iteration(iteration, runs, update_dict)

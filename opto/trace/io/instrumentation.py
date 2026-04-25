@@ -200,6 +200,7 @@ def instrument_graph(
     llm_span_name: str = "llm.chat.completion",
     input_key: str = "query",
     output_key: Optional[str] = None,
+    binding_consumers: Optional[Dict[str, List[str]]] = None,
 ) -> Any:
     """Wrap a LangGraph with automatic OTEL instrumentation.
 
@@ -254,6 +255,10 @@ def instrument_graph(
             str(name).split(".")[-1] for name in (graph_agents_functions or [])
         ]
     }
+    if binding_consumers:
+        observer_meta["binding_consumers"] = {
+            key: list(values) for key, values in binding_consumers.items()
+        }
 
     if adapter is not None:
         if GraphAdapter is not None and not isinstance(adapter, GraphAdapter):
@@ -322,6 +327,7 @@ def instrument_graph(
             output_key=output_key,
         )
         out.observers = _make_observers(observe_with, service_name=service_name)
+        out.observer_meta = dict(observer_meta)
         return out
 
     if backend == "sysmon":

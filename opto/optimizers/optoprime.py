@@ -814,9 +814,9 @@ class OptoPrime(Optimizer):
             if node_name in sugg:
                 return node_name
 
-            norm = re.sub(r":(?=\d+$)", "", node_name)
+            norm = re.sub(r"\d+$", "", re.sub(r":(?=\d+$)", "", node_name).split("/")[-1])
             for k in sugg:
-                if re.sub(r":(?=\d+$)", "", k) == norm:
+                if re.sub(r"\d+$", "", re.sub(r":(?=\d+$)", "", k).split("/")[-1]) == norm:
                     return k
             return None
 

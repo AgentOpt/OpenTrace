@@ -40,6 +40,7 @@ class SysMonitoringSession:
         self._events: List[SysMonEvent] = []
         self._tls = threading.local()
         self._bindings_snapshot: Dict[str, Dict[str, Any]] = {}
+        self._meta: Dict[str, Any] = {}
 
     def _claim_tool_id(self) -> int:
         """Claim a valid sys.monitoring tool id.
@@ -76,6 +77,7 @@ class SysMonitoringSession:
             k: {"value": b.get(), "kind": b.kind, "trainable": True}
             for k, b in (bindings or {}).items()
         }
+        self._meta = dict(meta or {})
         semantic_names = set((meta or {}).get("semantic_names") or ())
 
         def _safe_preview(value: Any) -> str:
@@ -164,6 +166,7 @@ class SysMonitoringSession:
             "version": "trace-json/1.0+sysmon",
             "agent": {"id": self.service_name},
             "bindings": self._bindings_snapshot,
+            "meta": dict(self._meta),
             "events": [
                 {
                     "id": ev.id,
@@ -222,6 +225,7 @@ def sysmon_profile_to_tgj(
 ) -> Dict[str, Any]:
     """Convert a simple sys.monitoring profile document into TGJ 1.0."""
     nodes = {}
+    binding_consumers = (doc.get("meta") or {}).get("binding_consumers") or {}
 
     for pname, spec in (doc.get("bindings") or {}).items():
         nodes[f"param:{pname}"] = {
@@ -233,12 +237,29 @@ def sysmon_profile_to_tgj(
             "description": f"[{spec.get('kind', 'prompt')}]",
         }
 
-    for ev in doc.get("events", []):
+    events = sorted(
+        doc.get("events", []),
+        key=lambda ev: (
+            (ev.get("thread_id") is None),
+            ev.get("thread_id") or 0,
+            (ev.get("start_ns") is None),
+            ev.get("start_ns") or 0,
+        ),
+    )
+    prev_root_by_thread: Dict[int | None, str] = {}
+    consumer_nodes: Dict[str, List[str]] = {}
+
+    for ev in events:
         inputs = {}
-        if ev.get("parent_id"):
-            inputs["parent"] = {"ref": f"msg:{ev['parent_id']}"}
-        nodes[f"msg:{ev['id']}"] = {
-            "id": f"msg:{ev['id']}",
+        explicit_parent_id = ev.get("parent_id")
+        thread_id = ev.get("thread_id")
+        if explicit_parent_id:
+            inputs["parent"] = {"ref": f"msg:{explicit_parent_id}"}
+        elif thread_id in prev_root_by_thread:
+            inputs["parent"] = {"ref": f"msg:{prev_root_by_thread[thread_id]}"}
+        node_id = f"msg:{ev['id']}"
+        nodes[node_id] = {
+            "id": node_id,
             "kind": "message",
             "name": ev["name"],
             "description": f"[sysmon] {ev['file']}:{ev['lineno']}",
@@ -254,6 +275,20 @@ def sysmon_profile_to_tgj(
                 }
             },
         }
+        consumer_nodes.setdefault(ev["name"], []).append(node_id)
+        if not explicit_parent_id:
+            prev_root_by_thread[thread_id] = ev["id"]
+
+    for pname, consumers in binding_consumers.items():
+        p_id = f"param:{pname}"
+        if p_id not in nodes:
+            continue
+        for consumer_name in consumers:
+            for node_id in consumer_nodes.get(consumer_name, []):
+                nodes[node_id].setdefault("inputs", {}).setdefault(
+                    f"param_{pname}",
+                    {"ref": p_id},
+                )
 
     return {
         "tgj": "1.0",

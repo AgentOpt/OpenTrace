@@ -39,6 +39,7 @@ from opto.trace.io.sysmonitoring import sysmon_profile_to_tgj
 from opto.trace.io.tgj_export import export_subgraph_to_tgj
 from opto.trace.io.tgj_ingest import ingest_tgj
 from opto.trace.nodes import MessageNode, ParameterNode
+from opto.utils.llm import LLM
 
 try:
     from openai import OpenAI
@@ -52,11 +53,19 @@ OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-3-flash-pre
 OPENROUTER_BASE_URL = os.environ.get(
     "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
 )
-ITERATIONS = 5
+ITERATIONS = int(os.environ.get("COMPARE_OBSERVERS_ITERATIONS", "5"))
 QUERIES = [
     "What is CRISPR?",
     "How does CRISPR enable gene editing?",
 ]
+_QUERY_LIMIT = os.environ.get("COMPARE_OBSERVERS_QUERY_LIMIT")
+if _QUERY_LIMIT:
+    QUERIES = QUERIES[: max(1, int(_QUERY_LIMIT))]
+_CASE_FILTER = tuple(
+    part.strip()
+    for part in os.environ.get("COMPARE_OBSERVERS_CASES", "").split(",")
+    if part.strip()
+)
 SYNTH_UPDATE_SCHEDULE = [
     {
         "synth_prompt": (
@@ -77,6 +86,10 @@ SYNTH_SYSTEM_PROMPT = "You are a careful scientific assistant."
 DEFAULT_TEMPLATES = {
     "planner_prompt": "Create a short plan for: {query}",
     "synth_prompt": "Answer briefly and factually: {query}\nPlan: {plan}",
+}
+PROMPT_CONSUMERS = {
+    "planner_prompt": ["planner_node"],
+    "synth_prompt": ["synth_node"],
 }
 SEMANTIC_NAMES = ("planner_node", "synth_node")
 STOPWORDS = {
@@ -145,10 +158,67 @@ def _str_map(values: Mapping[str, Any]) -> Dict[str, str]:
 
 
 def _node_records(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [record for _node_id, record in _node_items(doc)]
+
+
+def _node_items(doc: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+    """Return TGJ nodes as ``(node_id, record)`` pairs, preserving dict keys.
+
+    OTEL-derived TGJ docs store node identities in the ``nodes`` mapping keys,
+    while some other carriers inline ``id`` directly in each record. The
+    notebook renderer needs the stable node id in both cases.
+    """
     raw_nodes = doc.get("nodes") or {}
     if isinstance(raw_nodes, dict):
-        return list(raw_nodes.values())
-    return list(raw_nodes)
+        items = []
+        for node_id, record in raw_nodes.items():
+            enriched = dict(record)
+            enriched.setdefault("id", str(node_id))
+            items.append((str(node_id), enriched))
+        return items
+
+    items = []
+    for idx, record in enumerate(raw_nodes):
+        enriched = dict(record)
+        node_id = str(enriched.get("id") or f"node_{idx}")
+        enriched.setdefault("id", node_id)
+        items.append((node_id, enriched))
+    return items
+
+
+def _spans_from_otlp(otlp: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Flatten all spans across every OTLP resource/scope block."""
+    spans: List[Dict[str, Any]] = []
+    for resource in otlp.get("resourceSpans", []):
+        for scope in resource.get("scopeSpans", []):
+            spans.extend(scope.get("spans", []))
+    return spans
+
+
+def _merge_tgj_docs(docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Merge multiple TGJ docs into one node-preserving document."""
+    if not docs:
+        return {"version": "trace-json/1.0+otel", "nodes": {}, "context": {}}
+
+    merged = dict(docs[0])
+    merged_nodes: Dict[str, Dict[str, Any]] = {}
+    for doc in docs:
+        for node_id, record in _node_items(doc):
+            merged_nodes[node_id] = record
+    merged["nodes"] = merged_nodes
+    return merged
+
+
+def _edge_count(doc: Dict[str, Any]) -> int:
+    records = _node_items(doc)
+    known_ids = {node_id for node_id, _record in records}
+    count = 0
+    for _child_id, record in records:
+        for ref in (record.get("inputs") or {}).values():
+            parent_id = ref.get("ref") if isinstance(ref, dict) else ref
+            if parent_id is not None and str(parent_id) in known_ids:
+                count += 1
+    return count
 
 
 def _unique_nodes(nodes: Dict[str, Any], cls: type) -> List[Any]:
@@ -342,11 +412,7 @@ def _make_otel_view(
     config: str,
     origin: str,
 ) -> Dict[str, Any]:
-    spans = (
-        otlp.get("resourceSpans", [{}])[0]
-        .get("scopeSpans", [{}])[0]
-        .get("spans", [])
-    )
+    spans = _spans_from_otlp(otlp)
     param_keys = sorted(
         {
             attr["key"]
@@ -360,7 +426,7 @@ def _make_otel_view(
         agent_id_hint=config,
         use_temporal_hierarchy=True,
     )
-    doc = docs[0] if docs else {"tgj": "1.0", "nodes": {}}
+    doc = _merge_tgj_docs(list(docs))
     summary = summarize_tgj(doc)
     summary["span_count"] = len(spans)
     summary["span_names"] = [span.get("name") for span in spans]
@@ -401,44 +467,50 @@ def tgj_to_digraph(doc: Dict[str, Any], *, title: str):
     except Exception:
         return None
 
-    records = _node_records(doc)
-    known_ids = {str(record.get("id")) for record in records}
+    records = _node_items(doc)
+    known_ids = {node_id for node_id, _record in records}
+    dot_ids = {node_id: f"node_{idx}" for idx, (node_id, _record) in enumerate(records)}
     graph = Digraph(comment=title)
     graph.attr(rankdir="LR")
 
-    for record in records:
-        node_id = str(record.get("id"))
-        kind = str(record.get("kind", "value"))
+    for node_id, record in records:
+        kind = str(record.get("kind", "value")).lower()
         name = str(record.get("name", node_id))
         if kind == "parameter":
-            preview = record.get("value", "")
+            preview = record.get("value", record.get("data", ""))
             fill = "khaki1"
-        elif kind == "message":
+            kind_label = "parameter"
+        elif kind in {"message", "msg"}:
             preview = (record.get("output") or {}).get("value", "")
+            if preview in (None, ""):
+                preview = record.get("value", record.get("data", ""))
             fill = "lightblue"
+            kind_label = "message"
         elif kind == "exception":
             preview = (record.get("error") or {}).get("message", "")
             fill = "mistyrose"
+            kind_label = "exception"
         else:
-            preview = record.get("value", "")
+            preview = record.get("value", record.get("data", ""))
             fill = "white"
-        label = f"{name}\\n[{kind}]"
+            kind_label = kind
+        label = f"{name}\\n[{kind_label}]"
         if preview not in (None, ""):
             label += f"\\n{_truncate(preview, 80)}"
         graph.node(
-            node_id,
+            dot_ids[node_id],
             label=label,
             shape="box",
             style="rounded,filled",
             fillcolor=fill,
+            tooltip=node_id,
         )
 
-    for record in records:
-        child_id = str(record.get("id"))
+    for child_id, record in records:
         for ref in (record.get("inputs") or {}).values():
             parent_id = ref.get("ref") if isinstance(ref, dict) else ref
             if parent_id is not None and str(parent_id) in known_ids:
-                graph.edge(str(parent_id), child_id)
+                graph.edge(dot_ids[str(parent_id)], dot_ids[child_id])
 
     return graph
 
@@ -464,6 +536,21 @@ class DictUpdateOptimizer:
             return update
         self.calls += 1
         return {}
+
+
+def _optimizer_model_name() -> str:
+    model = os.environ.get("OPENROUTER_MODEL", OPENROUTER_MODEL or "google/gemini-3-flash-preview")
+    if model == "gemini-3-flash-preview":
+        model = "google/gemini-3-flash-preview"
+    if not model.startswith("openrouter/"):
+        model = f"openrouter/{model}"
+    return model
+
+
+def _comparison_optimizer_kwargs() -> Dict[str, Any] | None:
+    if not os.environ.get("OPENROUTER_API_KEY", OPENROUTER_API_KEY):
+        return None
+    return {"llm": LLM(backend="LiteLLM", model=_optimizer_model_name())}
 
 
 def make_live_llm():
@@ -574,11 +661,11 @@ def make_trace_case(llm, observe_with: Tuple[str, ...] = ()):
             user_prompt=prompt,
             temperature=0,
         )
-        return {"query": query, "plan": plan}
+        return {"query": query, "plan": MessageNode(plan, inputs={"prompt": planner_prompt}, description="[llm] planner", name="planner_answer")}
 
     def synth_node(state):
         query = str(_raw(state["query"]))
-        plan = str(_raw(state["plan"]))
+        plan_node = state["plan"]; plan = str(_raw(plan_node))
         prompt = render_template(synth_prompt.data, query=query, plan=plan)
         answer = call_chat_text(
             llm,
@@ -586,7 +673,7 @@ def make_trace_case(llm, observe_with: Tuple[str, ...] = ()):
             user_prompt=prompt,
             temperature=0,
         )
-        return {"final_answer": node(answer, name="final_answer_node")}
+        return {"final_answer": MessageNode(answer, inputs={"prompt": synth_prompt, "plan": node(plan_node)}, description="[llm] synth", name="final_answer_node")}
 
     scope.update(
         {
@@ -614,10 +701,11 @@ def make_trace_case(llm, observe_with: Tuple[str, ...] = ()):
         scope=scope,
         graph_agents_functions=list(SEMANTIC_NAMES),
         graph_prompts_list=[planner_prompt, synth_prompt],
+        binding_consumers=PROMPT_CONSUMERS,
         train_graph_agents_functions=False,
         output_key="final_answer",
     )
-    optimizer = DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
+    optimizer = None if os.environ.get("OPENROUTER_API_KEY", OPENROUTER_API_KEY) else DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
     return instrumented, optimizer, lambda: synth_prompt.data
 
 
@@ -627,6 +715,7 @@ def make_otel_case(llm, observe_with: Tuple[str, ...] = ()):
         backend="otel",
         observe_with=observe_with,
         graph_agents_functions=list(SEMANTIC_NAMES),
+        binding_consumers=PROMPT_CONSUMERS,
         llm=llm,
         initial_templates=dict(DEFAULT_TEMPLATES),
         output_key="final_answer",
@@ -663,7 +752,7 @@ def make_otel_case(llm, observe_with: Tuple[str, ...] = ()):
             synth_call=synth_call,
         )
     )
-    optimizer = DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
+    optimizer = None if os.environ.get("OPENROUTER_API_KEY", OPENROUTER_API_KEY) else DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
     return instrumented, optimizer, lambda: instrumented.templates["synth_prompt"]
 
 
@@ -699,9 +788,10 @@ def make_sysmon_case(llm):
         backend="sysmon",
         bindings=bindings,
         graph_agents_functions=list(SEMANTIC_NAMES),
+        binding_consumers=PROMPT_CONSUMERS,
         output_key="final_answer",
     )
-    optimizer = DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
+    optimizer = None if os.environ.get("OPENROUTER_API_KEY", OPENROUTER_API_KEY) else DictUpdateOptimizer(SYNTH_UPDATE_SCHEDULE)
     return instrumented, optimizer, lambda: templates["synth_prompt"]
 
 
@@ -723,6 +813,8 @@ def build_cases(llm):
                 ("sysmon", lambda: make_sysmon_case(llm)),
             ]
         )
+    if _CASE_FILTER:
+        cases = [case for case in cases if case[0] in _CASE_FILTER]
     return cases
 
 
@@ -734,6 +826,7 @@ def run_case(name: str, builder):
         queries=QUERIES,
         iterations=ITERATIONS,
         optimizer=optimizer,
+        optimizer_kwargs=_comparison_optimizer_kwargs(),
         eval_fn=eval_fn,
         output_key="final_answer",
     )
@@ -753,7 +846,7 @@ def run_case(name: str, builder):
     if backend == "trace":
         views.append(
             _make_trace_view(
-                [probe, *list(getattr(instrumented, "parameters", []))],
+                [probe, answer_value, *list(getattr(instrumented, "parameters", []))],
                 config=name,
                 origin="backend",
             )
@@ -794,8 +887,9 @@ def run_case(name: str, builder):
             )
 
     final_prompt = prompt_getter()
-    assert final_prompt == SYNTH_UPDATE_SCHEDULE[-1]["synth_prompt"]
+    assert bool(final_prompt) if optimizer is None else final_prompt == SYNTH_UPDATE_SCHEDULE[-1]["synth_prompt"]
     tail_scores = result.score_history[max(2, result.best_iteration):]
+    primary_summary = views[0]["summary"] if views else {}
 
     return {
         "config": name,
@@ -809,7 +903,9 @@ def run_case(name: str, builder):
             statistics.pstdev(tail_scores) if len(tail_scores) > 1 else 0.0,
             3,
         ),
-        "best_updates": dict(result.best_updates),
+        "node_count": int(primary_summary.get("node_count", 0)),
+        "edge_count": _edge_count(views[0]["doc"]) if views else 0,
+        "best_updates": {(_base_name(key) or str(key).split("/")[-1].split(":")[0]): value for key, value in result.best_updates.items()},
         "final_synth_prompt": final_prompt,
         "final_answer": answer_text,
         "answer_preview": _truncate(answer_text, 180),
@@ -857,15 +953,15 @@ def print_cli_report(rows: List[Dict[str, Any]]) -> None:
     print(f"\nOptimization comparison ({ITERATIONS} iterations)\n")
     print(
         "| config | runtime_s | baseline | best | gain | best_iteration | stability_std | "
-        "score_history | semantic_messages | params |"
+        "node_count | edge_count | score_history | semantic_messages | params |"
     )
-    print("|---|---:|---:|---:|---:|---:|---:|---|---|---|")
+    print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|")
     for row in rows:
         primary = row["views"][0]["summary"] if row["views"] else {}
         print(
             f"| {row['config']} | {row['runtime_s']:.3f} | {row['baseline_score']:.3f} "
             f"| {row['best_score']:.3f} | {row['score_gain']:.3f} | {row['best_iteration']} "
-            f"| {row['stability_std']:.3f} | {row['score_history']} "
+            f"| {row['stability_std']:.3f} | {row['node_count']} | {row['edge_count']} | {row['score_history']} "
             f"| {primary.get('semantic_messages', [])} | {primary.get('param_names', [])} |"
         )
 
@@ -909,16 +1005,20 @@ def display_notebook_report(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return rows
 
     lines = [
-        "| config | runtime_s | baseline | best | gain | best_iteration | stability_std | score_history |",
-        "|---|---:|---:|---:|---:|---:|---:|---|",
+        "| config | runtime_s | baseline | best | gain | best_iteration | stability_std | node_count | edge_count | score_history |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
         lines.append(
             f"| {row['config']} | {row['runtime_s']:.3f} | {row['baseline_score']:.3f} "
             f"| {row['best_score']:.3f} | {row['score_gain']:.3f} | {row['best_iteration']} "
-            f"| {row['stability_std']:.3f} | {row['score_history']} |"
+            f"| {row['stability_std']:.3f} | {row['node_count']} | {row['edge_count']} | {row['score_history']} |"
         )
-    display(Markdown("## Optimization comparison\n\n" + "\n".join(lines)))
+    note = (
+        "_Topology metrics remain useful even when score trajectories match, "
+        "for example under the fixed offline prompt schedule._"
+    )
+    display(Markdown("## Optimization comparison\n\n" + note + "\n\n" + "\n".join(lines)))
 
     for row in rows:
         display(
@@ -932,6 +1032,8 @@ def display_notebook_report(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                         f"- Score gain: `{row['score_gain']:.3f}`",
                         f"- Best iteration: `{row['best_iteration']}`",
                         f"- Post-update stability std: `{row['stability_std']:.3f}`",
+                        f"- Node count: `{row['node_count']}`",
+                        f"- Edge count: `{row['edge_count']}`",
                         f"- Score history: `{row['score_history']}`",
                         f"- Best updates: `{list(row['best_updates'].keys())}`",
                         "",
