@@ -146,6 +146,16 @@ def _base_name(value: Any) -> str:
     return name.split("/")[-1].split(":")[0]
 
 
+def _param_name(value: Any) -> str:
+    if name := _base_name(value):
+        return name
+    text = str(value).split("/")[-1]
+    if ":" in text:
+        left, right = text.rsplit(":", 1)
+        text = left if right.isdigit() else right
+    return text.removeprefix("param_")
+
+
 def _semantic_alias(name: str) -> str | None:
     suffix = name.split(".")[-1]
     if suffix in SEMANTIC_NAMES:
@@ -888,6 +898,15 @@ def run_case(name: str, builder):
 
     final_prompt = prompt_getter()
     assert bool(final_prompt) if optimizer is None else final_prompt == SYNTH_UPDATE_SCHEDULE[-1]["synth_prompt"]
+    best_parameters = {
+        _param_name(key): value for key, value in result.best_parameters.items()
+    }
+    best_updates = {
+        _param_name(key): value for key, value in result.best_updates.items()
+    }
+    best_synth_prompt = str(
+        _raw(best_parameters.get("synth_prompt", DEFAULT_TEMPLATES["synth_prompt"]))
+    )
     tail_scores = result.score_history[max(2, result.best_iteration):]
     primary_summary = views[0]["summary"] if views else {}
 
@@ -905,7 +924,9 @@ def run_case(name: str, builder):
         ),
         "node_count": int(primary_summary.get("node_count", 0)),
         "edge_count": _edge_count(views[0]["doc"]) if views else 0,
-        "best_updates": {(_base_name(key) or str(key).split("/")[-1].split(":")[0]): value for key, value in result.best_updates.items()},
+        "best_update_keys": list(best_updates.keys()),
+        "best_updates": best_updates,
+        "best_synth_prompt": best_synth_prompt,
         "final_synth_prompt": final_prompt,
         "final_answer": answer_text,
         "answer_preview": _truncate(answer_text, 180),
@@ -974,8 +995,9 @@ def print_cli_report(rows: List[Dict[str, Any]]) -> None:
         print(f"score_gain: {row['score_gain']:.3f}")
         print(f"stability_std: {row['stability_std']:.3f}")
         print(f"score_history: {row['score_history']}")
-        print(f"best_updates: {row['best_updates']}")
-        print(f"final_synth_prompt: {row['final_synth_prompt']}")
+        print(f"best_update_keys: {row['best_update_keys']}")
+        print(f"best_synth_prompt: {row['best_synth_prompt']}")
+        print(f"final_attempted_synth_prompt: {row['final_synth_prompt']}")
         print(f"final_answer: {row['answer_preview']}")
         for view in row["views"]:
             summary = view["summary"]
@@ -1035,9 +1057,13 @@ def display_notebook_report(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                         f"- Node count: `{row['node_count']}`",
                         f"- Edge count: `{row['edge_count']}`",
                         f"- Score history: `{row['score_history']}`",
-                        f"- Best updates: `{list(row['best_updates'].keys())}`",
+                        f"- Best update keys: `{row['best_update_keys']}`",
                         "",
-                        "### Final synth prompt",
+                        "### Best-scoring synth prompt",
+                        "```text",
+                        str(row["best_synth_prompt"]),
+                        "```",
+                        "### Final attempted synth prompt",
                         "```text",
                         str(row["final_synth_prompt"]),
                         "```",
