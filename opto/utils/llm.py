@@ -369,7 +369,7 @@ class LiteLLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True, max_retries=10, base_delay=1.0,
+                 cache=True, max_retries=1, base_delay=1.0,
                  mm_beta: bool = False, **default_params) -> None:
         if model is None:
             model = os.environ.get('TRACE_LITELLM_MODEL')
@@ -392,7 +392,7 @@ class LiteLLM(AbstractModel):
 
     @classmethod
     def _factory(cls, model_name: str, default_params: dict, mm_beta: bool,
-                 max_retries=10, base_delay=1.0):
+                 max_retries=1, base_delay=1.0):
         import litellm
         
         # For Azure models, set global litellm variables as a fallback
@@ -634,18 +634,21 @@ class GoogleGenAILLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True, mm_beta: bool = False, **default_params) -> None:
+                 cache=True, mm_beta: bool = False, max_retries: int = 1,
+                 base_delay: float = 1.0, **default_params) -> None:
         if model is None:
             model = os.environ.get('TRACE_GOOGLE_GENAI_MODEL', 'gemini-2.5-flash')
         
         self.model_name = model
         self.cache = cache
         self.default_params = default_params  # Store default generation parameters
-        factory = lambda: self._factory(self.model_name, self.default_params)
+        factory = lambda: self._factory(self.model_name, self.default_params,
+                                        max_retries=max_retries, base_delay=base_delay)
         super().__init__(factory, reset_freq, mm_beta=mm_beta, model_name=model)
 
     @classmethod
-    def _factory(cls, model_name: str, default_params: dict):
+    def _factory(cls, model_name: str, default_params: dict,
+                 max_retries: int = 1, base_delay: float = 1.0):
         """Create a Google GenAI client wrapper using the Interactions API."""
         # Get API key from environment variable
         api_key = os.environ.get('GEMINI_API_KEY')
@@ -683,8 +686,8 @@ class GoogleGenAILLM(AbstractModel):
             
             return lambda *args, **kwargs: retry_with_exponential_backoff(
                 lambda: image_api_func(*args, **{**default_params, **kwargs}),
-                max_retries=5,
-                base_delay=1,
+                max_retries=max_retries,
+                base_delay=base_delay,
                 operation_name=f"{model_name}_image_gen"
             )
 
@@ -707,17 +710,46 @@ class GoogleGenAILLM(AbstractModel):
             contents = kwargs.pop('contents', None)
             
             if messages:
-                # Extract system message if present and not explicitly overridden
-                if messages and messages[0].get('role') == 'system':
+                # Detect format: OpenAI-style has 'content' key, Gemini-native has 'parts' key.
+                # If OpenAI-style, convert via _gemini_messages_to_contents so the SDK accepts it.
+                first_non_system = next(
+                    (m for m in messages if m.get('role') != 'system'), None
+                )
+                is_openai_format = (
+                    first_non_system is not None and
+                    'content' in first_non_system and
+                    'parts' not in first_non_system
+                )
+                if is_openai_format:
+                    converted, extracted_sys = _gemini_messages_to_contents(messages)
                     if system_instruction is None:
-                        system_instruction = messages[0].get('content')
-                    # Remove system message from contents
-                    contents = messages[1:]
+                        system_instruction = extracted_sys
+                    contents = converted
                 else:
-                    contents = messages
-            
-            # Use contents if provided, otherwise use positional args
-            contents_to_use = contents if contents is not None else (args[0] if args else None)
+                    # Already in Gemini native format (from history.to_gemini_format())
+                    if messages[0].get('role') == 'system':
+                        if system_instruction is None:
+                            system_instruction = messages[0].get('content')
+                        contents = messages[1:]
+                    else:
+                        contents = messages
+
+            # Use contents if provided, otherwise use positional args.
+            # If a positional arg is a list of OpenAI-format dicts, convert it.
+            if contents is None and args:
+                raw = args[0]
+                if (
+                    isinstance(raw, list) and raw and
+                    isinstance(raw[0], dict) and
+                    'content' in raw[0] and 'parts' not in raw[0]
+                ):
+                    converted, extracted_sys = _gemini_messages_to_contents(raw)
+                    if system_instruction is None:
+                        system_instruction = extracted_sys
+                    contents = converted
+                else:
+                    contents = raw
+            contents_to_use = contents
             
             # Map max_tokens to max_output_tokens for Google GenAI
             if 'max_tokens' in kwargs:
@@ -747,8 +779,8 @@ class GoogleGenAILLM(AbstractModel):
             
         return lambda *args, **kwargs: retry_with_exponential_backoff(
             lambda: api_func(model_name, *args, **{**default_params, **kwargs}),
-            max_retries=5,
-            base_delay=1,
+            max_retries=max_retries,
+            base_delay=base_delay,
             operation_name=f"{model_name}"
         )
 
@@ -762,12 +794,242 @@ class GoogleGenAILLM(AbstractModel):
         """
         return lambda *args, **kwargs: self._model(model=self.model_name, *args, **kwargs)
 
+# ---------------------------------------------------------------------------
+# Helpers for GeminiRESTLLM – lightweight wrappers so AssistantTurn can parse
+# the raw REST JSON the same way it parses google-genai SDK responses.
+# ---------------------------------------------------------------------------
+
+class _GREPart:
+    """Wraps a single part dict from the Gemini REST response."""
+    def __init__(self, data: dict):
+        if 'text' in data:
+            self.text = data['text']
+        if 'inlineData' in data:
+            # Expose inline data (e.g. generated images) as inline_data attribute
+            raw = data['inlineData']
+            class _Blob:
+                def __init__(self, mime_type, b64data):
+                    self.mime_type = mime_type
+                    # Decode base64 so downstream code gets raw bytes
+                    import base64 as _b64
+                    self.data = _b64.b64decode(b64data) if b64data else b''
+            self.inline_data = _Blob(raw.get('mimeType', ''), raw.get('data', ''))
+
+
+class _GREContent:
+    def __init__(self, data: dict):
+        self.role = data.get('role', 'model')
+        self.parts = [_GREPart(p) for p in data.get('parts', [])]
+
+
+class _GRECandidate:
+    def __init__(self, data: dict):
+        self.content = _GREContent(data.get('content', {}))
+        self.finish_reason = data.get('finishReason')
+
+
+class _GREUsageMetadata:
+    def __init__(self, data: dict):
+        self.prompt_token_count = data.get('promptTokenCount')
+        self.candidates_token_count = data.get('candidatesTokenCount')
+
+
+class _GeminiRESTResponse:
+    """Wraps the raw Gemini REST JSON into attribute-based access so that
+    AssistantTurn.from_google_genai() can parse it without modification."""
+
+    def __init__(self, json_data: dict):
+        self.candidates = [_GRECandidate(c) for c in json_data.get('candidates', [])]
+        self.usage_metadata = _GREUsageMetadata(json_data.get('usageMetadata', {}))
+        self.model_version = json_data.get('modelVersion')
+
+
+def _gemini_messages_to_contents(messages):
+    """Convert a standard messages list to Gemini REST API ``contents`` format.
+
+    Returns (contents, system_instruction) where system_instruction is a str
+    extracted from any ``role="system"`` message, or None.
+    """
+    contents = []
+    system_instruction = None
+
+    for msg in messages:
+        role = msg.get('role', 'user')
+        content = msg.get('content', '')
+
+        if role == 'system':
+            if isinstance(content, list):
+                texts = [
+                    item['text'] for item in content
+                    if isinstance(item, dict) and item.get('type') == 'text'
+                ]
+                system_instruction = '\n'.join(texts)
+            else:
+                system_instruction = str(content)
+            continue
+
+        gemini_role = 'model' if role == 'assistant' else 'user'
+
+        if isinstance(content, str):
+            parts = [{'text': content}]
+        elif isinstance(content, list):
+            parts = [
+                {'text': item['text']}
+                for item in content
+                if isinstance(item, dict) and item.get('type') == 'text'
+            ]
+            if not parts:
+                parts = [{'text': str(content)}]
+        else:
+            parts = [{'text': str(content)}]
+
+        contents.append({'role': gemini_role, 'parts': parts})
+
+    return contents, system_instruction
+
+
+class GeminiRESTLLM(AbstractModel):
+    """LLM backend that calls the Gemini REST API directly via HTTP (no SDK).
+
+    This is functionally equivalent to::
+
+        curl "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}" \\
+            -H 'Content-Type: application/json' -X POST -d '{...}'
+
+    Use this when the ``google-genai`` Python SDK has issues on a server but the
+    raw REST endpoint is reachable (e.g. proxy/SSL differences between ``curl``
+    and Python's ``httpx``).
+
+    Environment variables
+    ---------------------
+    GEMINI_API_KEY
+        Your Google AI API key (required).
+    TRACE_GEMINI_REST_MODEL
+        Default model name (default: ``gemini-2.5-flash``).
+    GEMINI_REST_BASE_URL
+        Override the API base URL (default:
+        ``https://generativelanguage.googleapis.com/v1beta``).
+
+    Usage
+    -----
+    ::
+
+        # Explicit backend
+        llm = LLM(backend="GeminiREST", model="gemini-2.5-flash")
+        response = llm(messages=[{"role": "user", "content": "Hello"}])
+
+        # Or construct directly
+        from opto.utils.llm import GeminiRESTLLM
+        llm = GeminiRESTLLM(model="gemini-2.5-flash")
+        response = llm(messages=[{"role": "user", "content": "Hello"}])
+        print(response.get_text())  # mm_beta=True (default) -> AssistantTurn
+    """
+
+    def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
+                 cache=True, mm_beta: bool = False, **default_params) -> None:
+        if model is None:
+            model = os.environ.get('TRACE_GEMINI_REST_MODEL', 'gemini-2.5-flash')
+
+        self.model_name = model
+        self.cache = cache
+        self.default_params = default_params
+        factory = lambda: self._factory(self.model_name, self.default_params)
+        super().__init__(factory, reset_freq, mm_beta=mm_beta, model_name=model)
+
+    @classmethod
+    def _factory(cls, model_name: str, default_params: dict):
+        """Return a callable that sends a POST to the Gemini generateContent endpoint."""
+        import requests as _requests
+
+        def api_func(*args, **kwargs):
+            api_key = os.environ.get('GEMINI_API_KEY', '')
+            base_url = os.environ.get(
+                'GEMINI_REST_BASE_URL',
+                'https://generativelanguage.googleapis.com/v1beta'
+            )
+
+            body: dict = {}
+
+            # --- system instruction ---
+            system_instruction = kwargs.pop('system_instruction', None)
+
+            # --- messages / contents ---
+            messages = kwargs.pop('messages', None)
+            contents = kwargs.pop('contents', None)
+
+            if messages is not None:
+                contents, extracted_sys = _gemini_messages_to_contents(messages)
+                if system_instruction is None:
+                    system_instruction = extracted_sys
+            elif args:
+                raw = args[0]
+                if isinstance(raw, str):
+                    contents = [{'role': 'user', 'parts': [{'text': raw}]}]
+                else:
+                    contents = raw
+
+            if contents is not None:
+                body['contents'] = contents
+
+            if system_instruction:
+                body['systemInstruction'] = {'parts': [{'text': system_instruction}]}
+
+            # --- generationConfig from merged default_params + call-time kwargs ---
+            _snake_to_camel = {
+                'max_tokens': 'maxOutputTokens',
+                'top_p': 'topP',
+                'top_k': 'topK',
+                'stop_sequences': 'stopSequences',
+                'candidate_count': 'candidateCount',
+                'presence_penalty': 'presencePenalty',
+                'frequency_penalty': 'frequencyPenalty',
+                'response_mime_type': 'responseMimeType',
+            }
+            _valid_gen_config = {
+                'temperature', 'maxOutputTokens', 'topP', 'topK',
+                'stopSequences', 'candidateCount', 'presencePenalty',
+                'frequencyPenalty', 'responseMimeType',
+            }
+            gen_config = {}
+            for k, v in {**default_params, **kwargs}.items():
+                camel_k = _snake_to_camel.get(k, k)
+                if camel_k in _valid_gen_config:
+                    gen_config[camel_k] = v
+            if gen_config:
+                body['generationConfig'] = gen_config
+
+            # --- HTTP call ---
+            url = f"{base_url}/models/{model_name}:generateContent"
+            params = {'key': api_key} if api_key else {}
+            resp = _requests.post(
+                url,
+                params=params,
+                json=body,
+                headers={'Content-Type': 'application/json'},
+                timeout=120,
+            )
+            resp.raise_for_status()
+            return _GeminiRESTResponse(resp.json())
+
+        return lambda *args, **kwargs: retry_with_exponential_backoff(
+            lambda: api_func(*args, **kwargs),
+            max_retries=1,
+            base_delay=1,
+            operation_name=f"GeminiREST_{model_name}",
+        )
+
+    @property
+    def model(self):
+        return lambda *args, **kwargs: self._model(*args, **kwargs)
+
+
 # Registry of available backends
 _LLM_REGISTRY = {
     "LiteLLM": LiteLLM,
     "AutoGen": AutoGenLLM,
     "CustomLLM": CustomLLM,
     "GoogleGenAI": GoogleGenAILLM,
+    "GeminiREST": GeminiRESTLLM,
 }
 
 class LLMFactory:
@@ -898,16 +1160,18 @@ class LLMFactory:
         if model is not None:
             backend = kwargs.pop('backend', None)
             
-            # Determine backend with priority: Gemini models > explicit backend > default
-            if model.startswith('gemini'):
-                # Gemini models use GoogleGenAILLM backend (highest priority)
+            # Determine backend with priority:
+            # 1. Explicit backend kwarg (always wins) 
+            # 2. Gemini model name  -> GoogleGenAI
+            # 3. Default            -> LiteLLM
+            if backend is not None:
+                backend_cls = _LLM_REGISTRY[backend]
+            elif model.startswith('gemini'):
+                # Gemini models default to GoogleGenAILLM backend
                 backend_cls = _LLM_REGISTRY['GoogleGenAI']
                 # Strip 'gemini/' prefix if present (LiteLLM format: gemini/gemini-pro)
                 if model.startswith('gemini/'):
                     model = model[len('gemini/'):]
-            elif backend is not None:
-                # Explicit backend specified
-                backend_cls = _LLM_REGISTRY[backend]
             else:
                 # Default to LiteLLM for other models
                 backend_cls = _LLM_REGISTRY['LiteLLM']

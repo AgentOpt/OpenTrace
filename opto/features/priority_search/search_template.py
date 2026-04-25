@@ -71,7 +71,12 @@ def check_optimizer_parameters(optimizer: Optimizer, agent: trace.Module):
 
 def save_train_config(function):
     """ Decorator to save the inputs of a class method. """
-    def wrapper(self, **kwargs):
+    def wrapper(self, *args, **kwargs):
+        # Support positional callers: train(guide, train_dataset, ...)
+        if len(args) >= 1:
+            kwargs["guide"] = args[0]
+        if len(args) >= 2:
+            kwargs["train_dataset"] = args[1]
         _kwargs = kwargs.copy()
         del _kwargs['train_dataset']  # remove train_dataset from the saved kwargs
         if _kwargs.get('validate_dataset') is not None:

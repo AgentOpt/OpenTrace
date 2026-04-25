@@ -607,4 +607,9 @@ def call_llm(llm, system_prompt: str, *user_prompts, **kwargs) -> str:
         messages.append({"role": "user", "content": user_prompt})
     # TODO auto-parsing results
     response = llm(messages=messages, **kwargs)
+    # Handle both response formats:
+    # - AssistantTurn (returned by GoogleGenAILLM / mm_beta=True path)
+    # - OpenAI completion response (returned by LiteLLM mm_beta=False path)
+    if hasattr(response, "get_text"):
+        return response.get_text()
     return response.choices[0].message.content
