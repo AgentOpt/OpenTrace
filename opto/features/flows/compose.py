@@ -169,7 +169,10 @@ class TracedLLM:
 
         if llm is None:
             llm = LLM()
-        assert isinstance(llm, AbstractModel), f"{llm} must be an instance of AbstractModel"
+        if not isinstance(llm, AbstractModel) and not callable(llm):
+            raise TypeError(
+                f"{llm} must be an instance of AbstractModel or a callable"
+            )
         self.llm = llm
         self.chat_history = ChatHistory()
         self.chat_history_on = chat_history_on
