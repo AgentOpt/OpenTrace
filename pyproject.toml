@@ -20,11 +20,15 @@ classifiers = [
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3.13",
 ]
+telemetry = [
+    "opentelemetry-api>=1.38.0",
+    "opentelemetry-sdk>=1.38.0",
+    "langgraph>=1.0.7",
+]
 
 [project.optional-dependencies]
 autogen = ["autogen-agentchat==0.2.40"]
 test = ["datasets==3.6.0"]
-
 
 [project.urls]
 Homepage = "https://agentopt.github.io/Trace/"

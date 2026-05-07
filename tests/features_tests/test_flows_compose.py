@@ -76,3 +76,25 @@ def test_tracedllm_and_optoprimev2_prompt_with_mock_llm(mock_llm_globally):
     assert "Your response:" in part2
     print(part2)
 
+
+def test_tracedllm_accepts_callable_llm():
+    from opto.features.flows.compose import TracedLLM
+
+    class _Choice:
+        def __init__(self, content):
+            self.message = type("m", (), {"content": content})
+
+    def llm_callable(*args, **kwargs):
+        return type("r", (), {"choices": [_Choice("callable response")]})
+
+    traced_llm = TracedLLM(system_prompt="test", llm=llm_callable)
+    output = traced_llm("hello")
+    assert output.data == "callable response"
+
+
+def test_tracedllm_rejects_non_callable_non_abstract_model():
+    from opto.features.flows.compose import TracedLLM
+
+    with pytest.raises(TypeError, match="AbstractModel or a callable"):
+        TracedLLM(system_prompt="test", llm=object())
+
