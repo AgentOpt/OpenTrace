@@ -141,6 +141,10 @@ def _truncate(value: Any, limit: int = 140) -> str:
     return text[: limit - 3] + "..."
 
 
+def _table_text(value: Any, limit: int = 90) -> str:
+    return _truncate(value, limit).replace("|", "\\|").replace("\n", "<br>")
+
+
 def _base_name(value: Any) -> str:
     name = str(getattr(value, "name", getattr(value, "py_name", "")))
     return name.split("/")[-1].split(":")[0]
@@ -1040,7 +1044,25 @@ def display_notebook_report(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "_Topology metrics remain useful even when score trajectories match, "
         "for example under the fixed offline prompt schedule._"
     )
-    display(Markdown("## Optimization comparison\n\n" + note + "\n\n" + "\n".join(lines)))
+    prompt_lines = [
+        "| config | best_iteration | best update keys | best-scoring prompt | final attempted prompt |",
+        "|---|---:|---|---|---|",
+    ]
+    for row in rows:
+        prompt_lines.append(
+            f"| {row['config']} | {row['best_iteration']} | {row['best_update_keys']} "
+            f"| {_table_text(row['best_synth_prompt'])} | {_table_text(row['final_synth_prompt'])} |"
+        )
+    display(
+        Markdown(
+            "## Optimization comparison\n\n"
+            + note
+            + "\n\n"
+            + "\n".join(lines)
+            + "\n\n### Prompt selection\n\n"
+            + "\n".join(prompt_lines)
+        )
+    )
 
     for row in rows:
         display(
