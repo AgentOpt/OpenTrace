@@ -1,5 +1,6 @@
 from opto.optimizers.optoprime import OptoPrime as OptoPrimeV1
 from opto.optimizers.optoprimemulti import OptoPrimeMulti
+from opto.optimizers.optoprimemulti_v2 import OptoPrimeMultiV2
 from opto.optimizers.opro import OPRO
 from opto.optimizers.opro_v2 import OPROv2
 from opto.optimizers.textgrad import TextGrad
@@ -7,4 +8,4 @@ from opto.optimizers.optoprime_v2 import OptoPrimeV2
 
 OptoPrime = OptoPrimeV1
 
-__all__ = ["OPRO", "OptoPrime", "OptoPrimeMulti", "TextGrad", "OptoPrimeV2", "OptoPrimeV1", "OPROv2"]
+__all__ = ["OPRO", "OptoPrime", "OptoPrimeMulti", "OptoPrimeMultiV2", "TextGrad", "OptoPrimeV2", "OptoPrimeV1", "OPROv2"]
