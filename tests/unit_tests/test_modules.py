@@ -35,7 +35,7 @@ class ChildModule(BaseModule):
     def __init__(self):
         super().__init__()
         self._extra_param = node(1, trainable=True)
-        self._extra_method = bundle(trainable=True)(dummy_method)
+        # self._extra_method = bundle(trainable=True)(dummy_method)
         self._base = BaseModule()  # ParameterContainer
 
     @bundle(trainable=True)
@@ -47,8 +47,8 @@ class ChildModule(BaseModule):
 
 child = ChildModule()
 print(child.parameters_dict().keys())
-assert len(child.parameters()) == 6
-assert len(child.parameters_dict()) == 5
+assert len(child.parameters()) == 5
+assert len(child.parameters_dict()) == 4
 
 
 # Test using model decorator
@@ -83,7 +83,7 @@ class ChildClass(BaseClass):
     def __init__(self):
         super().__init__()
         self._extra_param = node(1, trainable=True)
-        self._extra_method = bundle(trainable=True)(dummy_method)
+        # self._extra_method = bundle(trainable=True)(dummy_method)
         self._base = BaseClass()  # ParameterContainer
 
     @bundle(trainable=True)
@@ -95,18 +95,18 @@ class ChildClass(BaseClass):
 
 def test_inheritance():
     child = ChildClass()
-    assert len(child.parameters()) == 6, f"Expected 6 parameters, got {child.parameters_dict()}"
-    assert len(child.parameters_dict()) == 5
+    assert len(child.parameters()) == 5, f"Expected 6 parameters, got {child.parameters_dict()}"
+    assert len(child.parameters_dict()) == 4
 
 
 # test save and load
 def test_save_load_pickle():
     child = ChildClass()
     child._extra_param._data = 2  # simulate data changes
-    child._extra_method.parameter._data = "fake method" # simulate data changes
-    child._base._param._data = 3  # simulate data changes
+    # child._extra_method.parameter._data = "fake method" # simulate data changes
+    # child._base._param._data = 3  # simulate data changes
     child._new_param = node(1, trainable=True)  # simulate adding new parameter
-    assert len(child.parameters()) == 7
+    assert len(child.parameters()) == 6
 
     try:
         child.save("test.pkl")

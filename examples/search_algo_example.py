@@ -13,9 +13,9 @@ from opto import trace
 from opto.optimizers import OptoPrime
 from opto.optimizers.utils import print_color
 from opto.trace.modules import Module
-from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, BasicSearchAlgorithm
-from opto.trainer.algorithms.beamsearch_algorithm import BeamsearchAlgorithm, BeamsearchHistoryAlgorithm
-from opto.trainer.algorithms.UCBsearch import UCBSearchAlgorithm
+from examples.trainers.basic_algorithms import MinibatchAlgorithm, BasicSearchAlgorithm
+from examples.trainers.beamsearch_algorithm import BeamsearchAlgorithm, BeamsearchHistoryAlgorithm
+from examples.trainers.UCBsearch import UCBSearchAlgorithm
 from opto.trainer.guide import Guide
 from opto.trainer.loggers import DefaultLogger
 from opto.utils.llm import LLM

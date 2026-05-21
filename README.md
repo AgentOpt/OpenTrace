@@ -32,7 +32,7 @@ Or for development, clone the repo and run the following.
 
     pip install -e .
 
-The library requires Python >= 3.9. By default (starting with v0.1.3.5), we use [LiteLLM](https://github.com/BerriAI/litellm) as the backend of LLMs. For backward compatibility, we provide backend-support with [AutoGen](https://github.com/microsoft/autogen); when installing, users can add `[autogen]` tag to install a compatible AutoGen version (e.g., `pip install trace-opt[autogen]`). You may require [Git Large File Storage](https://git-lfs.com/) if
+The library requires Python >= 3.10. By default (starting with v0.1.3.5), we use [LiteLLM](https://github.com/BerriAI/litellm) as the backend of LLMs. For backward compatibility, we provide backend-support with [AutoGen](https://github.com/microsoft/autogen); when installing, users can add `[autogen]` tag to install a compatible AutoGen version (e.g., `pip install trace-opt[autogen]`). You may require [Git Large File Storage](https://git-lfs.com/) if
 git is unable to clone the repository.
 
 **For questions or reporting bugs, please use Github Issues or post on our [Discord channel](https://discord.gg/4VeAvwFcWy). We actively check these channels.**
@@ -240,6 +240,36 @@ Defining and training an agent through Trace will give you more flexibility and 
 | Intermediate | [NLP Prompt Optimization](https://agentopt.github.io/Trace/examples/nlp/bigbench_hard.html) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/Trace/blob/website/docs/examples/nlp/bigbench_hard.ipynb) | Shows how Trace can optimizes prompt and code together jointly for BigBench-Hard 23 tasks.
 | Advanced | [Robotic Arm Control](https://agentopt.github.io/Trace/examples/robotics/metaworld.html) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AgentOpt/Trace/blob/website/docs/examples/robotics/metaworld.ipynb)                                     | Trace can optimize code to control a robotic arm after observing a full trajectory of interactions.                                                                                   |
 
+
+## Multi-Objective Optimization
+
+Trace supports **multi-objective optimization** where candidates are evaluated on
+multiple metrics simultaneously (e.g. accuracy + token cost, or base loss +
+regularization loss).
+
+See the full guide: **[docs/multi_objective_scores.md](docs/multi_objective_scores.md)**
+
+Key features:
+- **Vector scores** — `Guide.get_score_dict()` returns `Dict[str, float]` with named metrics
+- **Weighted scalarization** and **Pareto dominance** ranking via `ObjectiveConfig`
+- Supported in `BasicSearchAlgorithm`, `BeamsearchAlgorithm`, and `BeamsearchHistoryAlgorithm`
+- Token-minimization pattern using `UsageTrackingLLM` + `TokenUsageAugmentingGuide`
+
+Canonical notebooks:
+
+| Notebook | Description |
+|---|---|
+| [multiobjective_quickstart](examples/notebooks/multiobjective_quickstart.ipynb) | Core vector-score infrastructure and BasicSearch integration |
+| [multiobjective_trainers](examples/notebooks/multiobjective_trainers.ipynb) | Beamsearch and PrioritySearch multi-objective support |
+| [multiobjective_bbeh_langgraph](examples/notebooks/multiobjective_bbeh_langgraph.ipynb) | Real LLM task: BBEH boolean expressions with accuracy + execution time |
+
+Trace-Bench multi-objective benchmarks (in [AgentOpt/Trace-Bench](https://github.com/AgentOpt/Trace-Bench)):
+
+| Notebook | Task | Metrics |
+|---|---|---|
+| `multiobjective_convex` | SixHumpCamel | base_loss, reg_loss |
+| `multiobjective_bbeh` | BBEH boolean_expressions | accuracy, execution_time_s |
+| `multiobjective_gsm8k` | GSM8K + token usage | error, tokens_in, tokens_out |
 
 ## Supported Optimizers
 

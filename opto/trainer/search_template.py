@@ -3,9 +3,9 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.optimizers.optimizer import Optimizer
 from opto.trainer.loggers import BaseLogger
-from opto.trainer.algorithms.basic_algorithms import Trainer
+from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler, BatchRollout
+from opto.trainer.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 from opto.trainer.utils import safe_mean
 from dataclasses import dataclass
@@ -235,13 +235,13 @@ class SearchTemplate(Trainer):
 
             train_scores.append(info_sample['mean_score'])  # so that mean can be computed
             train_num_samples.append(info_sample['num_samples'])
+            self.n_samples += len(samples)  # update the number of samples processed
 
             if self.n_iters % log_frequency == 0:
                 avg_train_score = np.sum(np.array(train_scores) * np.array(train_num_samples)) / np.sum(train_num_samples)
                 self.logger.log('Algo/Average train score', avg_train_score, self.n_iters, color='blue')
                 self.log(info_update, prefix="Update/")
                 self.log(info_sample, prefix="Sample/")
-                self.n_samples += len(samples)  # update the number of samples processed
                 self.logger.log('Algo/Number of training samples', self.n_samples, self.n_iters, color='blue')
                 # Log parameters
                 for p in self.agent.parameters():
