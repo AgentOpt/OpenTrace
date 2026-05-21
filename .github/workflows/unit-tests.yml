@@ -1,0 +1,30 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [ experimental, dev ]
+  pull_request:
+    branches: [ main, experimental, dev ]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install Python dependencies
+      run: |
+        pip install -e .
+        pip install pytest numpy
+
+    - name: Run unit tests
+      run: pytest tests/unit_tests/ -v
+

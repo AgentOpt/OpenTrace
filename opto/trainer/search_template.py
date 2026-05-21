@@ -3,9 +3,9 @@ from typing import Union, List, Tuple, Dict, Any, Optional
 from opto import trace
 from opto.optimizers.optimizer import Optimizer
 from opto.trainer.loggers import BaseLogger
-from opto.trainer.algorithms.basic_algorithms import Trainer
+from opto.trainer.algorithms.algorithm import Trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler, BatchRollout
+from opto.trainer.sampler import Sampler, BatchRollout
 from opto.trainer.evaluators import evaluate  # TODO update evaluate implementation
 from opto.trainer.utils import safe_mean
 from dataclasses import dataclass
@@ -71,7 +71,12 @@ def check_optimizer_parameters(optimizer: Optimizer, agent: trace.Module):
 
 def save_train_config(function):
     """ Decorator to save the inputs of a class method. """
-    def wrapper(self, **kwargs):
+    def wrapper(self, *args, **kwargs):
+        # Support positional callers: train(guide, train_dataset, ...)
+        if len(args) >= 1:
+            kwargs["guide"] = args[0]
+        if len(args) >= 2:
+            kwargs["train_dataset"] = args[1]
         _kwargs = kwargs.copy()
         del _kwargs['train_dataset']  # remove train_dataset from the saved kwargs
         if _kwargs.get('validate_dataset') is not None:

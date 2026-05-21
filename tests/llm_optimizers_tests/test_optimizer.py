@@ -84,7 +84,7 @@ def model_profile(request, monkeypatch):
 
         # Register a runtime profile (does not modify source files)
         # Use CustomLLM backend which uses OpenAI-compatible calls.
-        LLMFactory.register_profile(profile_name, backend="CustomLLM", model=model_id)
+        LLMFactory.create_profile(profile_name, backend="CustomLLM", model=model_id)
 
     return profile_name
 

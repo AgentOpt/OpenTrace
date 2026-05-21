@@ -1,8 +1,8 @@
 from opto import trace, trainer
 from opto.trainer.loader import DataLoader
-from opto.features.priority_search.sampler import Sampler
-from opto.features.priority_search.priority_search import PrioritySearch as _PrioritySearch
-from opto.features.priority_search.priority_search import ModuleCandidate
+from opto.trainer.sampler import Sampler
+from opto.trainer.algorithms.priority_search import PrioritySearch as _PrioritySearch
+from opto.trainer.algorithms.priority_search import ModuleCandidate
 from opto.optimizers import OptoPrimeV2
 from opto.trainer.guide import Guide
 from opto.utils.llm import DummyLLM
@@ -130,6 +130,15 @@ def _llm_callable(messages, **kwargs):
     A dummy LLM callable that simulates a response.
     """
     problem = messages[1]['content']
+    # in newer LLM API (LiteLLM, OpenAI client, etc.), the user message content is now a list of typed messages:
+    # [{'type': 'text', 'text': '...'}, {'type': 'image', 'image_url': '...'}]
+    # this expansion is necessary for multi-modal inputs
+
+    if type(problem) is list:
+        for typed_message in problem:
+            if typed_message['type'] == 'text':
+                problem = typed_message['text']
+                break
 
     # extract name from <variable name= name ... >
     name = re.findall(r"<variable name=\"\s*(.*?)\" type=.*>", problem)

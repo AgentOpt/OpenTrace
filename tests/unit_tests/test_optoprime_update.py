@@ -1,8 +1,7 @@
 from opto import trace
 from opto.optimizers import OptoPrime
 from opto.utils.llm import DummyLLM
-
-
+from dataclasses import dataclass
 
 def test_json_keys():
     """

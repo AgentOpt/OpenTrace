@@ -572,7 +572,7 @@ from opto.trainer.guide import Guide
 from opto.trainer.loggers import TensorboardLogger
 from opto import trainer
 from opto.trainer.objectives import ObjectiveConfig
-from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm as SearchAlgorithm
+from examples.trainers.basic_algorithms import BasicSearchAlgorithm as SearchAlgorithm
 from typing import Tuple
 from copy import copy
 

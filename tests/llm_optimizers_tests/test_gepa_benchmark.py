@@ -4,8 +4,8 @@ import numpy as np
 
 from opto import trace
 from opto.optimizers.optoprime_v2 import OptoPrimeV2
-from opto.features.gepa.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
-from opto.trainer.algorithms.basic_algorithms import BasicSearchAlgorithm
+from examples.trainers.gepa_algorithms import GEPAAlgorithmBase, GEPAUCBSearch, GEPABeamPareto
+from examples.trainers.basic_algorithms import BasicSearchAlgorithm
 from opto.trainer.guide import LLMJudge
 from opto.utils.llm import LLM
 
@@ -66,12 +66,12 @@ def test_gepa_benchmark_gsm8k_real_llm():
     train = ds["train"][:6]
     train_dataset = {"inputs": train["question"], "infos": train["answer"]}
 
-    # Teacher/judge with a low-cost profile
-    guide = LLMJudge(llm=LLM(profile="cheap"))
+    # Teacher/judge with default model (gpt-4o-mini is cost-effective)
+    guide = LLMJudge(llm=LLM(model='gpt-4o-mini'))
 
-    # Agent and optimizer (low-cost profile)
-    agent = Learner(llm=LLM(profile="cheap"))
-    optimizer = OptoPrimeV2(agent.parameters(), llm=LLM(profile="cheap"))
+    # Agent and optimizer (using default model)
+    agent = Learner(llm=LLM(model='gpt-4o-mini'))
+    optimizer = OptoPrimeV2(agent.parameters(), llm=LLM(model='gpt-4o-mini'))
 
     algos = [
         ("GEPA-Base", GEPAAlgorithmBase(agent, optimizer=optimizer, logger=None, num_threads=2), dict(num_iters=2, train_batch_size=1, merge_every=2)),

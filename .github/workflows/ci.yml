@@ -1,4 +1,4 @@
-name: CI
+name: Full CI (with Ollama)
 
 on:
   push:
