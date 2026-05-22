@@ -523,6 +523,10 @@ class OptoPrimeV2(OptoPrime):
         self.problem_context += f"{context}\n\n"
         self.initialize_prompt()
 
+    def set_context(self, context: str):
+        self.problem_context = context
+        self.initialize_prompt()
+
     def initialize_prompt(self):
         self.representation_prompt = self.representation_prompt.format(
             variable_expression_format=dedent(f"""
