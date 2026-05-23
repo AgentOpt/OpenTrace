@@ -396,7 +396,7 @@ class LiteLLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True, max_retries=1, base_delay=1.0,
+                 cache=True, max_retries=10, base_delay=1.0,
                  mm_beta: bool = False, **default_params) -> None:
         if model is None:
             model = os.environ.get('TRACE_LITELLM_MODEL')
@@ -419,7 +419,7 @@ class LiteLLM(AbstractModel):
 
     @classmethod
     def _factory(cls, model_name: str, default_params: dict, mm_beta: bool,
-                 max_retries=1, base_delay=1.0):
+                 max_retries=10, base_delay=1.0):
         import litellm
         
         # For Azure models, set global litellm variables as a fallback
@@ -661,7 +661,7 @@ class GoogleGenAILLM(AbstractModel):
     """
 
     def __init__(self, model: Union[str, None] = None, reset_freq: Union[int, None] = None,
-                 cache=True, mm_beta: bool = False, max_retries: int = 1,
+                 cache=True, mm_beta: bool = False, max_retries: int = 10,
                  base_delay: float = 1.0, **default_params) -> None:
         if model is None:
             model = os.environ.get('TRACE_GOOGLE_GENAI_MODEL', 'gemini-2.5-flash')
@@ -675,7 +675,7 @@ class GoogleGenAILLM(AbstractModel):
 
     @classmethod
     def _factory(cls, model_name: str, default_params: dict,
-                 max_retries: int = 1, base_delay: float = 1.0):
+                 max_retries: int = 10, base_delay: float = 1.0):
         """Create a Google GenAI client wrapper using the Interactions API."""
         # Get API key from environment variable
         api_key = os.environ.get('GEMINI_API_KEY')
@@ -1040,7 +1040,7 @@ class GeminiRESTLLM(AbstractModel):
 
         return lambda *args, **kwargs: retry_with_exponential_backoff(
             lambda: api_func(*args, **kwargs),
-            max_retries=1,
+            max_retries=10,
             base_delay=1,
             operation_name=f"GeminiREST_{model_name}",
         )
