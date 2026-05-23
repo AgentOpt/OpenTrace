@@ -243,7 +243,9 @@ class ContentBlockList(list):
         text_parts = []
         for block in blocks:
             if isinstance(block, TextContent):
-                text_parts.append(block.text)
+                # Defensive: skip None text in case any upstream parser missed filtering.
+                if block.text is not None:
+                    text_parts.append(block.text)
             elif isinstance(block, ImageContent):
                 text_parts.append(image_placeholder)
             elif isinstance(block, ContentBlockList):
@@ -273,7 +275,7 @@ class ContentBlockList(list):
         for block in self:
             if isinstance(block, ImageContent):
                 return True
-            if isinstance(block, TextContent) and block.text.strip():
+            if isinstance(block, TextContent) and block.text and block.text.strip():
                 return True
         return False
     
@@ -2022,13 +2024,17 @@ class AssistantTurn(Turn):
                 if hasattr(candidate, 'finish_reason'):
                     result["finish_reason"] = str(candidate.finish_reason)
             
-            # Fallback: Extract simple text content if no candidates/parts were found
+            # Fallback: Extract simple text content if no candidates/parts were found.
+            # NOTE: Gemini returns text=None when finish_reason is SAFETY/RECITATION/MAX_TOKENS;
+            # OpenAI returns content=None on tool-only responses. Filter these out so downstream
+            # code sees an empty ContentBlockList (not a TextContent(text=None) that crashes str()).
             if not content_extracted:
-                if hasattr(raw_response, 'text'):
+                if hasattr(raw_response, 'text') and raw_response.text:
                     result["content"].append(TextContent(text=raw_response.text))
                 elif hasattr(value, 'choices'):
-                    # Fallback to normalized format
-                    result["content"].append(TextContent(text=value.choices[0].message.content))
+                    msg_content = value.choices[0].message.content
+                    if msg_content:
+                        result["content"].append(TextContent(text=msg_content))
         
         return result
     
