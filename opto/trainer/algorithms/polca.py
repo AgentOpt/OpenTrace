@@ -5,7 +5,7 @@ from opto.optimizers.utils import print_color
 from opto.trainer.utils import async_run
 from opto.utils.llm import embed
 import numpy as np
-from opto.trainer.search_template import Samples
+from opto.trainer.search_template import Samples, save_train_config
 
 
 class _CandidateEmbedder:
@@ -67,20 +67,32 @@ class POLCA(PrioritySearch):
         *args: Additional arguments for the parent class.
         **kwargs: Additional keyword arguments for the parent class.
     """
-    def __init__(self,
-                 epsilon: float = 0.1,
-                 use_summarizer: bool = False,
-                 context: str = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: ",
-                 embedding_model: str = "gemini/gemini-embedding-001",
-                 *args,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
+    @save_train_config
+    def train(self,
+              *args,
+              epsilon: float = 0.1,
+              use_summarizer: bool = True,
+              context: str = "Concrete recommendations for generating better agent parameters based on successful patterns observed in the trajectories: ",
+              embedding_model: str = "gemini/gemini-embedding-001",
+              **kwargs):
+        """POLCA-specific kwargs are popped here; remaining kwargs flow to PrioritySearch.train."""
         self.epsilon = epsilon
         self.use_summarizer = use_summarizer
         self.regressor = _CandidateEmbedder(embedding_model=embedding_model)
         self.summarizer = Summarizer()
+        # Ensure the summarizer talks to the same LLM trace-bench configured for the run.
+        # trace-bench sets TRACE_LITELLM_MODEL (without provider prefix) — LiteLLM needs
+        # "gemini/<model>" for Gemini, so prepend the prefix here when missing.
+        import os as _os
+        from opto.utils.llm import LiteLLM as _LiteLLM
+        _model = _os.environ.get("TRACE_LITELLM_MODEL")
+        if _model:
+            if "/" not in _model and "gemini" in _model.lower():
+                _model = f"gemini/{_model}"
+            self.summarizer.llm = _LiteLLM(model=_model, mm_beta=False)
         self.context = context
-        
+        return super().train(*args, **kwargs)
+
     def filter_candidates(self, new_candidates: List[ModuleCandidate]) -> List[ModuleCandidate]:
         """ Filter candidates by their embeddings.
         """
