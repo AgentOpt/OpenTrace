@@ -31,7 +31,8 @@ def retry_with_exponential_backoff(func, max_retries=10, base_delay=1.0, operati
                 'internal server error', 'bad gateway', 'service temporarily unavailable',
                 'too many requests', 'quota', 'overloaded', 'resource has been exhausted',
                 'resource_exhausted', 'ratelimiterror', 'quotaexceedederror',
-                'connection error', 'network', 'json decode'
+                'connection error', 'network', 'json decode',
+                'unavailable', 'server error', '503', '500', '502'
             ]
             
             # Also check specific litellm exceptions
