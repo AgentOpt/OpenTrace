@@ -362,6 +362,7 @@ class PrioritySearch(SearchTemplate):
               score_function: str = 'mean',  # function to compute the score for the candidates; 'mean' or 'ucb'
               ucb_exploration_constant: float = 1.0,  # exploration constant for UCB score function
               decouple_optimizers: bool = True,  # whether to decouple the optimizers for each candidate; if True, each candidate will have its own optimizer instance; if False, all candidates share the same optimizer instance.
+              num_pool: int = 10,  # post-training pool selection: re-evaluate top-min(num_pool, len(memory)) candidates on the full validate_dataset and apply the best to self.agent. Set to 1 to disable.
               # Additional keyword arguments
               **kwargs
               ):
@@ -434,6 +435,103 @@ class PrioritySearch(SearchTemplate):
                       save_frequency=save_frequency,
                       save_path=save_path,
                       **kwargs)
+
+        # Post-training pool selection: pick the candidate with the highest
+        # validation score from the top-N of long_term_memory (by stored
+        # priority) and apply it to self.agent so the trainer leaves the agent
+        # in a fair, statistically reliable state.
+        self._select_best_from_pool(
+            num_pool=num_pool,
+            validate_dataset=validate_dataset,
+            validate_guide=validate_guide,
+            guide=guide,
+            num_test_samples=num_test_samples,
+        )
+
+    def _select_best_from_pool(
+        self,
+        num_pool: int,
+        validate_dataset,
+        validate_guide,
+        guide,
+        num_test_samples: int = 1,
+    ):
+        """Re-evaluate the top-N candidates from long_term_memory on the full
+        validate_dataset and apply the best one (by valset average) to self.agent.
+
+        Args:
+            num_pool: maximum number of candidates to re-evaluate. Effective N is
+                min(num_pool, len(long_term_memory)). Set to 1 (or less) to disable.
+            validate_dataset: dataset to score candidates on. If None or empty,
+                this is a no-op.
+            validate_guide: guide for validate_dataset (falls back to guide).
+            guide: training guide; used as fallback for evaluation.
+            num_test_samples: how many times to evaluate each example for stability.
+        """
+        if num_pool is None or num_pool <= 1:
+            return
+        if validate_dataset is None:
+            return
+        inputs = validate_dataset.get("inputs") if isinstance(validate_dataset, dict) else None
+        infos = validate_dataset.get("infos") if isinstance(validate_dataset, dict) else None
+        if not inputs or not infos:
+            return
+        if len(self.long_term_memory) == 0:
+            return
+
+        n_pool = min(num_pool, len(self.long_term_memory))
+        # long_term_memory.memory is a list of (-priority, candidate) tuples in heap order.
+        # Sort ascending by neg_priority => highest priority first.
+        items = sorted(self.long_term_memory.memory, key=lambda x: x[0])[:n_pool]
+        candidates = [c for _, c in items]
+
+        eval_guide = validate_guide if validate_guide is not None else guide
+
+        from opto.optimizers.utils import print_color
+        print_color(f"Pool selection: re-evaluating top-{n_pool} candidates on "
+                    f"{len(inputs)} validate examples x {num_test_samples} samples...",
+                    "cyan")
+
+        pool_scores = []
+        for idx, cand in enumerate(candidates):
+            try:
+                cand.apply_update(self.agent)
+            except Exception as e:
+                print_color(f"  [{idx}] apply_update failed: {e}", "yellow")
+                pool_scores.append(None)
+                continue
+            try:
+                score = self.evaluate(
+                    self.agent, eval_guide, inputs, infos,
+                    num_samples=num_test_samples,
+                    num_threads=self.num_threads,
+                    description=f"Pool[{idx+1}/{n_pool}]",
+                )
+            except Exception as e:
+                print_color(f"  [{idx}] evaluate failed: {e}", "yellow")
+                score = None
+            pool_scores.append(score)
+            sc_str = f"{score:.4f}" if isinstance(score, (int, float)) else "None"
+            print_color(f"  [{idx}] candidate score: {sc_str}", "cyan")
+
+        # Pick best (None scores treated as -inf so they lose).
+        best_idx = max(
+            range(len(candidates)),
+            key=lambda i: pool_scores[i] if isinstance(pool_scores[i], (int, float)) else float("-inf"),
+        )
+        candidates[best_idx].apply_update(self.agent)
+        best_score = pool_scores[best_idx]
+        best_str = f"{best_score:.4f}" if isinstance(best_score, (int, float)) else "None"
+        print_color(f"Pool selection: applied candidate [{best_idx}] with score {best_str}", "green")
+
+        # Log to the trainer logger (TensorBoard etc.).
+        try:
+            self.logger.log("PoolSelection/num_pool", n_pool, self.n_iters, color="cyan")
+            self.logger.log("PoolSelection/best_idx", best_idx, self.n_iters, color="cyan")
+            if isinstance(best_score, (int, float)):
+                self.logger.log("PoolSelection/best_score", best_score, self.n_iters, color="green")
+        except Exception:
+            pass
 
     def _initialize_search_parameters(self, *,
                                     num_candidates,
