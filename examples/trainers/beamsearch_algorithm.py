@@ -3,7 +3,7 @@ import copy
 from typing import Union, List, Tuple, Dict, Any, Optional
 from opto.trainer.utils import async_run, batch_run
 from opto.optimizers.utils import print_color
-from opto.trainer.algorithms.basic_algorithms import MinibatchAlgorithm, evaluate, batchify, _objective_scalar
+from examples.trainers.basic_algorithms import MinibatchAlgorithm, evaluate, batchify, _objective_scalar
 from opto.trainer.evaluators import evaluate_vector, aggregate_vector_scores
 from opto.trainer.objectives import ObjectiveConfig, select_top_k, apply_minimize, weighted_scalarize
 

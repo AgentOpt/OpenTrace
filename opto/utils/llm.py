@@ -215,6 +215,33 @@ class AutoGenLLM(AbstractModel):
         return self._model.create(**config)
 
 
+def embed(model: str, text: str, max_retries: int = 10, base_delay: float = 1.0):
+    """Call an embedding API with automatic retry on failure.
+
+    Uses litellm under the hood. Returns the embedding vector (list of floats),
+    or None if all retries are exhausted.
+
+    Args:
+        model: Embedding model identifier accepted by litellm
+            (e.g. "gemini/gemini-embedding-001", "openai/text-embedding-3-small").
+        text: Text to embed.
+        max_retries: Maximum number of retry attempts on failure.
+        base_delay: Initial delay (in seconds) for exponential backoff.
+    """
+    import litellm
+    try:
+        response = retry_with_exponential_backoff(
+            lambda: litellm.embedding(model=model, input=text),
+            max_retries=max_retries,
+            base_delay=base_delay,
+            operation_name="Embedding API call",
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        warnings.warn(f"Embedding API call failed after retries: {e}")
+        return None
+
+
 def auto_construct_oai_config_list_from_env() -> List:
     """
     Collect various API keys saved in the environment and return a format like:
